@@ -45,6 +45,45 @@ function HScroll({ children }) {
   );
 }
 
+// ── Brand wordmark — switchable titlebar lockups ──────────────
+// The bowl logo is paired with five typographic treatments.
+const LOGO_AR = 822 / 696; // intrinsic width / height
+
+function BowlLogo({ h }) {
+  const th = useTheme();
+  return (
+    <img src="facebouffe-logo.png" alt="" aria-hidden="true" style={{
+      height: h, width: h * LOGO_AR, objectFit: "contain", flexShrink: 0, display: "block",
+      filter: th.dark ? "saturate(1.05)" : "drop-shadow(0 2px 6px rgba(192,86,59,0.26))",
+    }} />
+  );
+}
+
+function HomeWordmark() {
+  const th = useTheme();
+  const app = useApp();
+  const title = app.t("home_title");
+  const greeting = app.t("home_greeting");
+
+  const Greeting = ({ size = 13.5, caps = false, mt = 4 }) => (
+    <div style={{
+      fontFamily: th.fontUI, fontSize: th.fs(size), fontWeight: 600, color: th.inkSoft,
+      letterSpacing: caps ? 1.4 : 0.2, textTransform: caps ? "uppercase" : "none", marginTop: mt,
+    }}>{greeting}</div>
+  );
+
+  // Bistro: heavy condensed-feel grotesk, tight tracking
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+      <BowlLogo h={44} />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: '"Bricolage Grotesque", "Hanken Grotesk", sans-serif', fontSize: th.fs(33), fontWeight: 800, color: th.accent, lineHeight: 0.94, letterSpacing: -0.6 }}>{title}</div>
+        <Greeting size={12.5} mt={5} />
+      </div>
+    </div>
+  );
+}
+
 // ── Home ──────────────────────────────────────────────────────
 function HomeScreen() {
   const th = useTheme();
@@ -67,8 +106,7 @@ function HomeScreen() {
       <StickyHeader>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px 12px" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: th.fontDisplay, fontSize: th.fs(31), fontWeight: 600, color: th.accent, lineHeight: 1.05, letterSpacing: 0.3 }}>{t("home_title")}</div>
-            <div style={{ fontFamily: th.fontUI, fontSize: th.fs(13.5), fontWeight: 600, color: th.inkSoft, letterSpacing: 0.2, marginTop: 4 }}>{t("home_greeting")}</div>
+            <HomeWordmark />
           </div>
           <button onClick={() => nav.switchTab("settings")} style={{ marginLeft: 12, flexShrink: 0, width: 42, height: 42, borderRadius: 999, border: `1px solid ${th.line}`, background: th.card, cursor: "pointer", display: "grid", placeItems: "center", boxShadow: th.shadow, fontFamily: th.fontDisplay, fontSize: th.fs(18), color: th.accent, fontWeight: 600 }}>
             {(app.username || "?")[0].toUpperCase()}

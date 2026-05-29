@@ -95,6 +95,17 @@ class FbTheme {
     );
   }
 
+  /// Heavy brand wordmark face (Bricolage Grotesque), used for the home title bar.
+  TextStyle wordmark({double size = 33, FontWeight weight = FontWeight.w800, Color? color, double? height, double? letterSpacing}) {
+    return GoogleFonts.bricolageGrotesque(
+      fontSize: fs(size),
+      fontWeight: weight,
+      color: color ?? ink,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
+  }
+
   TextStyle ui({double size = 14, FontWeight weight = FontWeight.w500, Color? color, double? height, double? letterSpacing, FontStyle? fontStyle, TextDecoration? decoration}) {
     return GoogleFonts.hankenGrotesk(
       fontSize: fs(size),

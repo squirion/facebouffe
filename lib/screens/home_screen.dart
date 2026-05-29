@@ -33,13 +33,26 @@ class HomeScreen extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                  child: Row(
                     children: [
-                      Text(app.t('home_title'), style: fb.display(size: 31, weight: FontWeight.w600, color: fb.accent, height: 1.05, letterSpacing: 0.3)),
-                      const SizedBox(height: 4),
-                      Text(app.t('home_greeting'), style: fb.ui(size: 13.5, weight: FontWeight.w600, color: fb.inkSoft, letterSpacing: 0.2)),
+                      // Bowl logo + heavy wordmark lockup
+                      Image.asset(
+                        'assets/logo_mark.png',
+                        height: 44,
+                        filterQuality: FilterQuality.medium,
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(app.t('home_title'), maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.wordmark(size: 33, weight: FontWeight.w800, color: fb.accent, height: 0.94, letterSpacing: -0.6)),
+                            const SizedBox(height: 5),
+                            Text(app.t('home_greeting'), maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 12.5, weight: FontWeight.w600, color: fb.inkSoft, letterSpacing: 0.2)),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
