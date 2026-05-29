@@ -255,7 +255,10 @@ class _RecipeScreenState extends State<RecipeScreen> {
                               itemCount: useReal ? g.length : recipe.gallery.length,
                               separatorBuilder: (_, _) => const SizedBox(width: 10),
                               itemBuilder: (_, i) => useReal
-                                  ? SizedBox(width: 150, child: ClipRRect(borderRadius: BorderRadius.circular(16), child: fileImage(g[i])))
+                                  ? GestureDetector(
+                                      onTap: () => Nav.openGallery(context, g, i),
+                                      child: SizedBox(width: 150, child: ClipRRect(borderRadius: BorderRadius.circular(16), child: fileImage(g[i]))),
+                                    )
                                   : _PhotoPlaceholder(label: recipe.gallery[i], size: 150),
                             );
                           }),
