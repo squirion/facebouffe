@@ -123,8 +123,9 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
       }
     });
     final txt = _chimeText(idx);
+    final sound = context.read<AppState>().chimeSound;
     TimerNotifications.instance.cancel(idx);
-    TimerNotifications.instance.schedule(idx, total, title: txt.title, body: txt.body);
+    TimerNotifications.instance.schedule(idx, total, title: txt.title, body: txt.body, soundKey: sound);
     _ensureTicker();
   }
 
@@ -146,8 +147,9 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
         t.running = true;
       });
       final txt = _chimeText(t.stepIdx);
+      final sound = context.read<AppState>().chimeSound;
       TimerNotifications.instance.cancel(t.notifId);
-      TimerNotifications.instance.schedule(t.notifId, secs, title: txt.title, body: txt.body);
+      TimerNotifications.instance.schedule(t.notifId, secs, title: txt.title, body: txt.body, soundKey: sound);
     }
     _ensureTicker();
   }

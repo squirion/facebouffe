@@ -292,11 +292,28 @@ class _EditScreenState extends State<EditScreen> {
                   child: Row(
                     children: [
                       const FbIcon('timer', size: 16, color: Color(0xFFA89E90)),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       SizedBox(
-                        width: 92,
-                        child: _input(fb, form.steps[i].timerSeconds == null ? '' : (form.steps[i].timerSeconds! / 60).round().toString(), app.t('f_timer'), (v) => form.steps[i].timerSeconds = v.isEmpty ? null : (int.tryParse(v) ?? 0) * 60, number: true, small: true),
+                        width: 46,
+                        child: _input(fb, _minStr(form.steps[i].timerSeconds), 'min', (v) {
+                          final sec = (form.steps[i].timerSeconds ?? 0) % 60;
+                          final mn = v.isEmpty ? 0 : (int.tryParse(v) ?? 0);
+                          final total = mn * 60 + sec;
+                          setState(() => form.steps[i].timerSeconds = total == 0 ? null : total);
+                        }, number: true, small: true, center: true),
                       ),
+                      Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text('min', style: fb.ui(size: 12.5, color: fb.inkFaint))),
+                      SizedBox(
+                        width: 46,
+                        child: _input(fb, _secStr(form.steps[i].timerSeconds), 'sec', (v) {
+                          final mn = (form.steps[i].timerSeconds ?? 0) ~/ 60;
+                          var sc = v.isEmpty ? 0 : (int.tryParse(v) ?? 0);
+                          if (sc > 59) sc = 59;
+                          final total = mn * 60 + sc;
+                          setState(() => form.steps[i].timerSeconds = total == 0 ? null : total);
+                        }, number: true, small: true, center: true),
+                      ),
+                      Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text('sec', style: fb.ui(size: 12.5, color: fb.inkFaint))),
                       const Spacer(),
                       _miniBtn(fb, 'chevD', i == form.steps.length - 1, () => setState(() => _move(form.steps, i))),
                       const SizedBox(width: 6),
@@ -356,6 +373,11 @@ class _EditScreenState extends State<EditScreen> {
   }
 
   // ── helpers ──
+  // Split timerSeconds into editor field strings; blank out zero parts so a
+  // 2:00 timer shows "2 min" (not "2 min 0 sec") and 0:30 shows "30 sec".
+  String _minStr(int? s) => (s == null || s ~/ 60 == 0) ? '' : (s ~/ 60).toString();
+  String _secStr(int? s) => (s == null || s % 60 == 0) ? '' : (s % 60).toString();
+
   void _move(List list, int i) {
     if (i + 1 >= list.length) return;
     final tmp = list[i];

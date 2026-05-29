@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../nav.dart';
 import '../services/pdf_export.dart';
 import '../services/data_export.dart';
+import '../services/timer_notifications.dart';
 import 'export_select_screen.dart';
 import '../widgets/chrome.dart';
 import '../widgets/fb_icon.dart';
@@ -100,6 +101,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _Group(label: app.t('appearance'), children: [
                     _SettingsRow(label: app.t('dark_mode'), child: _Toggle(on: app.dark, onTap: () => app.setDark(!app.dark))),
                     _SettingsRow(label: app.t('platform'), sub: app.t('platform_sub'), width: 150, last: true, child: Segmented(value: app.device, onChange: app.setDevice, options: const [('android', 'Android'), ('ios', 'iOS')])),
+                  ]),
+                  _Group(label: app.t('timer_sound'), children: [
+                    for (final s in TimerNotifications.sounds) _ChimeRow(soundKey: s.key),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+                      child: Text(app.t('timer_sound_hint'), style: fb.ui(size: 12.5, color: fb.inkFaint)),
+                    ),
                   ]),
                   _Group(label: app.t('custom_tags'), children: const [TagManager()]),
                   _Group(label: app.t('import_export'), children: [
@@ -349,6 +357,51 @@ class _ActionRow extends StatelessWidget {
           Expanded(child: Text(label, style: fb.ui(size: 15.5, weight: FontWeight.w600))),
           FbIcon('chevR', size: fb.fs(17), color: fb.inkFaint),
         ]),
+      ),
+    );
+  }
+}
+
+// ── Timer chime selector: tap a row to choose + hear a preview ──
+class _ChimeRow extends StatelessWidget {
+  final String soundKey;
+  const _ChimeRow({required this.soundKey});
+
+  @override
+  Widget build(BuildContext context) {
+    final fb = context.fb;
+    final app = context.watch<AppState>();
+    final on = app.chimeSound == soundKey;
+    return GestureDetector(
+      onTap: () {
+        app.setChimeSound(soundKey);
+        TimerNotifications.instance.preview(soundKey, title: app.t('timer_sound'), body: app.t('chime_$soundKey'));
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: fb.line))),
+        child: Row(
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(color: on ? fb.accent : Colors.transparent, shape: BoxShape.circle, border: Border.all(color: on ? fb.accent : fb.lineStrong, width: 2)),
+              child: on ? const Center(child: FbIcon('check', size: 13, color: Colors.white)) : null,
+            ),
+            const SizedBox(width: 13),
+            Expanded(child: Text(app.t('chime_$soundKey'), style: fb.ui(size: 15.5, weight: FontWeight.w600))),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+              decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(999)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                FbIcon('play', size: 14, color: fb.accent),
+                const SizedBox(width: 5),
+                Text(app.t('chime_test'), style: fb.ui(size: 12.5, weight: FontWeight.w700, color: fb.accent)),
+              ]),
+            ),
+          ],
+        ),
       ),
     );
   }

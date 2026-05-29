@@ -26,6 +26,7 @@ class AppState extends ChangeNotifier {
   String accentHex = '#C0563B';
   String homeLayout = 'editorial'; // editorial | grid
   String device = 'android'; // android | ios — affects insets/transition flavor
+  String chimeSound = 'alarm'; // timer chime: alarm | ringtone | chime
 
   bool reduceMotion = false;
   SharedPreferences? _prefs;
@@ -74,6 +75,7 @@ class AppState extends ChangeNotifier {
     accentHex = _prefs!.getString('fb_accent') ?? accentHex;
     homeLayout = _prefs!.getString('fb_home') ?? homeLayout;
     device = _prefs!.getString('fb_device') ?? device;
+    chimeSound = _prefs!.getString('fb_chime') ?? chimeSound;
     final tips = _prefs!.getString('fb_tips');
     if (tips != null) {
       try {
@@ -126,6 +128,7 @@ class AppState extends ChangeNotifier {
     p.setString('fb_accent', accentHex);
     p.setString('fb_home', homeLayout);
     p.setString('fb_device', device);
+    p.setString('fb_chime', chimeSound);
   }
 
   // ── settings mutations ──
@@ -179,6 +182,12 @@ class AppState extends ChangeNotifier {
 
   void setDevice(String v) {
     device = v;
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void setChimeSound(String v) {
+    chimeSound = v;
     _persistSettings();
     notifyListeners();
   }

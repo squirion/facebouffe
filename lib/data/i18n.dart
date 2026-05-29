@@ -64,6 +64,8 @@ const Map<String, Map<String, String>> kI18n = {
     'export_all': 'Toutes les recettes', 'export_subset': 'Choisir des recettes',
     'select_recipes': 'Choisir les recettes', 'export_selected_count': 'Exporter',
     'select_all': 'Tout', 'select_none': 'Aucune', 'selected': 'sélectionnée(s)',
+    'timer_sound': 'Son du minuteur', 'timer_sound_hint': 'Au volume de l\'alarme, même en veille',
+    'chime_alarm': 'Alarme', 'chime_ringtone': 'Sonnerie', 'chime_chime': 'Carillon doux', 'chime_test': 'Tester',
   },
   'en': {
     'tab_home': 'Home', 'tab_search': 'Search', 'tab_list': 'Groceries', 'tab_settings': 'Settings',
@@ -128,6 +130,8 @@ const Map<String, Map<String, String>> kI18n = {
     'export_all': 'All recipes', 'export_subset': 'Choose recipes',
     'select_recipes': 'Choose recipes', 'export_selected_count': 'Export',
     'select_all': 'All', 'select_none': 'None', 'selected': 'selected',
+    'timer_sound': 'Timer sound', 'timer_sound_hint': 'Plays at alarm volume, even while asleep',
+    'chime_alarm': 'Alarm', 'chime_ringtone': 'Ringtone', 'chime_chime': 'Soft chime', 'chime_test': 'Test',
   },
 };
 
