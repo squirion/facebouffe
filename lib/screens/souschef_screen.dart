@@ -1,22 +1,39 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' hide Step;
 import 'package:provider/provider.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../state/app_state.dart';
 import '../data/models.dart';
 import '../data/format.dart';
 import '../theme.dart';
 import '../nav.dart';
+import '../services/timer_notifications.dart';
 import '../widgets/common.dart';
 import '../widgets/fb_icon.dart';
 
+/// A cooking timer anchored to a wall-clock end time so the displayed
+/// countdown stays correct after the app is backgrounded / the phone sleeps
+/// (the in-app ticker only repaints; the real chime is an OS-scheduled
+/// notification keyed by [notifId]). [notifId] == stepIdx (one timer per step).
 class _Timer {
   final String key;
   final int stepIdx;
+  final int notifId;
   final int total;
-  int left;
+  DateTime? endTime; // set while running; null while paused
+  int remaining; // authoritative only while paused
   bool running = true;
-  _Timer({required this.key, required this.stepIdx, required this.total, required this.left});
+  _Timer({required this.key, required this.stepIdx, required this.notifId, required this.total, this.endTime, required this.remaining});
+
+  int get left {
+    if (running && endTime != null) {
+      final s = endTime!.difference(DateTime.now()).inSeconds;
+      return s < 0 ? 0 : s;
+    }
+    return remaining;
+  }
 }
 
 /// Lean cooking helper: two swipeable panes (ingredients checklist + step-by-
@@ -31,7 +48,7 @@ class SousChefScreen extends StatefulWidget {
   State<SousChefScreen> createState() => _SousChefScreenState();
 }
 
-class _SousChefScreenState extends State<SousChefScreen> {
+class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObserver {
   final _pager = PageController();
   int _pane = 0;
   int _stepIdx = 0;
@@ -40,21 +57,43 @@ class _SousChefScreenState extends State<SousChefScreen> {
   Timer? _ticker;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WakelockPlus.enable(); // keep the screen awake while cooking (web + Android)
+    if (!kIsWeb) TimerNotifications.instance.requestPermissions();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back from background/sleep: the ticker was frozen, so repaint the
+    // wall-clock-derived countdown and restart the cosmetic ticker if needed.
+    if (state == AppLifecycleState.resumed) {
+      setState(() {});
+      _ensureTicker();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     _pager.dispose();
+    WakelockPlus.disable();
+    // Cooking session is over — cancel any pending chimes for this session.
+    for (final t in _timers) {
+      TimerNotifications.instance.cancel(t.notifId);
+    }
     super.dispose();
   }
 
+  // Cosmetic ticker: repaints the derived countdown ~1×/s while a timer runs.
+  // Correctness comes from each timer's wall-clock endTime + the OS chime.
   void _ensureTicker() {
     final active = _timers.any((t) => t.running && t.left > 0);
     if (active && _ticker == null) {
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-        setState(() {
-          for (final t in _timers) {
-            if (t.running && t.left > 0) t.left--;
-          }
-        });
+        setState(() {});
         if (!_timers.any((t) => t.running && t.left > 0)) {
           _ticker?.cancel();
           _ticker = null;
@@ -63,24 +102,53 @@ class _SousChefScreenState extends State<SousChefScreen> {
     }
   }
 
+  // Build the bilingual chime title/body for a step timer.
+  ({String title, String body}) _chimeText(int stepIdx) {
+    final app = context.read<AppState>();
+    final recipe = app.getRecipe(widget.id);
+    final step = '${app.t('sc_step')} ${stepIdx + 1}';
+    return (title: app.t('sc_timer_done'), body: recipe != null ? '${recipe.title} · $step' : step);
+  }
+
   void _startStepTimer(int idx, int total) {
+    final end = DateTime.now().add(Duration(seconds: total));
     setState(() {
       final ex = _timers.where((t) => t.stepIdx == idx).firstOrNull;
       if (ex != null) {
-        ex.left = total;
+        ex.endTime = end;
+        ex.remaining = total;
         ex.running = true;
       } else {
-        _timers.add(_Timer(key: '$idx-${DateTime.now().microsecondsSinceEpoch}', stepIdx: idx, total: total, left: total));
+        _timers.add(_Timer(key: '$idx-${DateTime.now().microsecondsSinceEpoch}', stepIdx: idx, notifId: idx, total: total, endTime: end, remaining: total));
       }
     });
+    final txt = _chimeText(idx);
+    TimerNotifications.instance.cancel(idx);
+    TimerNotifications.instance.schedule(idx, total, title: txt.title, body: txt.body);
     _ensureTicker();
   }
 
   void _toggleTimer(_Timer t) {
-    setState(() {
-      t.running = !t.running;
-      if (t.left <= 0) t.left = t.total;
-    });
+    if (t.running) {
+      // pause: freeze remaining and cancel the pending chime
+      setState(() {
+        t.remaining = t.left;
+        t.endTime = null;
+        t.running = false;
+      });
+      TimerNotifications.instance.cancel(t.notifId);
+    } else {
+      // resume (or restart if it had finished): reschedule the chime
+      final secs = t.left <= 0 ? t.total : t.remaining;
+      setState(() {
+        t.endTime = DateTime.now().add(Duration(seconds: secs));
+        t.remaining = secs;
+        t.running = true;
+      });
+      final txt = _chimeText(t.stepIdx);
+      TimerNotifications.instance.cancel(t.notifId);
+      TimerNotifications.instance.schedule(t.notifId, secs, title: txt.title, body: txt.body);
+    }
     _ensureTicker();
   }
 
@@ -212,7 +280,7 @@ class _SousChefScreenState extends State<SousChefScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 GestureDetector(
-                                  onTap: () => setState(() => _timers.removeWhere((x) => x.key == tm.key)),
+                                  onTap: () { TimerNotifications.instance.cancel(tm.notifId); setState(() => _timers.removeWhere((x) => x.key == tm.key)); },
                                   child: FbIcon('x', size: fb.fs(15), color: faint),
                                 ),
                               ]),

@@ -1,4 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Cooking-timer chimes: scheduled local notifications that fire on the
+         alarm channel even when the phone is asleep / in doze. USE_EXACT_ALARM
+         is auto-granted for genuine timer apps (no runtime prompt); if Play
+         policy ever objects, switch to SCHEDULE_EXACT_ALARM + a runtime grant. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <application
         android:label="Facebouffe"
         android:name="${applicationName}"

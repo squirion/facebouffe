@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../nav.dart';
 import '../services/pdf_export.dart';
 import '../services/data_export.dart';
+import 'export_select_screen.dart';
 import '../widgets/chrome.dart';
 import '../widgets/fb_icon.dart';
 
@@ -134,8 +135,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _exportBook(AppState app) async {
-    // PDF book: all base recipes in current language + units
-    await exportRecipesPdf(context, app.baseRecipes);
+    final fb = context.fb;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: fb.card,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) {
+        Widget option(String icon, String label, String value, {bool primary = false}) => GestureDetector(
+              onTap: () => Navigator.pop(ctx, value),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                decoration: BoxDecoration(
+                  color: primary ? fb.accent : fb.cardSoft,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: primary ? fb.accent : fb.line),
+                ),
+                child: Row(children: [
+                  FbIcon(icon, size: 20, color: primary ? Colors.white : fb.accent),
+                  const SizedBox(width: 12),
+                  Text(label, style: fb.ui(size: 15.5, weight: FontWeight.w700, color: primary ? Colors.white : fb.ink)),
+                ]),
+              ),
+            );
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+                child: Text(app.t('export_choose_title'), style: fb.display(size: 21, weight: FontWeight.w600)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                child: Text(app.t('export_choose_sub'), style: fb.ui(size: 14, color: fb.inkSoft)),
+              ),
+              option('note', app.t('export_all'), 'all', primary: true),
+              option('check', app.t('export_subset'), 'subset'),
+              const SizedBox(height: 6),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted) return;
+    if (choice == 'all') {
+      await exportRecipesPdf(context, app.baseRecipes);
+    } else if (choice == 'subset') {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const ExportSelectScreen()));
+    }
   }
 }
 

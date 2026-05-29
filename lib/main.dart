@@ -4,10 +4,12 @@ import 'package:provider/provider.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 import 'screens/shell.dart';
+import 'services/timer_notifications.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final app = AppState();
+  TimerNotifications.instance.init(); // fire-and-forget; no-op on web; idempotent
   runApp(
     MultiProvider(
       providers: [

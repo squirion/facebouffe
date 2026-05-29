@@ -60,6 +60,10 @@ const Map<String, Map<String, String>> kI18n = {
     'platform': 'Plateforme', 'platform_sub': 'Android natif · appli web iOS',
     'search_recipe': 'Rechercher une recette', 'book_exported': 'Livre exporté',
     'imported': 'Importé : ', 'imported_recipes': ' recettes', 'invalid_file': 'Fichier invalide',
+    'export_choose_title': 'Exporter en PDF', 'export_choose_sub': 'Quelles recettes inclure dans le livre ?',
+    'export_all': 'Toutes les recettes', 'export_subset': 'Choisir des recettes',
+    'select_recipes': 'Choisir les recettes', 'export_selected_count': 'Exporter',
+    'select_all': 'Tout', 'select_none': 'Aucune', 'selected': 'sélectionnée(s)',
   },
   'en': {
     'tab_home': 'Home', 'tab_search': 'Search', 'tab_list': 'Groceries', 'tab_settings': 'Settings',
@@ -120,6 +124,10 @@ const Map<String, Map<String, String>> kI18n = {
     'platform': 'Platform', 'platform_sub': 'Native Android · iOS web app',
     'search_recipe': 'Search a recipe', 'book_exported': 'Book exported',
     'imported': 'Imported: ', 'imported_recipes': ' recipes', 'invalid_file': 'Invalid file',
+    'export_choose_title': 'Export to PDF', 'export_choose_sub': 'Which recipes to include in the book?',
+    'export_all': 'All recipes', 'export_subset': 'Choose recipes',
+    'select_recipes': 'Choose recipes', 'export_selected_count': 'Export',
+    'select_all': 'All', 'select_none': 'None', 'selected': 'selected',
   },
 };
 
