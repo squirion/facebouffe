@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/fb_icon.dart';
 
@@ -27,7 +26,6 @@ class _GalleryViewerScreenState extends State<GalleryViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final fb = context.fb;
     final topInset = MediaQuery.of(context).padding.top;
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final count = widget.images.length;
@@ -62,17 +60,6 @@ class _GalleryViewerScreenState extends State<GalleryViewerScreen> {
               ),
             ),
           ),
-          // counter (top-right) for context, esp. on longer galleries
-          if (count > 1)
-            Positioned(
-              top: topInset + 12,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), borderRadius: BorderRadius.circular(999)),
-                child: Text('${_index + 1} / $count', style: fb.ui(size: 13, weight: FontWeight.w700, color: Colors.white)),
-              ),
-            ),
           // page dots (bottom)
           if (showDots)
             Positioned(

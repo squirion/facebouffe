@@ -422,10 +422,14 @@ class AppState extends ChangeNotifier {
   // ── gallery ──
   void _persistGallery() => _prefs?.setString('fb_gallery', jsonEncode(recipeGallery));
 
+  static const int maxGalleryPhotos = 5;
+
   List<String> galleryOf(String id) => recipeGallery[id] ?? const [];
 
   void addGalleryPhoto(String id, String path) {
-    (recipeGallery[id] ??= []).add(path);
+    final list = recipeGallery[id] ??= [];
+    if (list.length >= maxGalleryPhotos) return; // hard cap
+    list.add(path);
     _persistGallery();
     notifyListeners();
   }

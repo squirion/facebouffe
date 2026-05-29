@@ -424,24 +424,25 @@ class _EditScreenState extends State<EditScreen> {
                 ),
               ),
             ),
-          GestureDetector(
-            onTap: () async {
-              final path = await ImagePick.pick(context);
-              if (path != null) app.addGalleryPhoto(photoId, path);
-            },
-            child: Container(
-              width: 120,
-              decoration: BoxDecoration(color: fb.canvas2, borderRadius: BorderRadius.circular(14), border: Border.all(color: fb.lineStrong, width: 1.5)),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  FbIcon('camera', size: 22, color: fb.accent),
-                  const SizedBox(height: 6),
-                  Text(app.lang == 'fr' ? 'Ajouter' : 'Add', style: fb.ui(size: 12.5, weight: FontWeight.w600, color: fb.accent)),
-                ],
+          if (photos.length < AppState.maxGalleryPhotos)
+            GestureDetector(
+              onTap: () async {
+                final path = await ImagePick.pick(context);
+                if (path != null) app.addGalleryPhoto(photoId, path);
+              },
+              child: Container(
+                width: 120,
+                decoration: BoxDecoration(color: fb.canvas2, borderRadius: BorderRadius.circular(14), border: Border.all(color: fb.lineStrong, width: 1.5)),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FbIcon('camera', size: 22, color: fb.accent),
+                    const SizedBox(height: 6),
+                    Text(app.lang == 'fr' ? 'Ajouter' : 'Add', style: fb.ui(size: 12.5, weight: FontWeight.w600, color: fb.accent)),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
