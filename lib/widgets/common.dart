@@ -320,33 +320,35 @@ class RichRecipeText extends StatelessWidget {
     final fb = context.fb;
     final app = context.read<AppState>();
     final baseColor = color ?? (dark ? Colors.white : fb.inkSoft);
-    final parts = text.split(RegExp(r'(\{\{(?:link|temp):[^}]+\}\})'));
     final spans = <InlineSpan>[];
-    final linkRe = RegExp(r'^\{\{link:([^}]+)\}\}$');
-    final tempRe2 = RegExp(r'^\{\{temp:([0-9.]+):([cfCF])\}\}$');
-    for (final p in parts) {
-      final lm = linkRe.firstMatch(p);
-      if (lm != null) {
-        final r = app.getRecipe(lm.group(1));
-        if (r == null) continue;
-        spans.add(WidgetSpan(
-          alignment: PlaceholderAlignment.baseline,
-          baseline: TextBaseline.alphabetic,
-          child: _LinkChip(title: r.title, dark: dark, onTap: () => onLink?.call(r.id)),
-        ));
-        continue;
+    // Dart's String.split drops captured delimiters, so walk matches manually,
+    // emitting the plain text between tokens and a chip for each token.
+    final tokenRe = RegExp(r'\{\{(link|temp):([^}]+)\}\}');
+    int cursor = 0;
+    for (final m in tokenRe.allMatches(text)) {
+      if (m.start > cursor) spans.add(TextSpan(text: text.substring(cursor, m.start)));
+      cursor = m.end;
+      final kind = m.group(1);
+      final payload = m.group(2)!;
+      if (kind == 'link') {
+        final r = app.getRecipe(payload);
+        if (r != null) {
+          spans.add(WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: _LinkChip(title: r.title, dark: dark, onTap: () => onLink?.call(r.id)),
+          ));
+        }
+      } else {
+        final parts = payload.split(':');
+        if (parts.length == 2) {
+          spans.add(WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: _TempChip(value: num.tryParse(parts[0]) ?? 0, unit: parts[1], dark: dark),
+          ));
+        }
       }
-      final tm = tempRe2.firstMatch(p);
-      if (tm != null) {
-        spans.add(WidgetSpan(
-          alignment: PlaceholderAlignment.baseline,
-          baseline: TextBaseline.alphabetic,
-          child: _TempChip(value: num.parse(tm.group(1)!), unit: tm.group(2)!, dark: dark),
-        ));
-        continue;
-      }
-      if (p.isNotEmpty) spans.add(TextSpan(text: p));
     }
+    if (cursor < text.length) spans.add(TextSpan(text: text.substring(cursor)));
     return Text.rich(
       TextSpan(children: spans, style: fb.ui(size: fontSize, color: baseColor, height: height)),
     );
