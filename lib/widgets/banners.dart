@@ -12,7 +12,14 @@ import 'fb_icon.dart';
 
 Future<void> _open(String url) async {
   final uri = Uri.parse(url);
-  if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (kIsWeb) {
+    // Same-tab navigation: the server sends the APK as an attachment, so the
+    // browser downloads it without leaving the app. A new blank tab
+    // (window.open) can be blocked / left hanging at 100% on Android Chrome.
+    await launchUrl(uri, webOnlyWindowName: '_self');
+  } else if (await canLaunchUrl(uri)) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 }
 
 /// Shared dismissible bar look used by both banners.

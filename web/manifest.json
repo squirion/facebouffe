@@ -5,7 +5,7 @@
     "display": "standalone",
     "background_color": "#FBF6EE",
     "theme_color": "#C0563B",
-    "description": "A new Flutter project.",
+    "description": "Your recipes, in one tidy place — add, organize, and cook.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
