@@ -10,13 +10,10 @@ import '../services/update_check.dart';
 import '../services/web_env.dart';
 import 'fb_icon.dart';
 
-Future<void> _open(String url) async {
+Future<void> _open(String url, {bool sameTab = false}) async {
   final uri = Uri.parse(url);
   if (kIsWeb) {
-    // Same-tab navigation: the server sends the APK as an attachment, so the
-    // browser downloads it without leaving the app. A new blank tab
-    // (window.open) can be blocked / left hanging at 100% on Android Chrome.
-    await launchUrl(uri, webOnlyWindowName: '_self');
+    await launchUrl(uri, webOnlyWindowName: sameTab ? '_self' : '_blank');
   } else if (await canLaunchUrl(uri)) {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
@@ -144,7 +141,10 @@ class _WebPromoBannerState extends State<WebPromoBanner> {
         icon: 'basket',
         content: Text(app.t('install_android'), style: fb.ui(size: 13.5, weight: FontWeight.w600)),
         actionLabel: app.t('install_get'),
-        onAction: () => _open(kApkLatestUrl),
+        // open the release page (a normal web page) — tapping the APK there uses
+        // Chrome's standard download flow, which doesn't stall like an
+        // SPA-initiated download can.
+        onAction: () => _open(kReleasesPageUrl),
         onDismiss: () => setState(() => _hidden = true),
       );
     }
