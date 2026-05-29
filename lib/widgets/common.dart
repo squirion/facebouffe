@@ -2,12 +2,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models.dart';
 import '../data/format.dart';
 import '../state/app_state.dart';
+import '../services/image_pick.dart';
 import '../theme.dart';
 import 'fb_icon.dart';
 
@@ -162,6 +162,12 @@ class _DotPainter extends CustomPainter {
   bool shouldRepaint(_DotPainter old) => old.color != color;
 }
 
+/// An image widget for a stored file path (web blob URL vs local file).
+Widget fileImage(String path, {BoxFit fit = BoxFit.cover}) {
+  if (kIsWeb) return Image.network(path, fit: fit, gaplessPlayback: true);
+  return Image.file(File(path), fit: fit, gaplessPlayback: true);
+}
+
 /// Resolves a stored photo path to an Image widget (web blob vs file).
 Widget? recipeImage(BuildContext context, String? id, {BoxFit fit = BoxFit.cover}) {
   if (id == null) return null;
@@ -206,29 +212,8 @@ class PhotoDrop extends StatelessWidget {
 
   Future<void> _pick(BuildContext context) async {
     final app = context.read<AppState>();
-    final messenger = ScaffoldMessenger.of(context);
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (ctx) {
-        final fb = ctx.fb;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(leading: const FbIcon('camera'), title: Text(app.lang == 'fr' ? 'Prendre une photo' : 'Take a photo', style: fb.ui(size: 15.5)), onTap: () => Navigator.pop(ctx, ImageSource.camera)),
-              ListTile(leading: const FbIcon('note'), title: Text(app.lang == 'fr' ? 'Choisir dans la galerie' : 'Choose from gallery', style: fb.ui(size: 15.5)), onTap: () => Navigator.pop(ctx, ImageSource.gallery)),
-            ],
-          ),
-        );
-      },
-    );
-    if (source == null) return;
-    try {
-      final x = await ImagePicker().pickImage(source: source, maxWidth: 1600, imageQuality: 82);
-      if (x != null) app.setRecipePhoto(photoId, x.path);
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(app.lang == 'fr' ? 'Impossible d\'accéder à la caméra' : 'Camera unavailable')));
-    }
+    final path = await ImagePick.pick(context);
+    if (path != null) app.setRecipePhoto(photoId, path);
   }
 
   @override

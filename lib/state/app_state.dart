@@ -19,7 +19,8 @@ class AppState extends ChangeNotifier {
   Profile profile = Profile();
   List<ShoppingItem> shopping = [];
   TipsSeen tipsSeen = TipsSeen();
-  Map<String, String> recipePhotos = {}; // recipe id (or "__draft") -> local file path
+  Map<String, String> recipePhotos = {}; // recipe id (or "__draft") -> hero photo path
+  Map<String, List<String>> recipeGallery = {}; // recipe id (or "__draft") -> gallery photo paths
 
   // App-only settings (not part of the recipe schema)
   bool dark = false;
@@ -89,6 +90,12 @@ class AppState extends ChangeNotifier {
     if (photos != null) {
       try {
         recipePhotos = Map<String, String>.from(jsonDecode(photos) as Map);
+      } catch (_) {}
+    }
+    final gallery = _prefs!.getString('fb_gallery');
+    if (gallery != null) {
+      try {
+        recipeGallery = (jsonDecode(gallery) as Map).map((k, v) => MapEntry(k as String, (v as List).map((e) => e as String).toList()));
       } catch (_) {}
     }
     ready = true;
@@ -256,6 +263,8 @@ class AppState extends ChangeNotifier {
 
   void deleteRecipe(String id) {
     recipes.removeWhere((r) => r.id == id);
+    if (recipePhotos.remove(id) != null) _persistPhotos();
+    if (recipeGallery.remove(id) != null) _persistGallery();
     _persistDb();
     notifyListeners();
   }
@@ -277,10 +286,13 @@ class AppState extends ChangeNotifier {
     form.dateAdded = now;
     form.dateModified = now;
     recipes.insert(0, form);
-    // migrate any draft photo to the new recipe id
+    // migrate any draft hero photo + gallery to the new recipe id
     final draft = recipePhotos.remove('__draft');
     if (draft != null) recipePhotos[id] = draft;
+    final draftGallery = recipeGallery.remove('__draft');
+    if (draftGallery != null && draftGallery.isNotEmpty) recipeGallery[id] = draftGallery;
     _persistPhotos();
+    _persistGallery();
     _persistDb();
     notifyListeners();
     return id;
@@ -404,6 +416,26 @@ class AppState extends ChangeNotifier {
       recipePhotos[id] = path;
     }
     _persistPhotos();
+    notifyListeners();
+  }
+
+  // ── gallery ──
+  void _persistGallery() => _prefs?.setString('fb_gallery', jsonEncode(recipeGallery));
+
+  List<String> galleryOf(String id) => recipeGallery[id] ?? const [];
+
+  void addGalleryPhoto(String id, String path) {
+    (recipeGallery[id] ??= []).add(path);
+    _persistGallery();
+    notifyListeners();
+  }
+
+  void removeGalleryPhoto(String id, int index) {
+    final list = recipeGallery[id];
+    if (list == null || index < 0 || index >= list.length) return;
+    list.removeAt(index);
+    if (list.isEmpty) recipeGallery.remove(id);
+    _persistGallery();
     notifyListeners();
   }
 

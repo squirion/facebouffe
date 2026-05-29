@@ -240,19 +240,25 @@ class _RecipeScreenState extends State<RecipeScreen> {
                       const SizedBox(height: 14),
                       for (int i = 0; i < recipe.steps.length; i++)
                         _StepRow(index: i, step: recipe.steps[i], onLink: (id) => Nav.openRecipe(context, id)),
-                      // gallery
-                      if (recipe.gallery.isNotEmpty) ...[
+                      // gallery — user-added photos if any, else seed placeholders
+                      if (app.galleryOf(recipe.id).isNotEmpty || recipe.gallery.isNotEmpty) ...[
                         const SizedBox(height: 30),
                         Text(app.t('gallery'), style: fb.display(size: 22, weight: FontWeight.w600)),
                         const SizedBox(height: 12),
                         SizedBox(
                           height: 150,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: recipe.gallery.length,
-                            separatorBuilder: (_, _) => const SizedBox(width: 10),
-                            itemBuilder: (_, i) => _PhotoPlaceholder(label: recipe.gallery[i], size: 150),
-                          ),
+                          child: Builder(builder: (_) {
+                            final g = app.galleryOf(recipe.id);
+                            final useReal = g.isNotEmpty;
+                            return ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: useReal ? g.length : recipe.gallery.length,
+                              separatorBuilder: (_, _) => const SizedBox(width: 10),
+                              itemBuilder: (_, i) => useReal
+                                  ? SizedBox(width: 150, child: ClipRRect(borderRadius: BorderRadius.circular(16), child: fileImage(g[i])))
+                                  : _PhotoPlaceholder(label: recipe.gallery[i], size: 150),
+                            );
+                          }),
                         ),
                       ],
                       // see also

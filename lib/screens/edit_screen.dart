@@ -5,6 +5,7 @@ import '../state/app_state.dart';
 import '../data/models.dart';
 import '../data/format.dart';
 import '../theme.dart';
+import '../services/image_pick.dart';
 import '../widgets/common.dart';
 import '../widgets/fb_icon.dart';
 
@@ -228,103 +229,136 @@ class _EditScreenState extends State<EditScreen> {
   // ── INGREDIENTS ──
   List<Widget> _ingredients(AppState app, FbTheme fb) {
     return [
-      for (int i = 0; i < form.ingredients.length; i++)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: fb.cardSoft, borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.line)),
-            child: Column(
-              children: [
-                Row(
+      ReorderableListView(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        buildDefaultDragHandles: false,
+        onReorder: (oldIndex, newIndex) => setState(() => _reorder(form.ingredients, oldIndex, newIndex)),
+        children: [
+          for (int i = 0; i < form.ingredients.length; i++)
+            Padding(
+              key: ObjectKey(form.ingredients[i]),
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: fb.cardSoft, borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.line)),
+                child: Column(
                   children: [
-                    SizedBox(width: 50, child: _input(fb, form.ingredients[i].quantity?.toString() ?? '', app.t('f_qty'), (v) => form.ingredients[i].quantity = v.isEmpty ? null : num.tryParse(v), number: true, center: true)),
-                    const SizedBox(width: 6),
-                    SizedBox(
-                      width: 82,
-                      child: _UnitDropdown(value: form.ingredients[i].unit, lang: app.lang, onChange: (u) => setState(() => form.ingredients[i].unit = u)),
+                    Row(
+                      children: [
+                        _dragHandle(i),
+                        const SizedBox(width: 4),
+                        SizedBox(width: 50, child: _input(fb, form.ingredients[i].quantity?.toString() ?? '', app.t('f_qty'), (v) => form.ingredients[i].quantity = v.isEmpty ? null : num.tryParse(v), number: true, center: true)),
+                        const SizedBox(width: 6),
+                        SizedBox(
+                          width: 82,
+                          child: _UnitDropdown(value: form.ingredients[i].unit, lang: app.lang, onChange: (u) => setState(() => form.ingredients[i].unit = u)),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(child: _input(fb, form.ingredients[i].name, app.t('f_ing_name'), (v) => form.ingredients[i].name = v)),
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(child: _input(fb, form.ingredients[i].name, app.t('f_ing_name'), (v) => form.ingredients[i].name = v)),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Expanded(child: _input(fb, form.ingredients[i].note ?? '', '${app.t('f_note')} · ${app.t('f_note_ph')}', (v) => form.ingredients[i].note = v, italic: true)),
+                        const SizedBox(width: 6),
+                        _miniBtn(fb, 'trash', false, () => setState(() => form.ingredients.removeAt(i))),
+                      ],
+                    ),
                   ],
                 ),
-                const SizedBox(height: 7),
-                Row(
-                  children: [
-                    Expanded(child: _input(fb, form.ingredients[i].note ?? '', '${app.t('f_note')} · ${app.t('f_note_ph')}', (v) => form.ingredients[i].note = v, italic: true)),
-                    const SizedBox(width: 6),
-                    _miniBtn(fb, 'chevD', i == form.ingredients.length - 1, () => setState(() => _move(form.ingredients, i))),
-                    const SizedBox(width: 6),
-                    _miniBtn(fb, 'trash', false, () => setState(() => form.ingredients.removeAt(i))),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
+        ],
+      ),
       _addRowBtn(fb, app.t('f_add_ing'), () => setState(() => form.ingredients.add(Ingredient(name: '')))),
     ];
+  }
+
+  // Drag handle that initiates a reorder for the row at [index].
+  Widget _dragHandle(int index) => ReorderableDragStartListener(
+        index: index,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+          child: FbIcon('drag', size: 22, color: const Color(0xFFA89E90)),
+        ),
+      );
+
+  void _reorder(List list, int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex -= 1;
+    final item = list.removeAt(oldIndex);
+    list.insert(newIndex, item);
   }
 
   // ── STEPS ──
   List<Widget> _steps(AppState app, FbTheme fb) {
     return [
-      for (int i = 0; i < form.steps.length; i++)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: fb.cardSoft, borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.line)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      ReorderableListView(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        buildDefaultDragHandles: false,
+        onReorder: (oldIndex, newIndex) => setState(() => _reorder(form.steps, oldIndex, newIndex)),
+        children: [
+          for (int i = 0; i < form.steps.length; i++)
+            Padding(
+              key: ObjectKey(form.steps[i]),
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: fb.cardSoft, borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.line)),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(width: 28, height: 28, margin: const EdgeInsets.only(top: 2), decoration: BoxDecoration(color: fb.accent, shape: BoxShape.circle), alignment: Alignment.center, child: Text('${i + 1}', style: fb.display(size: 15, weight: FontWeight.w600, color: Colors.white))),
-                    const SizedBox(width: 9),
-                    Expanded(child: TempTextarea(value: form.steps[i].text, onChange: (v) => setState(() => form.steps[i].text = v), placeholder: '${app.t('f_step')} ${i + 1}', rows: 2)),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(padding: const EdgeInsets.only(top: 5), child: _dragHandle(i)),
+                        const SizedBox(width: 2),
+                        Container(width: 28, height: 28, margin: const EdgeInsets.only(top: 2), decoration: BoxDecoration(color: fb.accent, shape: BoxShape.circle), alignment: Alignment.center, child: Text('${i + 1}', style: fb.display(size: 15, weight: FontWeight.w600, color: Colors.white))),
+                        const SizedBox(width: 9),
+                        Expanded(child: TempTextarea(value: form.steps[i].text, onChange: (v) => setState(() => form.steps[i].text = v), placeholder: '${app.t('f_step')} ${i + 1}', rows: 2)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 37),
+                      child: Row(
+                        children: [
+                          const FbIcon('timer', size: 16, color: Color(0xFFA89E90)),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 46,
+                            child: _input(fb, _minStr(form.steps[i].timerSeconds), 'min', (v) {
+                              final sec = (form.steps[i].timerSeconds ?? 0) % 60;
+                              final mn = v.isEmpty ? 0 : (int.tryParse(v) ?? 0);
+                              final total = mn * 60 + sec;
+                              setState(() => form.steps[i].timerSeconds = total == 0 ? null : total);
+                            }, number: true, small: true, center: true),
+                          ),
+                          Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text('min', style: fb.ui(size: 12.5, color: fb.inkFaint))),
+                          SizedBox(
+                            width: 46,
+                            child: _input(fb, _secStr(form.steps[i].timerSeconds), 'sec', (v) {
+                              final mn = (form.steps[i].timerSeconds ?? 0) ~/ 60;
+                              var sc = v.isEmpty ? 0 : (int.tryParse(v) ?? 0);
+                              if (sc > 59) sc = 59;
+                              final total = mn * 60 + sc;
+                              setState(() => form.steps[i].timerSeconds = total == 0 ? null : total);
+                            }, number: true, small: true, center: true),
+                          ),
+                          Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text('sec', style: fb.ui(size: 12.5, color: fb.inkFaint))),
+                          const Spacer(),
+                          _miniBtn(fb, 'trash', false, () => setState(() => form.steps.removeAt(i))),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.only(left: 37),
-                  child: Row(
-                    children: [
-                      const FbIcon('timer', size: 16, color: Color(0xFFA89E90)),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 46,
-                        child: _input(fb, _minStr(form.steps[i].timerSeconds), 'min', (v) {
-                          final sec = (form.steps[i].timerSeconds ?? 0) % 60;
-                          final mn = v.isEmpty ? 0 : (int.tryParse(v) ?? 0);
-                          final total = mn * 60 + sec;
-                          setState(() => form.steps[i].timerSeconds = total == 0 ? null : total);
-                        }, number: true, small: true, center: true),
-                      ),
-                      Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text('min', style: fb.ui(size: 12.5, color: fb.inkFaint))),
-                      SizedBox(
-                        width: 46,
-                        child: _input(fb, _secStr(form.steps[i].timerSeconds), 'sec', (v) {
-                          final mn = (form.steps[i].timerSeconds ?? 0) ~/ 60;
-                          var sc = v.isEmpty ? 0 : (int.tryParse(v) ?? 0);
-                          if (sc > 59) sc = 59;
-                          final total = mn * 60 + sc;
-                          setState(() => form.steps[i].timerSeconds = total == 0 ? null : total);
-                        }, number: true, small: true, center: true),
-                      ),
-                      Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text('sec', style: fb.ui(size: 12.5, color: fb.inkFaint))),
-                      const Spacer(),
-                      _miniBtn(fb, 'chevD', i == form.steps.length - 1, () => setState(() => _move(form.steps, i))),
-                      const SizedBox(width: 6),
-                      _miniBtn(fb, 'trash', false, () => setState(() => form.steps.removeAt(i))),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
+        ],
+      ),
       _addRowBtn(fb, app.t('f_add_step'), () => setState(() => form.steps.add(Step(text: '')))),
     ];
   }
@@ -351,25 +385,66 @@ class _EditScreenState extends State<EditScreen> {
           ],
         ),
       ),
-      _field(fb, app.t('gallery'), SizedBox(
-        height: 120,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          children: [
-            for (int i = 0; i < 3; i++)
-              Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: Container(
-                  width: 120,
-                  decoration: BoxDecoration(color: fb.canvas2, borderRadius: BorderRadius.circular(14)),
-                  child: Center(child: Text(app.lang == 'fr' ? '+ Photo' : '+ Photo', style: fb.ui(size: 12.5, color: fb.inkFaint))),
-                ),
-              ),
-          ],
-        ),
-      )),
+      _field(fb, app.t('gallery'), _galleryEditor(app, fb)),
       _field(fb, app.t('notes'), _input(fb, form.personal.notes, app.t('f_notes_ph'), (v) => form.personal.notes = v, rows: 2)),
     ];
+  }
+
+  // Gallery: existing photos (with remove) + an add tile (pick → crop → store).
+  Widget _galleryEditor(AppState app, FbTheme fb) {
+    final photos = app.galleryOf(photoId);
+    return SizedBox(
+      height: 120,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (int i = 0; i < photos.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: SizedBox(
+                width: 120,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(borderRadius: BorderRadius.circular(14), child: fileImage(photos[i])),
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: GestureDetector(
+                        onTap: () => app.removeGalleryPhoto(photoId, i),
+                        child: Container(
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.5), shape: BoxShape.circle),
+                          child: const Center(child: FbIcon('x', size: 15, color: Colors.white)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          GestureDetector(
+            onTap: () async {
+              final path = await ImagePick.pick(context);
+              if (path != null) app.addGalleryPhoto(photoId, path);
+            },
+            child: Container(
+              width: 120,
+              decoration: BoxDecoration(color: fb.canvas2, borderRadius: BorderRadius.circular(14), border: Border.all(color: fb.lineStrong, width: 1.5)),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  FbIcon('camera', size: 22, color: fb.accent),
+                  const SizedBox(height: 6),
+                  Text(app.lang == 'fr' ? 'Ajouter' : 'Add', style: fb.ui(size: 12.5, weight: FontWeight.w600, color: fb.accent)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── helpers ──
@@ -378,12 +453,6 @@ class _EditScreenState extends State<EditScreen> {
   String _minStr(int? s) => (s == null || s ~/ 60 == 0) ? '' : (s ~/ 60).toString();
   String _secStr(int? s) => (s == null || s % 60 == 0) ? '' : (s % 60).toString();
 
-  void _move(List list, int i) {
-    if (i + 1 >= list.length) return;
-    final tmp = list[i];
-    list[i] = list[i + 1];
-    list[i + 1] = tmp;
-  }
 
   Widget _field(FbTheme fb, String label, Widget child) => Padding(
         padding: const EdgeInsets.only(bottom: 16),
