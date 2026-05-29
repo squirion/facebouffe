@@ -25,7 +25,6 @@ class AppState extends ChangeNotifier {
   bool dark = false;
   String accentHex = '#C0563B';
   String homeLayout = 'editorial'; // editorial | grid
-  String device = 'android'; // android | ios — affects insets/transition flavor
   String chimeSound = 'alarm'; // timer sound mode: 'alarm' (a phone alarm tone) | 'chime' (soft)
   String? chimeAlarmUri; // chosen alarm tone URI; null = device default alarm
   String? chimeAlarmName; // display title of the chosen alarm tone
@@ -77,7 +76,6 @@ class AppState extends ChangeNotifier {
     dark = _prefs!.getBool('fb_dark') ?? false;
     accentHex = _prefs!.getString('fb_accent') ?? accentHex;
     homeLayout = _prefs!.getString('fb_home') ?? homeLayout;
-    device = _prefs!.getString('fb_device') ?? device;
     chimeSound = _prefs!.getString('fb_chime') ?? chimeSound;
     chimeAlarmUri = _prefs!.getString('fb_chime_uri');
     chimeAlarmName = _prefs!.getString('fb_chime_name');
@@ -132,7 +130,6 @@ class AppState extends ChangeNotifier {
     p.setBool('fb_dark', dark);
     p.setString('fb_accent', accentHex);
     p.setString('fb_home', homeLayout);
-    p.setString('fb_device', device);
     p.setString('fb_chime', chimeSound);
     if (chimeAlarmUri != null) {
       p.setString('fb_chime_uri', chimeAlarmUri!);
@@ -191,12 +188,6 @@ class AppState extends ChangeNotifier {
 
   void setHomeLayout(String v) {
     homeLayout = v;
-    _persistSettings();
-    notifyListeners();
-  }
-
-  void setDevice(String v) {
-    device = v;
     _persistSettings();
     notifyListeners();
   }

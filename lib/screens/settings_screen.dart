@@ -100,8 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _SettingsRow(label: app.t('set_textsize'), width: 150, last: true, child: Segmented(value: app.profile.fontSize, onChange: app.setFontSize, options: const [('small', 'A'), ('medium', 'A'), ('large', 'A')])),
                   ]),
                   _Group(label: app.t('appearance'), children: [
-                    _SettingsRow(label: app.t('dark_mode'), child: _Toggle(on: app.dark, onTap: () => app.setDark(!app.dark))),
-                    _SettingsRow(label: app.t('platform'), sub: app.t('platform_sub'), width: 150, last: true, child: Segmented(value: app.device, onChange: app.setDevice, options: const [('android', 'Android'), ('ios', 'iOS')])),
+                    _SettingsRow(label: app.t('dark_mode'), last: true, child: _Toggle(on: app.dark, onTap: () => app.setDark(!app.dark))),
                   ]),
                   _Group(label: app.t('timer_sound'), children: const [
                     _SoundRow(alarm: true),
@@ -306,11 +305,10 @@ class _Group extends StatelessWidget {
 
 class _SettingsRow extends StatelessWidget {
   final String label;
-  final String? sub;
   final Widget child;
   final double? width;
   final bool last;
-  const _SettingsRow({required this.label, this.sub, required this.child, this.width, this.last = false});
+  const _SettingsRow({required this.label, required this.child, this.width, this.last = false});
 
   @override
   Widget build(BuildContext context) {
@@ -318,17 +316,11 @@ class _SettingsRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: last ? null : BoxDecoration(border: Border(bottom: BorderSide(color: fb.line))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(child: Text(label, style: fb.ui(size: 15.5, weight: FontWeight.w600))),
-              const SizedBox(width: 14),
-              width != null ? SizedBox(width: width, child: child) : child,
-            ],
-          ),
-          if (sub != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(sub!, style: fb.ui(size: 12.5, color: fb.inkFaint))),
+          Expanded(child: Text(label, style: fb.ui(size: 15.5, weight: FontWeight.w600))),
+          const SizedBox(width: 14),
+          width != null ? SizedBox(width: width, child: child) : child,
         ],
       ),
     );
