@@ -1,0 +1,276 @@
+{
+  "schemaVersion": 1,
+  "profile": {
+    "username": "demo_chef",
+    "language": "fr",
+    "units": {
+      "temperature": "celsius",
+      "volume": "metric",
+      "weight": "metric"
+    },
+    "fontSize": "medium"
+  },
+  "tags": [
+    { "id": "tag-fav",        "system": true,  "special": "favorite", "name": { "fr": "Favoris",     "en": "Favorites" },  "icon": "star",        "color": "#F4B400" },
+    { "id": "tag-breakfast",  "system": true,  "name": { "fr": "Déjeuner",   "en": "Breakfast" },  "icon": "sunrise",     "color": "#F6A23C" },
+    { "id": "tag-dinner",     "system": true,  "name": { "fr": "Souper",     "en": "Dinner" },     "icon": "utensils",    "color": "#C0563B" },
+    { "id": "tag-dessert",    "system": true,  "name": { "fr": "Dessert",    "en": "Dessert" },    "icon": "cake",        "color": "#D98AB0" },
+    { "id": "tag-appetizer",  "system": true,  "name": { "fr": "Entrée",     "en": "Appetizer" },  "icon": "shrimp",      "color": "#7FB069" },
+    { "id": "tag-soup",       "system": true,  "name": { "fr": "Soupe",      "en": "Soup" },       "icon": "bowl",        "color": "#E0A458" },
+    { "id": "tag-salad",      "system": true,  "name": { "fr": "Salade",     "en": "Salad" },      "icon": "leaf",        "color": "#6BA368" },
+    { "id": "tag-hiprotein",  "system": false, "name": { "fr": "Hi-protéine","en": "Hi-protein" }, "icon": "dumbbell",    "color": "#4A7BA6" }
+  ],
+  "variantGroups": [
+    {
+      "groupId": "vg-beignes",
+      "memberIds": ["rec-beignes-frits", "rec-beignes-four"],
+      "baseId": "rec-beignes-frits"
+    }
+  ],
+  "recipes": [
+    {
+      "id": "rec-beignes-frits",
+      "title": "Beignes traditionnels frits",
+      "createdBy": "demo_chef",
+      "dateAdded": "2026-01-12T09:30:00Z",
+      "dateModified": "2026-02-03T14:10:00Z",
+      "source": "Recette de grand-maman Thérèse",
+      "heroImage": "beignes-frits.jpg",
+      "gallery": ["beignes-frits.jpg", "beignes-frits-pate.jpg"],
+      "description": "Le beigne de base, moelleux à l'intérieur et légèrement croustillant à l'extérieur. Cette pâte sert de fondation : nappez-la du glaçage de votre choix. Voir le {{link:rec-glacage-erable}} pour la version classique du temps des sucres.",
+      "servings": 12,
+      "prepTimeMinutes": 30,
+      "cookTimeMinutes": 15,
+      "tags": ["tag-dessert", "tag-fav"],
+      "variantGroupId": "vg-beignes",
+      "links": ["rec-glacage-erable"],
+      "ingredients": [
+        { "quantity": 500, "unit": "g",    "name": "farine tout usage" },
+        { "quantity": 200, "unit": "g",    "name": "sucre" },
+        { "quantity": 2,   "unit": "tsp",  "name": "poudre à pâte" },
+        { "quantity": 0.5, "unit": "tsp",  "name": "sel" },
+        { "quantity": 2,   "unit": null,   "name": "oeufs", "note": "gros, à température pièce" },
+        { "quantity": 250, "unit": "ml",   "name": "lait" },
+        { "quantity": 60,  "unit": "g",    "name": "beurre", "note": "fondu" },
+        { "quantity": 1.5, "unit": "l",    "name": "huile végétale", "note": "pour la friture" }
+      ],
+      "steps": [
+        { "text": "Mélanger les ingrédients secs : farine, sucre, poudre à pâte et sel.", "image": null, "timerSeconds": null },
+        { "text": "Dans un autre bol, battre les oeufs avec le lait et le beurre fondu.", "image": null, "timerSeconds": null },
+        { "text": "Combiner le tout sans trop mélanger, puis laisser reposer la pâte.", "image": "beignes-frits-pate.jpg", "timerSeconds": 900 },
+        { "text": "Chauffer l'huile à 180 °C. Façonner les beignes et les frire jusqu'à ce qu'ils soient dorés.", "image": null, "timerSeconds": 180 },
+        { "text": "Égoutter sur un papier absorbant et glacer au goût.", "image": null, "timerSeconds": null }
+      ],
+      "personal": {
+        "notes": "La pâte gagne à reposer 20 min plutôt que 15. Ne pas surcharger la friteuse.",
+        "rating": 5,
+        "lastCooked": "2026-02-03T00:00:00Z",
+        "madeCount": 4
+      }
+    },
+    {
+      "id": "rec-beignes-four",
+      "title": "Beignes au four (plus légers)",
+      "createdBy": "demo_chef",
+      "dateAdded": "2026-02-05T11:00:00Z",
+      "dateModified": "2026-02-05T11:00:00Z",
+      "source": "Variante de la recette de grand-maman",
+      "heroImage": null,
+      "gallery": [],
+      "description": "Une version cuite au four, sans friture — plus légère et plus rapide à nettoyer. Nécessite un moule à beignes. Même esprit que la {{link:rec-beignes-frits}}, mais moins de gras.",
+      "servings": 12,
+      "prepTimeMinutes": 20,
+      "cookTimeMinutes": 12,
+      "tags": ["tag-dessert"],
+      "variantGroupId": "vg-beignes",
+      "links": ["rec-beignes-frits"],
+      "ingredients": [
+        { "quantity": 500, "unit": "g",    "name": "farine tout usage" },
+        { "quantity": 150, "unit": "g",    "name": "sucre" },
+        { "quantity": 2,   "unit": "tsp",  "name": "poudre à pâte" },
+        { "quantity": 0.5, "unit": "tsp",  "name": "sel" },
+        { "quantity": 2,   "unit": null,   "name": "oeufs", "note": "gros" },
+        { "quantity": 250, "unit": "ml",   "name": "lait" },
+        { "quantity": 45,  "unit": "g",    "name": "beurre", "note": "fondu" }
+      ],
+      "steps": [
+        { "text": "Préchauffer le four à 190 °C et beurrer un moule à beignes.", "image": null, "timerSeconds": null },
+        { "text": "Mélanger les secs, puis incorporer les liquides sans trop travailler la pâte.", "image": null, "timerSeconds": null },
+        { "text": "Répartir la pâte dans le moule et cuire jusqu'à ce qu'un cure-dent ressorte propre.", "image": null, "timerSeconds": 720 },
+        { "text": "Démouler, laisser tiédir et glacer.", "image": null, "timerSeconds": null }
+      ],
+      "personal": {
+        "notes": "",
+        "rating": 4,
+        "lastCooked": null,
+        "madeCount": 1
+      }
+    },
+    {
+      "id": "rec-glacage-erable",
+      "title": "Glaçage à l'érable",
+      "createdBy": "demo_chef",
+      "dateAdded": "2026-01-12T10:00:00Z",
+      "dateModified": "2026-01-12T10:00:00Z",
+      "source": null,
+      "heroImage": null,
+      "gallery": [],
+      "description": "Un glaçage brillant au sirop d'érable, parfait pour napper les beignes. Se prépare en 5 minutes pendant que les beignes refroidissent.",
+      "servings": 12,
+      "prepTimeMinutes": 5,
+      "cookTimeMinutes": 0,
+      "tags": ["tag-dessert"],
+      "variantGroupId": null,
+      "links": [],
+      "ingredients": [
+        { "quantity": 250, "unit": "g",  "name": "sucre à glacer" },
+        { "quantity": 60,  "unit": "ml", "name": "sirop d'érable", "note": "ambré de préférence" },
+        { "quantity": 15,  "unit": "ml", "name": "lait", "note": "ajuster pour la consistance" }
+      ],
+      "steps": [
+        { "text": "Fouetter tous les ingrédients jusqu'à consistance lisse et nappante.", "image": null, "timerSeconds": null },
+        { "text": "Tremper le dessus des beignes tièdes et laisser figer.", "image": null, "timerSeconds": 600 }
+      ],
+      "personal": { "notes": "", "rating": 0, "lastCooked": null, "madeCount": 0 }
+    },
+    {
+      "id": "rec-crepes",
+      "title": "Crêpes du dimanche",
+      "createdBy": "demo_chef",
+      "dateAdded": "2026-01-20T08:15:00Z",
+      "dateModified": "2026-01-20T08:15:00Z",
+      "source": null,
+      "heroImage": "crepes.jpg",
+      "gallery": ["crepes.jpg"],
+      "description": "Des crêpes fines et souples, prêtes en un tournemain. Le repos de la pâte fait toute la différence.",
+      "servings": 4,
+      "prepTimeMinutes": 10,
+      "cookTimeMinutes": 20,
+      "tags": ["tag-breakfast", "tag-fav"],
+      "variantGroupId": null,
+      "links": [],
+      "ingredients": [
+        { "quantity": 250, "unit": "g",  "name": "farine tout usage" },
+        { "quantity": 3,   "unit": null, "name": "oeufs" },
+        { "quantity": 500, "unit": "ml", "name": "lait" },
+        { "quantity": 30,  "unit": "g",  "name": "beurre", "note": "fondu" },
+        { "quantity": 1,   "unit": "pinch", "name": "sel" }
+      ],
+      "steps": [
+        { "text": "Fouetter la farine, les oeufs et le sel, puis détendre avec le lait.", "image": null, "timerSeconds": null },
+        { "text": "Incorporer le beurre fondu et laisser reposer la pâte.", "image": null, "timerSeconds": 1800 },
+        { "text": "Cuire chaque crêpe dans une poêle chaude légèrement beurrée.", "image": null, "timerSeconds": 90 }
+      ],
+      "personal": {
+        "notes": "Doubler la recette : elles partent vite.",
+        "rating": 5,
+        "lastCooked": "2026-05-24T00:00:00Z",
+        "madeCount": 9
+      }
+    },
+    {
+      "id": "rec-soupe-pois",
+      "title": "Soupe aux pois jaunes",
+      "createdBy": "demo_chef",
+      "dateAdded": "2026-01-08T17:40:00Z",
+      "dateModified": "2026-01-08T17:40:00Z",
+      "source": "Classique québécois",
+      "heroImage": null,
+      "gallery": [],
+      "description": "La soupe réconfortante par excellence. Longue à mijoter, mais presque sans effort. Encore meilleure le lendemain.",
+      "servings": 8,
+      "prepTimeMinutes": 15,
+      "cookTimeMinutes": 150,
+      "tags": ["tag-soup", "tag-dinner"],
+      "variantGroupId": null,
+      "links": [],
+      "ingredients": [
+        { "quantity": 450, "unit": "g",  "name": "pois jaunes secs", "note": "rincés" },
+        { "quantity": 1,   "unit": null, "name": "oignon", "note": "haché" },
+        { "quantity": 2,   "unit": null, "name": "carottes", "note": "en dés" },
+        { "quantity": 200, "unit": "g",  "name": "jambon", "note": "en cubes" },
+        { "quantity": 2,   "unit": "l",  "name": "eau" },
+        { "quantity": 1,   "unit": "tsp", "name": "sarriette" },
+        { "quantity": 1,   "unit": "tsp", "name": "sel" }
+      ],
+      "steps": [
+        { "text": "Faire revenir l'oignon dans une grande casserole.", "image": null, "timerSeconds": null },
+        { "text": "Ajouter tous les autres ingrédients et porter à ébullition.", "image": null, "timerSeconds": null },
+        { "text": "Réduire le feu et laisser mijoter à couvert, en remuant de temps en temps.", "image": null, "timerSeconds": 9000 },
+        { "text": "Rectifier l'assaisonnement avant de servir.", "image": null, "timerSeconds": null }
+      ],
+      "personal": { "notes": "", "rating": 4, "lastCooked": null, "madeCount": 2 }
+    },
+    {
+      "id": "rec-cesar",
+      "title": "Salade César maison",
+      "createdBy": "demo_chef",
+      "dateAdded": "2026-03-02T19:00:00Z",
+      "dateModified": "2026-03-02T19:00:00Z",
+      "source": null,
+      "heroImage": null,
+      "gallery": [],
+      "description": "Une César avec une vraie vinaigrette maison, sans compromis. Croûtons à l'ail faits maison.",
+      "servings": 4,
+      "prepTimeMinutes": 20,
+      "cookTimeMinutes": 10,
+      "tags": ["tag-salad", "tag-appetizer"],
+      "variantGroupId": null,
+      "links": [],
+      "ingredients": [
+        { "quantity": 1,   "unit": null, "name": "laitue romaine", "note": "grosse" },
+        { "quantity": 2,   "unit": null, "name": "gousses d'ail" },
+        { "quantity": 1,   "unit": null, "name": "jaune d'oeuf" },
+        { "quantity": 60,  "unit": "ml", "name": "huile d'olive" },
+        { "quantity": 30,  "unit": "g",  "name": "parmesan", "note": "râpé" },
+        { "quantity": 4,   "unit": null, "name": "filets d'anchois", "note": "optionnel" },
+        { "quantity": 2,   "unit": "cup","name": "pain", "note": "en cubes, pour les croûtons" }
+      ],
+      "steps": [
+        { "text": "Faire dorer les cubes de pain à l'ail au four.", "image": null, "timerSeconds": 600 },
+        { "text": "Émulsionner le jaune d'oeuf, l'ail, les anchois et l'huile.", "image": null, "timerSeconds": null },
+        { "text": "Mélanger la romaine avec la vinaigrette, le parmesan et les croûtons.", "image": null, "timerSeconds": null }
+      ],
+      "personal": { "notes": "", "rating": 0, "lastCooked": null, "madeCount": 0 }
+    },
+    {
+      "id": "rec-chili-proteine",
+      "title": "Chili hi-protéine",
+      "createdBy": "demo_chef",
+      "dateAdded": "2026-04-11T18:20:00Z",
+      "dateModified": "2026-04-11T18:20:00Z",
+      "source": null,
+      "heroImage": "chili.jpg",
+      "gallery": ["chili.jpg"],
+      "description": "Un chili copieux et riche en protéines, idéal pour la préparation de repas (meal prep). Se congèle très bien.",
+      "servings": 6,
+      "prepTimeMinutes": 15,
+      "cookTimeMinutes": 45,
+      "tags": ["tag-dinner", "tag-hiprotein", "tag-fav"],
+      "variantGroupId": null,
+      "links": [],
+      "ingredients": [
+        { "quantity": 600, "unit": "g",  "name": "boeuf haché maigre" },
+        { "quantity": 1,   "unit": null, "name": "oignon", "note": "haché" },
+        { "quantity": 2,   "unit": null, "name": "gousses d'ail", "note": "émincées" },
+        { "quantity": 800, "unit": "g",  "name": "tomates en dés", "note": "en conserve" },
+        { "quantity": 540, "unit": "ml", "name": "haricots rouges", "note": "rincés" },
+        { "quantity": 540, "unit": "ml", "name": "haricots noirs", "note": "rincés" },
+        { "quantity": 2,   "unit": "tbsp","name": "poudre de chili" },
+        { "quantity": 1,   "unit": "tsp", "name": "cumin moulu" }
+      ],
+      "steps": [
+        { "text": "Faire revenir l'oignon et l'ail, puis ajouter le boeuf et défaire à la cuillère.", "image": null, "timerSeconds": null },
+        { "text": "Ajouter les épices et bien enrober la viande.", "image": null, "timerSeconds": null },
+        { "text": "Verser les tomates et les haricots, puis laisser mijoter à découvert.", "image": null, "timerSeconds": 2400 },
+        { "text": "Rectifier l'assaisonnement et servir.", "image": null, "timerSeconds": null }
+      ],
+      "personal": {
+        "notes": "~38 g de protéines par portion. Excellent avec un peu de yogourt grec sur le dessus.",
+        "rating": 5,
+        "lastCooked": "2026-05-18T00:00:00Z",
+        "madeCount": 6
+      }
+    }
+  ]
+}
