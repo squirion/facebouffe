@@ -36,12 +36,16 @@ jobs:
       - run: flutter pub get
       - name: Build web (PWA)
         run: flutter build web --release --base-href /facebouffe/
-      - name: Write version.json
+      - name: Augment version.json (keep Flutter's fields for package_info_plus)
         run: |
           VER=$(grep '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//')
-          cat > build/web/version.json <<EOF
-          { "version": "${VER%%+*}", "build": ${VER##*+}, "apk": "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/facebouffe.apk" }
-          EOF
+          BUILD=${VER##*+}
+          APK="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/facebouffe.apk"
+          # Flutter generates build/web/version.json; merge in our update fields.
+          if [ ! -f build/web/version.json ]; then echo "{\"version\":\"${VER%%+*}\",\"build_number\":\"$BUILD\"}" > build/web/version.json; fi
+          jq --argjson build "$BUILD" --arg apk "$APK" '. + {build: $build, apk: $apk}' build/web/version.json > build/web/version.tmp.json
+          mv build/web/version.tmp.json build/web/version.json
+          cat build/web/version.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
