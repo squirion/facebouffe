@@ -46,3 +46,8 @@ app.*.map.json
 
 # Local verification artifacts
 tool/shots/
+
+# Android release signing (keep OUT of git)
+android/key.properties
+android/app/*.jks
+android/keystore.b64
