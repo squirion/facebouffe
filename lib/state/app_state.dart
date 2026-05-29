@@ -26,7 +26,10 @@ class AppState extends ChangeNotifier {
   String accentHex = '#C0563B';
   String homeLayout = 'editorial'; // editorial | grid
   String device = 'android'; // android | ios — affects insets/transition flavor
-  String chimeSound = 'alarm'; // timer chime: alarm | ringtone | chime
+  String chimeSound = 'alarm'; // timer sound mode: 'alarm' (a phone alarm tone) | 'chime' (soft)
+  String? chimeAlarmUri; // chosen alarm tone URI; null = device default alarm
+  String? chimeAlarmName; // display title of the chosen alarm tone
+  bool get chimeIsAlarm => chimeSound == 'alarm';
 
   bool reduceMotion = false;
   SharedPreferences? _prefs;
@@ -76,6 +79,8 @@ class AppState extends ChangeNotifier {
     homeLayout = _prefs!.getString('fb_home') ?? homeLayout;
     device = _prefs!.getString('fb_device') ?? device;
     chimeSound = _prefs!.getString('fb_chime') ?? chimeSound;
+    chimeAlarmUri = _prefs!.getString('fb_chime_uri');
+    chimeAlarmName = _prefs!.getString('fb_chime_name');
     final tips = _prefs!.getString('fb_tips');
     if (tips != null) {
       try {
@@ -129,6 +134,16 @@ class AppState extends ChangeNotifier {
     p.setString('fb_home', homeLayout);
     p.setString('fb_device', device);
     p.setString('fb_chime', chimeSound);
+    if (chimeAlarmUri != null) {
+      p.setString('fb_chime_uri', chimeAlarmUri!);
+    } else {
+      p.remove('fb_chime_uri');
+    }
+    if (chimeAlarmName != null) {
+      p.setString('fb_chime_name', chimeAlarmName!);
+    } else {
+      p.remove('fb_chime_name');
+    }
   }
 
   // ── settings mutations ──
@@ -186,8 +201,17 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setChimeSound(String v) {
+  void setChimeMode(String v) {
     chimeSound = v;
+    _persistSettings();
+    notifyListeners();
+  }
+
+  /// Pick a specific phone alarm tone (also switches the mode to 'alarm').
+  void setAlarmTone(String? uri, String? name) {
+    chimeSound = 'alarm';
+    chimeAlarmUri = uri;
+    chimeAlarmName = name;
     _persistSettings();
     notifyListeners();
   }

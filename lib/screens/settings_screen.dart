@@ -10,6 +10,7 @@ import '../nav.dart';
 import '../services/pdf_export.dart';
 import '../services/data_export.dart';
 import '../services/timer_notifications.dart';
+import '../services/ringtone_picker.dart';
 import 'export_select_screen.dart';
 import '../widgets/chrome.dart';
 import '../widgets/fb_icon.dart';
@@ -102,12 +103,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _SettingsRow(label: app.t('dark_mode'), child: _Toggle(on: app.dark, onTap: () => app.setDark(!app.dark))),
                     _SettingsRow(label: app.t('platform'), sub: app.t('platform_sub'), width: 150, last: true, child: Segmented(value: app.device, onChange: app.setDevice, options: const [('android', 'Android'), ('ios', 'iOS')])),
                   ]),
-                  _Group(label: app.t('timer_sound'), children: [
-                    for (final s in TimerNotifications.sounds) _ChimeRow(soundKey: s.key),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
-                      child: Text(app.t('timer_sound_hint'), style: fb.ui(size: 12.5, color: fb.inkFaint)),
-                    ),
+                  _Group(label: app.t('timer_sound'), children: const [
+                    _SoundRow(alarm: true),
+                    _SoundRow(alarm: false),
+                    _SoundHint(),
                   ]),
                   _Group(label: app.t('custom_tags'), children: const [TagManager()]),
                   _Group(label: app.t('import_export'), children: [
@@ -362,21 +361,48 @@ class _ActionRow extends StatelessWidget {
   }
 }
 
-// ── Timer chime selector: tap a row to choose + hear a preview ──
-class _ChimeRow extends StatelessWidget {
-  final String soundKey;
-  const _ChimeRow({required this.soundKey});
+// ── Timer sound selector ──
+// Two options: a phone alarm tone (pick any of the device's alarms) or a soft
+// chime. Tapping a row selects it and plays a short preview; the alarm row also
+// opens the system alarm picker to change which tone is used.
+class _SoundRow extends StatelessWidget {
+  final bool alarm;
+  const _SoundRow({required this.alarm});
 
   @override
   Widget build(BuildContext context) {
     final fb = context.fb;
     final app = context.watch<AppState>();
-    final on = app.chimeSound == soundKey;
+    final on = app.chimeIsAlarm == alarm;
+
+    void preview() => TimerNotifications.instance.preview(
+          isAlarm: alarm,
+          alarmUri: app.chimeAlarmUri,
+          title: app.t('timer_sound'),
+          body: alarm ? app.t('sound_alarm') : app.t('sound_soft'),
+        );
+
+    Future<void> pick() async {
+      final picked = await RingtonePicker.pickAlarm(current: app.chimeAlarmUri, title: app.t('sound_alarm'));
+      if (picked == null) return; // cancelled
+      app.setAlarmTone(picked.uri, picked.title);
+      preview();
+    }
+
+    void select() {
+      if (alarm) {
+        app.setAlarmTone(app.chimeAlarmUri, app.chimeAlarmName);
+      } else {
+        app.setChimeMode('chime');
+      }
+      preview();
+    }
+
+    final title = alarm ? app.t('sound_alarm') : app.t('sound_soft');
+    final sub = alarm ? (app.chimeAlarmName ?? app.t('sound_default_alarm')) : null;
+
     return GestureDetector(
-      onTap: () {
-        app.setChimeSound(soundKey);
-        TimerNotifications.instance.preview(soundKey, title: app.t('timer_sound'), body: app.t('chime_$soundKey'));
-      },
+      onTap: select,
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
@@ -390,19 +416,54 @@ class _ChimeRow extends StatelessWidget {
               child: on ? const Center(child: FbIcon('check', size: 13, color: Colors.white)) : null,
             ),
             const SizedBox(width: 13),
-            Expanded(child: Text(app.t('chime_$soundKey'), style: fb.ui(size: 15.5, weight: FontWeight.w600))),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-              decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(999)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                FbIcon('play', size: 14, color: fb.accent),
-                const SizedBox(width: 5),
-                Text(app.t('chime_test'), style: fb.ui(size: 12.5, weight: FontWeight.w700, color: fb.accent)),
-              ]),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title, style: fb.ui(size: 15.5, weight: FontWeight.w600)),
+                  if (sub != null) Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 12.5, color: fb.inkFaint)),
+                ],
+              ),
+            ),
+            if (alarm) ...[
+              GestureDetector(
+                onTap: pick,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Text(app.t('sound_change'), style: fb.ui(size: 13, weight: FontWeight.w700, color: fb.accent)),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+            GestureDetector(
+              onTap: preview,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(999)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  FbIcon('play', size: 14, color: fb.accent),
+                  const SizedBox(width: 5),
+                  Text(app.t('chime_test'), style: fb.ui(size: 12.5, weight: FontWeight.w700, color: fb.accent)),
+                ]),
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SoundHint extends StatelessWidget {
+  const _SoundHint();
+  @override
+  Widget build(BuildContext context) {
+    final fb = context.fb;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+      child: Text(context.read<AppState>().t('timer_sound_hint'), style: fb.ui(size: 12.5, color: fb.inkFaint)),
     );
   }
 }

@@ -4,22 +4,15 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
-/// A selectable timer chime. Each maps to its own notification channel because
-/// a channel's sound is immutable once created — switching the user's choice
-/// switches channels rather than mutating one. All play through the alarm
-/// stream (loud, DND-bypassing) so timers are heard while the phone sleeps.
-class ChimeSound {
-  final String key;
-  final String channelId;
-  final AndroidNotificationSound? sound; // null => channel default notification sound
-  const ChimeSound(this.key, this.channelId, this.sound);
-}
-
 /// OS-scheduled cooking-timer alerts. A timer's chime is a `zonedSchedule`d
 /// local notification fired at an absolute wall-clock time on an alarm-usage
 /// channel, so it survives backgrounding, screen-off and doze. The in-app tray
 /// is only a visual mirror. All methods are no-ops on web (the iOS web app
 /// falls back to the in-app visual countdown).
+///
+/// Two flavours: a soft "chime" (the system notification tone) or an "alarm"
+/// (any of the phone's own alarm tones, chosen via the system picker). Because
+/// a channel's sound is immutable, each distinct alarm URI gets its own channel.
 class TimerNotifications {
   TimerNotifications._();
   static final TimerNotifications instance = TimerNotifications._();
@@ -28,17 +21,13 @@ class TimerNotifications {
   bool _ready = false;
   Future<void>? _initFuture;
 
-  // Selectable chimes. 'alarm' (the device alarm tone) is the loud default;
-  // 'ringtone' is the phone ringtone; 'chime' is the gentle notification tone.
-  static const List<ChimeSound> sounds = [
-    ChimeSound('alarm', 'fb_timer_alarm', UriAndroidNotificationSound('content://settings/system/alarm_alert')),
-    ChimeSound('ringtone', 'fb_timer_ringtone', UriAndroidNotificationSound('content://settings/system/ringtone')),
-    ChimeSound('chime', 'fb_timer_chime', null),
-  ];
-  static const String defaultSound = 'alarm';
+  static const String _chimeChannel = 'fb_timer_chime';
+  static const String _alarmPrefix = 'fb_timer_alarm_';
+  // The device's default alarm tone, used when the user hasn't picked a specific one.
+  static const String defaultAlarmUri = 'content://settings/system/alarm_alert';
+  final Set<String> _ensured = {};
 
-  ChimeSound _soundFor(String key) =>
-      sounds.firstWhere((s) => s.key == key, orElse: () => sounds.first);
+  String _alarmChannelId(String? uri) => '$_alarmPrefix${(uri ?? 'default').hashCode}';
 
   /// Idempotent and concurrency-safe: the body runs at most once.
   Future<void> init() => _initFuture ??= _doInit();
@@ -60,24 +49,51 @@ class TimerNotifications {
     );
     await _plugin.initialize(settings: const InitializationSettings(android: android, iOS: darwin));
 
-    final android13 = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    if (android13 != null) {
-      // Retire the old single channel from earlier builds.
-      await android13.deleteNotificationChannel(channelId: 'fb_cooking_timers');
-      for (final s in sounds) {
-        await android13.createNotificationChannel(AndroidNotificationChannel(
-          s.channelId,
-          'Minuterie · ${s.key}',
-          description: 'Sonne quand une minuterie de cuisson se termine.',
-          importance: Importance.max,
-          playSound: true,
-          sound: s.sound,
-          enableVibration: true,
-          audioAttributesUsage: AudioAttributesUsage.alarm, // sounds while asleep / under DND
-        ));
+    final a = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (a != null) {
+      // Retire channels from earlier builds (fixed alarm/ringtone options).
+      for (final legacy in ['fb_cooking_timers', 'fb_timer_alarm', 'fb_timer_ringtone']) {
+        await a.deleteNotificationChannel(channelId: legacy);
       }
+      await a.createNotificationChannel(const AndroidNotificationChannel(
+        _chimeChannel,
+        'Minuterie · carillon',
+        description: 'Sonne quand une minuterie de cuisson se termine.',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm, // sounds while asleep / under DND
+      ));
     }
     _ready = true;
+  }
+
+  /// Create the channel for a specific alarm URI (once), pruning stale ones.
+  Future<void> _ensureAlarmChannel(String? uri) async {
+    final id = _alarmChannelId(uri);
+    if (_ensured.contains(id)) return;
+    final a = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (a == null) return;
+    await a.createNotificationChannel(AndroidNotificationChannel(
+      id,
+      'Minuterie · alarme',
+      description: 'Sonne quand une minuterie de cuisson se termine.',
+      importance: Importance.max,
+      playSound: true,
+      sound: UriAndroidNotificationSound(uri ?? defaultAlarmUri),
+      enableVibration: true,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+    ));
+    _ensured.add(id);
+    // prune previously-created alarm channels that are no longer selected
+    try {
+      final existing = await a.getNotificationChannels() ?? [];
+      for (final ch in existing) {
+        if (ch.id.startsWith(_alarmPrefix) && ch.id != id) {
+          await a.deleteNotificationChannel(channelId: ch.id);
+        }
+      }
+    } catch (_) {}
   }
 
   /// Ask for POST_NOTIFICATIONS (Android 13+). Exact-alarm is auto-granted via
@@ -85,33 +101,47 @@ class TimerNotifications {
   Future<bool> requestPermissions() async {
     if (kIsWeb) return false;
     await init();
-    final android13 = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    return await android13?.requestNotificationsPermission() ?? false;
+    final a = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    return await a?.requestNotificationsPermission() ?? false;
   }
 
-  NotificationDetails _details(String soundKey) {
-    final s = _soundFor(soundKey);
-    return NotificationDetails(
+  Future<NotificationDetails> _details({required bool isAlarm, String? alarmUri}) async {
+    if (isAlarm) {
+      await _ensureAlarmChannel(alarmUri);
+      return NotificationDetails(
+        android: AndroidNotificationDetails(
+          _alarmChannelId(alarmUri),
+          'Minuterie · alarme',
+          channelDescription: 'Sonne quand une minuterie de cuisson se termine.',
+          icon: 'ic_stat_timer',
+          importance: Importance.max,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.alarm,
+          sound: UriAndroidNotificationSound(alarmUri ?? defaultAlarmUri),
+          audioAttributesUsage: AudioAttributesUsage.alarm,
+        ),
+      );
+    }
+    return const NotificationDetails(
       android: AndroidNotificationDetails(
-        s.channelId,
-        'Minuterie · ${s.key}',
+        _chimeChannel,
+        'Minuterie · carillon',
         channelDescription: 'Sonne quand une minuterie de cuisson se termine.',
         icon: 'ic_stat_timer',
         importance: Importance.max,
         priority: Priority.high,
         category: AndroidNotificationCategory.alarm,
-        sound: s.sound,
         audioAttributesUsage: AudioAttributesUsage.alarm,
       ),
     );
   }
 
-  Future<void> schedule(int id, int fireDelaySeconds, {required String title, required String body, String soundKey = defaultSound}) async {
+  Future<void> schedule(int id, int fireDelaySeconds, {required String title, required String body, required bool isAlarm, String? alarmUri}) async {
     if (kIsWeb || fireDelaySeconds <= 0) return;
     await init(); // idempotent; guards against scheduling before init completes
     if (!_ready) return;
     final when = tz.TZDateTime.now(tz.local).add(Duration(seconds: fireDelaySeconds));
-    final details = _details(soundKey);
+    final details = await _details(isAlarm: isAlarm, alarmUri: alarmUri);
     try {
       await _plugin.zonedSchedule(
         id: id, title: title, body: body, scheduledDate: when,
@@ -132,13 +162,13 @@ class TimerNotifications {
     }
   }
 
-  /// Immediately post a sample notification so the user can hear a chime when
+  /// Immediately post a sample notification so the user can hear a sound when
   /// choosing one in Settings. Auto-dismisses shortly after.
-  Future<void> preview(String soundKey, {required String title, required String body}) async {
+  Future<void> preview({required bool isAlarm, String? alarmUri, required String title, required String body}) async {
     if (kIsWeb) return;
     await requestPermissions();
     if (!_ready) return;
-    final base = _details(soundKey).android!;
+    final base = (await _details(isAlarm: isAlarm, alarmUri: alarmUri)).android!;
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
         base.channelId, base.channelName,
@@ -146,7 +176,7 @@ class TimerNotifications {
         icon: 'ic_stat_timer',
         importance: Importance.max, priority: Priority.high,
         category: AndroidNotificationCategory.alarm,
-        sound: _soundFor(soundKey).sound,
+        sound: isAlarm ? UriAndroidNotificationSound(alarmUri ?? defaultAlarmUri) : null,
         audioAttributesUsage: AudioAttributesUsage.alarm,
         timeoutAfter: 4000, // self-dismiss after 4s
       ),
