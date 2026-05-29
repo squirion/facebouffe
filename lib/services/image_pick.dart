@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -59,11 +62,13 @@ class ImagePick {
       return null;
     }
     if (picked == null) return null;
+    final title = app.lang == 'fr' ? 'Cadrer la photo' : 'Reframe photo';
+    if (!context.mounted) return null;
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
       uiSettings: [
         AndroidUiSettings(
-          toolbarTitle: app.lang == 'fr' ? 'Cadrer la photo' : 'Reframe photo',
+          toolbarTitle: title,
           toolbarColor: fb.accent,
           toolbarWidgetColor: Colors.white,
           activeControlsWidgetColor: fb.accent,
@@ -71,12 +76,23 @@ class ImagePick {
           lockAspectRatio: false,
           hideBottomControls: false,
         ),
-        IOSUiSettings(
-          title: app.lang == 'fr' ? 'Cadrer la photo' : 'Reframe photo',
-          aspectRatioLockEnabled: false,
-        ),
+        IOSUiSettings(title: title, aspectRatioLockEnabled: false),
+        if (kIsWeb) WebUiSettings(context: context),
       ],
     );
-    return cropped?.path; // null if the crop screen was cancelled
+    if (cropped == null) return null; // crop cancelled
+    if (kIsWeb) {
+      // Web has no file paths that persist; store a downscaled data URL so the
+      // photo survives reloads (kept small to respect browser storage limits).
+      final bytes = await cropped.readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      List<int> out = bytes;
+      if (decoded != null) {
+        final resized = decoded.width > 1280 ? img.copyResize(decoded, width: 1280) : decoded;
+        out = img.encodeJpg(resized, quality: 80);
+      }
+      return 'data:image/jpeg;base64,${base64Encode(out)}';
+    }
+    return cropped.path;
   }
 }

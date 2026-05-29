@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../nav.dart';
+import '../widgets/banners.dart';
 import '../widgets/cards.dart';
 import '../widgets/chrome.dart';
 import '../widgets/fb_icon.dart';
@@ -73,6 +74,9 @@ class HomeScreen extends StatelessWidget {
         Expanded(
           child: ScreenScroll(
             children: [
+              // deployment banners (update available / install app) — self-hide
+              const UpdateBanner(),
+              const WebPromoBanner(),
               // category browse hub
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),

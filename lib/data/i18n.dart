@@ -67,6 +67,9 @@ const Map<String, Map<String, String>> kI18n = {
     'timer_sound': 'Son du minuteur', 'timer_sound_hint': 'Au volume de l\'alarme, même en veille',
     'sound_soft': 'Carillon doux', 'sound_alarm': 'Alarme du téléphone',
     'sound_default_alarm': 'Alarme par défaut', 'sound_change': 'Changer', 'chime_test': 'Tester',
+    'update_available': 'Mise à jour disponible', 'update_get': 'Télécharger', 'update_refresh': 'Rafraîchir',
+    'install_android': 'Installez l\'app Android', 'install_get': 'Obtenir',
+    'ios_a2hs': 'Ajoutez Facebouffe à l\'écran d\'accueil : Partager → Sur l\'écran d\'accueil.',
   },
   'en': {
     'tab_home': 'Home', 'tab_search': 'Search', 'tab_list': 'Groceries', 'tab_settings': 'Settings',
@@ -134,6 +137,9 @@ const Map<String, Map<String, String>> kI18n = {
     'timer_sound': 'Timer sound', 'timer_sound_hint': 'Plays at alarm volume, even while asleep',
     'sound_soft': 'Soft chime', 'sound_alarm': 'Phone alarm',
     'sound_default_alarm': 'Default alarm', 'sound_change': 'Change', 'chime_test': 'Test',
+    'update_available': 'Update available', 'update_get': 'Download', 'update_refresh': 'Refresh',
+    'install_android': 'Install the Android app', 'install_get': 'Get',
+    'ios_a2hs': 'Add Facebouffe to your home screen: Share → Add to Home Screen.',
   },
 };
 
