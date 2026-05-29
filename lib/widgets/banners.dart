@@ -10,13 +10,9 @@ import '../services/update_check.dart';
 import '../services/web_env.dart';
 import 'fb_icon.dart';
 
-Future<void> _open(String url, {bool sameTab = false}) async {
+Future<void> _open(String url) async {
   final uri = Uri.parse(url);
-  if (kIsWeb) {
-    await launchUrl(uri, webOnlyWindowName: sameTab ? '_self' : '_blank');
-  } else if (await canLaunchUrl(uri)) {
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
+  if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
 /// Shared dismissible bar look used by both banners.
@@ -141,10 +137,10 @@ class _WebPromoBannerState extends State<WebPromoBanner> {
         icon: 'basket',
         content: Text(app.t('install_android'), style: fb.ui(size: 13.5, weight: FontWeight.w600)),
         actionLabel: app.t('install_get'),
-        // open the release page (a normal web page) — tapping the APK there uses
-        // Chrome's standard download flow, which doesn't stall like an
-        // SPA-initiated download can.
-        onAction: () => _open(kReleasesPageUrl),
+        // One-tap direct download via top-level navigation (Content-Disposition:
+        // attachment → downloads without leaving the app). Avoids the popup
+        // download that stalled on Android Chrome.
+        onAction: () => webDownload(kApkLatestUrl),
         onDismiss: () => setState(() => _hidden = true),
       );
     }
