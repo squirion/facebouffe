@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="facebouffe"
+        android:label="Facebouffe"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
