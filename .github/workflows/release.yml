@@ -50,9 +50,9 @@ jobs:
           storeFile=facebouffe-release.jks
           EOF
 
-      - name: Build Android APK (universal, signed)
+      - name: Build Android APK (ARM 32/64-bit, signed)
         run: |
-          flutter build apk --release
+          flutter build apk --release --target-platform android-arm,android-arm64
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk dist/facebouffe.apk
 
