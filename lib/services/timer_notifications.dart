@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -15,11 +15,15 @@ class TimerNotifications {
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
+  Future<void>? _initFuture;
   static const String _channelId = 'fb_cooking_timers';
   static const String _channelName = 'Minuteries / Cooking timers';
 
-  Future<void> init() async {
-    if (kIsWeb || _ready) return;
+  /// Idempotent and concurrency-safe: the body runs at most once.
+  Future<void> init() => _initFuture ??= _doInit();
+
+  Future<void> _doInit() async {
+    if (kIsWeb) return;
     tzdata.initializeTimeZones();
     try {
       final info = await FlutterTimezone.getLocalTimezone();
@@ -27,7 +31,7 @@ class TimerNotifications {
     } catch (_) {
       tz.setLocalLocation(tz.getLocation('UTC')); // degraded fallback, never crash
     }
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const android = AndroidInitializationSettings('ic_stat_timer');
     const darwin = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestSoundPermission: false,
@@ -52,31 +56,47 @@ class TimerNotifications {
   /// the USE_EXACT_ALARM manifest permission, so no runtime request is needed.
   Future<bool> requestPermissions() async {
     if (kIsWeb) return false;
+    await init();
     final android13 = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     return await android13?.requestNotificationsPermission() ?? false;
   }
 
+  static const NotificationDetails _details = NotificationDetails(
+    android: AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: 'Sonne quand une minuterie de cuisson se termine.',
+      icon: 'ic_stat_timer',
+      importance: Importance.max,
+      priority: Priority.high,
+      category: AndroidNotificationCategory.alarm,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+    ),
+  );
+
   Future<void> schedule(int id, int fireDelaySeconds, {required String title, required String body}) async {
-    if (kIsWeb || !_ready || fireDelaySeconds <= 0) return;
+    if (kIsWeb || fireDelaySeconds <= 0) return;
+    await init(); // idempotent; guards against scheduling before init completes
+    if (!_ready) return;
     final when = tz.TZDateTime.now(tz.local).add(Duration(seconds: fireDelaySeconds));
-    await _plugin.zonedSchedule(
-      id: id,
-      title: title,
-      body: body,
-      scheduledDate: when,
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          channelDescription: 'Sonne quand une minuterie de cuisson se termine.',
-          importance: Importance.max,
-          priority: Priority.high,
-          category: AndroidNotificationCategory.alarm,
-          audioAttributesUsage: AudioAttributesUsage.alarm,
-        ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-    );
+    try {
+      await _plugin.zonedSchedule(
+        id: id, title: title, body: body, scheduledDate: when,
+        notificationDetails: _details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } catch (e) {
+      debugPrint('[TimerNotifications] exact schedule failed ($e); retrying inexact');
+      try {
+        await _plugin.zonedSchedule(
+          id: id, title: title, body: body, scheduledDate: when,
+          notificationDetails: _details,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        );
+      } catch (e2) {
+        debugPrint('[TimerNotifications] inexact schedule also failed: $e2');
+      }
+    }
   }
 
   Future<void> cancel(int id) async {
