@@ -705,6 +705,9 @@ class _JournalState extends State<_Journal> {
                       controller: _notes,
                       focusNode: _notesFocus,
                       onChanged: (v) => p.notes = v, // in-memory; flushed on blur/leave
+                      // tapping anywhere outside drops focus → cursor/keyboard
+                      // disappear, signalling the edit was recorded (blur saves)
+                      onTapOutside: (_) => _notesFocus.unfocus(),
                       minLines: 1,
                       maxLines: null,
                       keyboardType: TextInputType.multiline,
