@@ -252,6 +252,10 @@ class AppState extends ChangeNotifier {
 
   void setRating(String id, int v) => updateRecipe(id, (r) => r.personal.rating = v);
 
+  /// Persist the in-memory database (used to flush inline notes edits without
+  /// rebuilding the UI on every keystroke).
+  void saveDb() => _persistDb();
+
   void markCooked(String id) {
     final r = getRecipe(id);
     if (r == null) return;

@@ -617,14 +617,40 @@ class _PhotoPlaceholder extends StatelessWidget {
   }
 }
 
-class _Journal extends StatelessWidget {
+class _Journal extends StatefulWidget {
   final Recipe recipe;
   const _Journal({required this.recipe});
+
+  @override
+  State<_Journal> createState() => _JournalState();
+}
+
+class _JournalState extends State<_Journal> {
+  late final TextEditingController _notes = TextEditingController(text: widget.recipe.personal.notes);
+  final FocusNode _notesFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    // Flush the edited note to disk when the field loses focus.
+    _notesFocus.addListener(() {
+      if (!_notesFocus.hasFocus) context.read<AppState>().saveDb();
+    });
+  }
+
+  @override
+  void dispose() {
+    context.read<AppState>().saveDb(); // flush any last edit on leaving the page
+    _notes.dispose();
+    _notesFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final fb = context.fb;
     final app = context.read<AppState>();
+    final recipe = widget.recipe;
     final lang = app.lang;
     final p = recipe.personal;
     return Container(
@@ -663,22 +689,40 @@ class _Journal extends StatelessWidget {
               ),
             ],
           ),
-          if (p.notes.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 14),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(14)),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(padding: const EdgeInsets.only(top: 2), child: FbIcon('note', size: fb.fs(17), color: fb.accent)),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(p.notes, style: fb.ui(size: 14.5, color: fb.inkSoft, height: 1.5, fontStyle: FontStyle.italic))),
-                  ],
-                ),
+          // Editable notes — tap to add or change.
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(14)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(padding: const EdgeInsets.only(top: 10), child: FbIcon('note', size: fb.fs(17), color: fb.accent)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _notes,
+                      focusNode: _notesFocus,
+                      onChanged: (v) => p.notes = v, // in-memory; flushed on blur/leave
+                      minLines: 1,
+                      maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      textCapitalization: TextCapitalization.sentences,
+                      style: fb.ui(size: 14.5, color: fb.inkSoft, height: 1.5, fontStyle: FontStyle.italic),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                        border: InputBorder.none,
+                        hintText: app.t('f_notes_ph'),
+                        hintStyle: fb.ui(size: 14.5, color: fb.inkFaint, fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+          ),
         ],
       ),
     );
