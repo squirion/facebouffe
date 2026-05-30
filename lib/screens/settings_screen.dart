@@ -179,8 +179,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (kIsWeb) {
       reloadApp();
     } else {
-      final uri = Uri.parse(info.apkUrl);
-      if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+      try {
+        await launchUrl(Uri.parse(info.apkUrl), mode: LaunchMode.externalApplication);
+      } catch (_) {}
     }
   }
 

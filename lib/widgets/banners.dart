@@ -11,8 +11,11 @@ import '../services/web_env.dart';
 import 'fb_icon.dart';
 
 Future<void> _open(String url) async {
-  final uri = Uri.parse(url);
-  if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  // Don't gate on canLaunchUrl: on Android 11+ it can return false for https
+  // even when a browser exists. Just launch and ignore failures.
+  try {
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  } catch (_) {}
 }
 
 /// Shared dismissible bar look used by both banners.
