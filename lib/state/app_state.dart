@@ -5,6 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../services/import/ondevice_ai.dart';
 
 import '../data/models.dart';
 import '../data/i18n.dart';
@@ -23,6 +26,13 @@ class AppState extends ChangeNotifier {
   Map<String, String> recipePhotos = {}; // recipe id (or "__draft") -> hero photo path
   Map<String, List<String>> recipeGallery = {}; // recipe id (or "__draft") -> gallery photo paths
   Map<String, String> aliases = {}; // normalized ingredient name -> CNF food code (learned defaults, §2e)
+
+  // ── import engine config (§2f) ──
+  String importBackend = 'tier0'; // tier0 (link/JSON-LD) | ondevice | byok
+  String importProvider = 'claude'; // selected BYOK provider: claude | openai | gemini
+  Map<String, String> importKeys = {}; // provider -> API key, cached from secure storage
+  bool onDeviceAI = false; // whether Tier 1 (on-device model) is usable on this device
+  static const _secure = FlutterSecureStorage();
 
   // App-only settings (not part of the recipe schema)
   bool dark = false;
@@ -107,6 +117,15 @@ class AppState extends ChangeNotifier {
         aliases = Map<String, String>.from(jsonDecode(al) as Map);
       } catch (_) {}
     }
+    importBackend = _prefs!.getString('fb_import_backend') ?? importBackend;
+    importProvider = _prefs!.getString('fb_import_provider') ?? importProvider;
+    try {
+      for (final p in const ['claude', 'openai', 'gemini']) {
+        final k = await _secure.read(key: 'fb_key_$p');
+        if (k != null && k.isNotEmpty) importKeys[p] = k;
+      }
+    } catch (_) {}
+    onDeviceAI = await OnDeviceAi.available();
     try {
       final pkg = await PackageInfo.fromPlatform();
       appVersion = '${pkg.version}+${pkg.buildNumber}';
@@ -476,6 +495,45 @@ class AppState extends ChangeNotifier {
     _prefs?.setString('fb_aliases', jsonEncode(aliases));
     notifyListeners();
   }
+
+  // ── import engine config (§2f) ──
+  void setImportBackend(String b) {
+    importBackend = b;
+    _prefs?.setString('fb_import_backend', b);
+    notifyListeners();
+  }
+
+  void setImportProvider(String p) {
+    importProvider = p;
+    _prefs?.setString('fb_import_provider', p);
+    notifyListeners();
+  }
+
+  Future<void> setImportKey(String provider, String key) async {
+    final v = key.trim();
+    if (v.isEmpty) {
+      importKeys.remove(provider);
+      try {
+        await _secure.delete(key: 'fb_key_$provider');
+      } catch (_) {}
+    } else {
+      importKeys[provider] = v;
+      try {
+        await _secure.write(key: 'fb_key_$provider', value: v);
+      } catch (_) {}
+    }
+    notifyListeners();
+  }
+
+  bool importKeyFor(String provider) => (importKeys[provider] ?? '').trim().isNotEmpty;
+  bool get hasAnyImportKey => importKeys.values.any((k) => k.trim().isNotEmpty);
+
+  /// Whether a backend tier can run right now (device / keys permitting).
+  bool engineAvailable(String backend) =>
+      backend == 'tier0' || (backend == 'ondevice' && onDeviceAI) || (backend == 'byok' && hasAnyImportKey);
+
+  /// The configured backend, falling back to tier0 if it's not currently usable.
+  String get effectiveBackend => engineAvailable(importBackend) ? importBackend : 'tier0';
 
   // ── shopping ──
   void shoppingAdd(ShoppingItem it) {

@@ -53,6 +53,9 @@ dependencies:
   url_launcher: ^6.3.2
   image: ^4.8.0
   web: ^1.1.1
+  flutter_secure_storage: ^9.2.2      # BYOK API keys in Keychain/Keystore (§2f)
+  google_mlkit_text_recognition: ^0.15.0  # on-device OCR for photo import (Tier 1)
+  receive_sharing_intent: ^1.8.1      # "Partager vers Facebouffe" share-sheet target
 
 dev_dependencies:
   flutter_test:
