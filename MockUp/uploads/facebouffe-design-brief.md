@@ -28,7 +28,7 @@
 - A floating **"+"** button for adding a recipe (present on Home; your call whether it floats elsewhere). It opens a small **method chooser** — Manuellement / lien / photo / texte (Manuellement first); all paths land on the same Add/Edit screen. The non-manual paths are the §2f import engine (Phase 1.5); in Phase 1 the "+" goes straight to manual add.
 - **Favorites** are surfaced on Home, not a separate tab.
 
-**Screen inventory.** Home · Filtered list · Recipe description page · Sous-chef mode (2 swipeable panes) · Add/Edit (sectioned flow) · Shopping list · Search · Settings · Advanced settings (sub-page of Settings).
+**Screen inventory.** Home · Filtered list · Recipe description page · Sous-chef mode (2 swipeable panes) · Add/Edit (sectioned flow) · Shopping list · Search · Settings.
 
 ---
 
@@ -100,7 +100,7 @@ Profile {
               volume: "metric"|"imperial",
               weight: "metric"|"imperial" }
   fontSize  "small" | "medium" | "large"
-  tipsSeen  { sousChef, variants, shoppingAdd, pdfExport, variantChips, customTags, ingredientAliases, importBackend, apiKeys: bool }  // see 2c
+  tipsSeen  { sousChef, variants, shoppingAdd, pdfExport, variantChips: bool }  // see 2c
 }
 
 // App state, not in the seed file:
@@ -187,11 +187,10 @@ Tasteful motion raises perceived quality; the goal is *selective and purposeful*
 - **Mode sous-chef toggle** (carries the "vue simplifiée pour cuisiner" explanation).
 - **Ajouter une variante** (what a variant is vs. a normal recipe).
 - **Ajouter à la liste d'épicerie** (sends *scaled* ingredients to the list).
-- **Exporter en livre (PDF)** (single-recipe PDF here / whole-book PDF from Settings).
+- **Exporter en PDF** (single recipe here / book from Settings).
 - **Variant chips** (switching between forks of the same dish).
-- **Advanced settings features** (each fires the first time its section is opened in Paramètres avancés): **Tags personnalisés** (creating/renaming/deleting your own tags), **Aliases d'ingrédients** (what a learned ingredient match is, and that edits apply going-forward), **Importation** (the rule-based / on-device / your-own-key tiers), **Clés API** (what a key is, where to get one, that it's stored only on this device). The last three are Phase 1.5.
 
-**Persistent fallback.** A **Help / Aide** entry in Settings: a short plain-language glossary of the app's own terms (sous-chef, variante, tag, **tag personnalisé, alias d'ingrédient, importation IA, clé API**) plus a few how-tos — including the advanced ones: managing your own tags, editing ingredient aliases, choosing an import method, and adding/removing an API key. Low discovery, but the safety net for "I need to look it up."
+**Persistent fallback.** A **Help / Aide** entry in Settings: a short plain-language glossary of the app's own terms (sous-chef, variante, tag) plus a few how-tos. Low discovery, but the safety net for "I need to look it up."
 
 **Replay.** Settings includes **"Revoir les astuces"** (reset tips) that clears all seen-flags so coach marks reappear. Important for nervous users who dismissed a tip and fear it's gone forever.
 
@@ -200,16 +199,12 @@ Tasteful motion raises perceived quality; the goal is *selective and purposeful*
 **Data-model addition.** Coach marks need per-feature seen-flags persisted locally, plus a global reset:
 ```
 Profile.tipsSeen {
-  sousChef:     bool,
-  variants:     bool,
-  shoppingAdd:  bool,
-  pdfExport:    bool,
-  variantChips: bool,
-  customTags:        bool,   // Advanced settings
-  ingredientAliases: bool,   // Advanced settings (Phase 1.5)
-  importBackend:     bool,   // Advanced settings (Phase 1.5)
-  apiKeys:           bool    // Advanced settings (Phase 1.5)
-}   // "Revoir les astuces" sets all → false; absent flags load as false
+  sousChef:    bool,
+  variants:    bool,
+  shoppingAdd: bool,
+  pdfExport:   bool,
+  variantChips:bool
+}   // "Revoir les astuces" sets all → false
 ```
 
 **Bilingual note.** Every word of help copy (empty states, coach marks, glossary) exists in FR + EN — keep it short, partly for that reason.
@@ -218,13 +213,13 @@ Profile.tipsSeen {
 
 ## 2d. Tag Management
 
-Two distinct jobs: **managing** tags (create/rename/delete) lives in **Settings → Paramètres avancés → Tags personnalisés**; **applying** tags to a recipe lives in the **Add/Edit editor**. Recall `Tag { id, system, special?, name, icon, color }` (§2).
+Two distinct jobs: **managing** tags (create/rename/delete) lives in **Settings**; **applying** tags to a recipe lives in the **Add/Edit editor**. Recall `Tag { id, system, special?, name, icon, color }` (§2).
 
 **System vs. user tags.**
 - **System tags** (Déjeuner, Dessert, Soupe…) and the special `tag-fav`: **not editable or deletable.** Their bilingual `{fr,en}` names and default icons/colors are fixed. Settings may list them read-only, or omit them.
 - **User tags** (e.g. Hi-protéine): single-string name, fully managed by the user.
 
-**Managing (Settings → Paramètres avancés → "Tags personnalisés").** Lists user tags only, each with rename + delete.
+**Managing (Settings → "Tags personnalisés").** Lists user tags only, each with rename + delete.
 - **Auto appearance on creation.** A new user tag is auto-assigned a palette color and a sensible default icon — the user is **not** required to configure appearance. Changing icon/color afterward is *optional*, not a creation step. (Lowest friction for novices.)
 - **Delete = drop relationship, never destroy recipes.** Deleting a user tag removes it from any recipes carrying it; the recipes are untouched. Confirmation states the count: *"Supprimer 'Hi-protéine'? Ce tag sera retiré de 3 recettes."*
 - **Rename is the single source of truth.** Renaming here propagates everywhere the tag appears. The editor never renames — it only toggles on/off.
@@ -237,7 +232,7 @@ Two distinct jobs: **managing** tags (create/rename/delete) lives in **Settings 
 - **Inline creation is allowed** from that picker: if the search yields no match, offer *"Aucun résultat — créer 'Végé'?"*. A tag born here gets the same auto color/icon treatment, and the case-insensitive duplicate warning applies.
 - **The favorite star is NOT a pill here.** It stays its own distinct control on the recipe page header; `tag-fav` never renders in the editor pill row (avoids two ways to do one thing).
 
-**Designer-facing summary.** Editor tag row = colored selected pills + grayed unselected pills (tap to toggle) + a "+ tag" button opening the search picker with inline-create. Tag manager (in Advanced settings) = list of user tags with rename/delete, delete shows affected-recipe count, creation auto-assigns color/icon. Star excluded from both pill contexts.
+**Designer-facing summary.** Editor tag row = colored selected pills + grayed unselected pills (tap to toggle) + a "+ tag" button opening the search picker with inline-create. Settings tag manager = list of user tags with rename/delete, delete shows affected-recipe count, creation auto-assigns color/icon. Star excluded from both pill contexts.
 
 ---
 
@@ -259,11 +254,11 @@ Two distinct jobs: **managing** tags (create/rename/delete) lives in **Settings 
 
 **Learned alias table (quality-of-life, CNF-path only).** A recipe-independent local store mapping a normalized ingredient name → preferred CNF food, so a correction made once becomes the default thereafter.
 - **Going-forward only.** Correcting "beurre" sets the default for *future* matches; it does **not** retroactively rewrite recipes already finalized (same principle as variant "full copy, no retroactive inheritance" — consistent mental model). Past rows keep their resolved match unless the user re-opens and re-matches.
-- **Override-able.** An alias is a remembered default, always overridable per row; the full table is viewable/editable in **Settings → Paramètres avancés → "Aliases d'ingrédients"**, a sibling to "Tags personnalisés".
+- **Override-able.** An alias is a remembered default, always overridable per row; the full table is viewable/editable in **Settings**, as a sibling to "Tags personnalisés" ("Aliases d'ingrédients").
 - **Normalized keys.** Lowercased + trimmed, so "Beurre", "beurre", "beurre " collapse to one alias (same case-insensitive instinct as tag de-duplication).
 - This learning behavior is itself Phase 1.5 scope; the per-row `nutritionRef` alone is enough to ship a working label, with the alias layer as the upgrade on top.
 
-**Where it surfaces (all Phase 1.5).** Ingredients section of Add/Edit (matching + correction + per-ingredient include toggle + "générer l'étiquette"); the recipe description page (display the saved label); optionally the PDF export; Advanced settings (the alias table editor). A coach mark would join the §2c set when introduced.
+**Where it surfaces (all Phase 1.5).** Ingredients section of Add/Edit (matching + correction + per-ingredient include toggle + "générer l'étiquette"); the recipe description page (display the saved label); optionally the PDF export; Settings (the alias table editor). A coach mark would join the §2c set when introduced.
 
 ### Phase 1.5 schema additions (optional fields; absent in Phase 1 data)
 ```
@@ -290,7 +285,7 @@ Recipe (+) {
 IngredientAliases {              // learned defaults: normalized name → preferred CNF food
   "<normalized name>": { foodCode, matchedName }
   // e.g. "beurre": { "foodCode": "…", "matchedName": "Beurre, salé" }
-  // keys lowercased+trimmed · editable in Advanced settings · going-forward only · CNF-path only
+  // keys lowercased+trimmed · editable in Settings · going-forward only · CNF-path only
 }
 ```
 
@@ -319,7 +314,7 @@ IngredientAliases {              // learned defaults: normalized name → prefer
 **Where it surfaces — action vs. configuration are separate, and live in different places.**
 Import is not one component; it's an *action* (bring a recipe in now) and a *configuration* (which backend, the key, privacy). Splitting them keeps it simple.
 - **Action → the "+" method chooser.** "+" no longer opens a blank form directly; it opens a small chooser — **Manuellement · À partir d'un lien · À partir d'une photo · À partir de texte** — with *Manuellement listed first* (thumb-reflex for the common case). All four paths funnel into the **same sectioned Add/Edit review screen**. Import isn't a feature parallel to "add a recipe"; it *is* adding a recipe with a different starting point. Output always opens the editor for review — never a silent save.
-- **Configuration → Settings → Paramètres avancés.** Two separate items there: **Importation** (backend choice — rule-based only / on-device / your own key — and the privacy note) and **Clés API** (the BYOK provider keys). Setup belongs in the advanced sub-page, where the tier/key complexity stays out of the way 99% of the time.
+- **Configuration → Settings, "Importation" group.** Backend choice (rule-based only / on-device / your own key), the BYOK key field, and the privacy note live here beside "Tags personnalisés" — where setup belongs and where the tier/key complexity stays out of the way 99% of the time.
 - **Bonus, lowest-friction path → OS share-sheet target ("Partager vers Facebouffe").** Share a URL from the browser or an image from Photos straight into the app; both land on the same review screen. No button, no tab — the user is already looking at the recipe and just shares it over. Complements the "+", doesn't replace it. **(Phase 1.5, designed-for.)**
 - **Not a bottom tab.** The tab bar is for destinations you return to; import is an occasional action and doesn't earn that real estate (and would crowd the bar with long FR labels). And the *action* never lives in Settings — Settings configures, it doesn't do.
 
@@ -378,22 +373,11 @@ Each block: **Purpose · Reads/Writes · Key UI · States & edges · Mockup seed
 - **Mockup seed.** "Search screen: query field, a row of preset ingredient filter buttons plus tag chips, and a results list of recipe cards — include the donut base card showing a 'variantes' badge."
 
 ### Page — Settings (Réglages)
-- **Purpose.** Everyday configuration: profile, language, units, font size; load/save the recipe book and PDF export; help; and an entry to advanced settings.
-- **Reads/Writes.** `Profile`; triggers **Charger des recettes** (Load recipes — JSON book) / **Sauvegarder les recettes** (Save recipes — JSON book) / **Exporter en livre (PDF)** (Export as book (PDF), with recipe selection).
-- **Key UI.** **Nom d'utilisateur.** **Langue** (FR/EN, default OS). **Unités** — three independent toggles: température (°C/°F), volume (métrique/impérial), poids (métrique/impérial). **Taille de police** (small/medium/large). **Aide** — glossary + how-tos (§2c). **Revoir les astuces** — resets all `tipsSeen` flags so coach marks reappear. **Charger des recettes** (Load recipes — load a JSON book, merge-by-id). **Sauvegarder les recettes** (Save recipes — save the whole book as JSON, backup). **Exporter en livre (PDF)** (Export as book (PDF) → prompts for recipe selection, renders in current language + units). **Paramètres avancés ›** — opens the advanced sub-page (below).
-- **States & edges.** Load (JSON book) conflict/merge messaging. PDF selection sheet. Long bilingual labels. "Revoir les astuces" gives brief confirmation feedback.
-- **Mockup seed.** "Settings screen: username field, language toggle, three separate unit toggles (temperature/volume/weight), font-size selector, a Charger des recettes / Sauvegarder les recettes (load/save recipes) section plus Exporter en livre (PDF), and a 'Paramètres avancés ›' row at the bottom."
-
-### Page — Advanced Settings (Paramètres avancés)
-- **Purpose.** A sub-page (pushed from Settings) for occasional power-user configuration, keeping the everyday Settings view uncluttered.
-- **Reads/Writes.** User tags; `IngredientAliases` (§2e); import backend choice; stored API keys.
-- **Key UI — in this order:**
-  1. **Tags personnalisés** — manage user tags: create (auto color/icon), rename, delete (with affected-recipe count); system tags read-only/omitted (see §2d). *(Phase 1.)*
-  2. **Aliases d'ingrédients** — view/edit the learned ingredient→CNF-food alias table; override or remove entries (§2e). *(Phase 1.5.)*
-  3. **Importation** — import-backend choice (rule-based only / on-device / your own key) and the privacy note; *configuration* only, the import *action* lives on the "+" (§2f). *(Phase 1.5.)*
-  4. **Clés API** — manage BYOK provider keys (add/revoke/delete) used by Tier-2 import; stored in Keychain/Keystore, never logged, sent only to the provider (§2f). *(Phase 1.5.)*
-- **States & edges.** Tag delete confirms with count; duplicate tag name warns "ce tag existe déjà". Empty alias table / empty key list states. Key field masks the secret and offers reveal/clear. In Phase 1 only the Tags personnalisés section exists; the rest appear with Phase 1.5. **First-use coach marks** (§2c) fire when each section is first opened, and all four are covered in **Aide**.
-- **Mockup seed.** "Advanced settings sub-page with four stacked sections in order — Tags personnalisés (a list of user tags with rename/delete), Aliases d'ingrédients, Importation (backend radio choice), and Clés API (masked key field with add/revoke) — and a back arrow to Réglages."
+- **Purpose.** Configure profile, language, units, font size; load/save the recipe book and PDF export.
+- **Reads/Writes.** `Profile`; triggers **Charger un livre** (load a JSON book) / **Sauvegarder un livre** (save book as JSON) / **Exporter en PDF** (book, with recipe selection).
+- **Key UI.** **Nom d'utilisateur.** **Langue** (FR/EN, default OS). **Unités** — three independent toggles: température (°C/°F), volume (métrique/impérial), poids (métrique/impérial). **Taille de police** (small/medium/large). **Tags personnalisés** — manage user tags: create (auto color/icon), rename, delete (with affected-recipe count); system tags read-only/omitted (see §2d). **Importation** (Phase 1.5, §2f) — import-backend choice (rule-based only / on-device / your own key), the BYOK key field, and the privacy note; this is *configuration* only, the import *action* lives on the "+". **Aide** — glossary + how-tos (§2c). **Revoir les astuces** — resets all `tipsSeen` flags so coach marks reappear. **Charger un livre** (load a JSON book — merge-by-id). **Sauvegarder un livre** (save the whole book as JSON — backup). **Exporter en PDF** (book → prompts for recipe selection, renders in current language + units).
+- **States & edges.** Load (JSON book) conflict/merge messaging. PDF selection sheet. Long bilingual labels. "Revoir les astuces" gives brief confirmation feedback. Tag delete confirms with count; duplicate tag name warns "ce tag existe déjà".
+- **Mockup seed.** "Settings screen: username field, language toggle, three separate unit toggles (temperature/volume/weight), font-size selector, and a Charger / Sauvegarder un livre (load/save) section plus Exporter en PDF."
 
 ---
 

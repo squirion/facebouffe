@@ -7,6 +7,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "lang": "fr",
   "fontSize": "medium",
   "homeLayout": "editorial",
+  "onDeviceAI": true,
   "tempUnit": "celsius",
   "volUnit": "metric",
   "weightUnit": "metric"
@@ -75,8 +76,37 @@ function App() {
       return next;
     });
   }, []);
+  // Phase 1.5 — learned ingredient→CNF alias table (going-forward defaults).
+  const [aliases, setAliasesState] = React.useState(() => {
+    try { const v = JSON.parse(localStorage.getItem("fb_aliases") || "null"); return v || { "beurre": { foodCode: "F-0142", matchedName: "Beurre, sal\u00e9" } }; } catch (e) { return {}; }
+  });
+  const addAlias = React.useCallback((name, foodCode) => {
+    const key = FB.normalizeName(name);
+    if (!key) return;
+    setAliasesState((a) => { const next = { ...a, [key]: { foodCode, matchedName: FB.cnfName(foodCode, "fr") } }; try { localStorage.setItem("fb_aliases", JSON.stringify(next)); } catch (e) {} return next; });
+  }, []);
+  const removeAlias = React.useCallback((key) => {
+    setAliasesState((a) => { const next = { ...a }; delete next[key]; try { localStorage.setItem("fb_aliases", JSON.stringify(next)); } catch (e) {} return next; });
+  }, []);
+  // Phase 1.5 — import engine configuration (backend tier + per-provider keys).
+  const [importCfg, setImportCfgState] = React.useState(() => {
+    const base = { backend: "ondevice", provider: "claude", keys: { claude: "", gemini: "", chatgpt: "" } };
+    try {
+      const saved = JSON.parse(localStorage.getItem("fb_import_cfg") || "{}");
+      const keys = { ...base.keys, ...(saved.keys || {}) };
+      if (saved.key && !keys.claude) keys.claude = saved.key; // migrate old single-key shape
+      return { ...base, ...saved, keys };
+    } catch (e) { return base; }
+  });
+  const setImportCfg = React.useCallback((patch) => {
+    setImportCfgState((c) => { const next = { ...c, ...patch }; try { localStorage.setItem("fb_import_cfg", JSON.stringify(next)); } catch (e) {} return next; });
+  }, []);
+  const setImportKey = React.useCallback((provider, value) => {
+    setImportCfgState((c) => { const next = { ...c, keys: { ...c.keys, [provider]: value } }; try { localStorage.setItem("fb_import_cfg", JSON.stringify(next)); } catch (e) {} return next; });
+  }, []);
+  const [importFlow, setImportFlow] = React.useState(null);
   // coach-mark seen flags (Profile.tipsSeen), persisted; reset via Settings
-  const TIP_KEYS = { sousChef: false, variants: false, shoppingAdd: false, pdfExport: false, variantChips: false };
+  const TIP_KEYS = { sousChef: false, variants: false, shoppingAdd: false, pdfExport: false, variantChips: false, customTags: false, ingredientAliases: false, importEngine: false, apiKeys: false };
   const [tipsSeen, setTipsSeen] = React.useState(() => {
     try { return { ...TIP_KEYS, ...JSON.parse(localStorage.getItem("fb_tips_seen") || "{}") }; } catch (e) { return { ...TIP_KEYS }; }
   });
@@ -84,7 +114,7 @@ function App() {
     setTipsSeen((p) => { const next = { ...p, [k]: true }; try { localStorage.setItem("fb_tips_seen", JSON.stringify(next)); } catch (e) {} return next; });
   }, []);
   const resetTips = React.useCallback(() => {
-    const next = { sousChef: false, variants: false, shoppingAdd: false, pdfExport: false, variantChips: false };
+    const next = { sousChef: false, variants: false, shoppingAdd: false, pdfExport: false, variantChips: false, customTags: false, ingredientAliases: false, importEngine: false, apiKeys: false };
     setTipsSeen(next); try { localStorage.setItem("fb_tips_seen", JSON.stringify(next)); } catch (e) {}
   }, []);
 
@@ -101,7 +131,7 @@ function App() {
     openRecipe: (id, replace) => setStack((s) => replace ? [...s.slice(0, -1), { screen: "recipe", params: { id } }] : [...s, { screen: "recipe", params: { id } }]),
     cook: (id, servings) => setStack((s) => [...s, { screen: "souschef", params: { id, servings } }]),
     edit: (id) => setStack((s) => [...s, { screen: "edit", params: { id } }]),
-    add: () => setStack((s) => [...s, { screen: "edit", params: {} }]),
+    add: (draft) => setStack((s) => [...s, { screen: "edit", params: draft ? { draft } : {} }]),
     home: () => { setActiveTab("home"); setStack([{ screen: "home", params: {} }]); },
   }), []);
 
@@ -217,6 +247,7 @@ function App() {
     addTag, exportData, importData, recipePhotos, setRecipePhoto,
     renameTag, deleteTag, findTagByName, recipesWithTag,
     tipsSeen, markTipSeen, resetTips,
+    aliases, addAlias, removeAlias, importCfg, setImportCfg, setImportKey, onDeviceAI: tw.onDeviceAI !== false,
     shopping: shoppingApi,
   };
 
@@ -227,6 +258,7 @@ function App() {
     case "search": screen = <SearchScreen />; break;
     case "groceries": screen = <ShoppingScreen />; break;
     case "settings": screen = <SettingsScreen />; break;
+    case "advanced": screen = <AdvancedSettingsScreen />; break;
     case "help": screen = <HelpScreen />; break;
     case "filter": screen = <ListFilterScreen route={current.params} />; break;
     case "recipe": screen = <RecipeScreen route={current.params} />; break;
@@ -269,7 +301,7 @@ function App() {
 
       {/* FAB */}
       {showFab && (
-        <button onClick={() => nav.add()} style={{
+        <button onClick={() => setImportFlow({ stage: "choose" })} style={{
           position: "absolute", right: 18, bottom: 76 + insets.bottom, zIndex: 40,
           width: 60, height: 60, borderRadius: 20, border: "none", cursor: "pointer",
           background: theme.accent, color: "#fff", display: "grid", placeItems: "center",
@@ -308,6 +340,9 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Phase 1.5 — import method chooser / input (covers the frame) */}
+      <ImportOverlay flow={importFlow} setFlow={setImportFlow} />
     </div>
   );
 
@@ -333,6 +368,7 @@ function App() {
           <TweakToggle label={lang === "fr" ? "Thème sombre" : "Dark mode"} value={tw.dark} onChange={(v) => setTweak("dark", v)} />
           <TweakColor label={lang === "fr" ? "Couleur d'accent" : "Accent color"} value={tw.accent} options={["#C0563B", "#C58A2E", "#6BA368", "#9C6B8E", "#4A7BA6"]} onChange={(v) => setTweak("accent", v)} />
           <TweakRadio label={lang === "fr" ? "Accueil" : "Home layout"} value={tw.homeLayout} options={[{ value: "editorial", label: lang === "fr" ? "Éditorial" : "Editorial" }, { value: "grid", label: lang === "fr" ? "Grille" : "Grid" }]} onChange={(v) => setTweak("homeLayout", v)} />
+          <TweakToggle label={lang === "fr" ? "Appareil compatible IA sur appareil" : "Device supports on-device AI"} value={tw.onDeviceAI} onChange={(v) => setTweak("onDeviceAI", v)} />
         </TweaksPanel>
       </AppCtx.Provider>
     </ThemeCtx.Provider>

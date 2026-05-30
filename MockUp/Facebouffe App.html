@@ -26,6 +26,9 @@
     @keyframes fbPop { 0% { transform: scale(1); } 38% { transform: scale(1.32); } 70% { transform: scale(0.92); } 100% { transform: scale(1); } }
     @keyframes fbRowIn { from { opacity: 0; transform: translateY(-7px); } to { opacity: 1; transform: none; } }
     .fb-row-in { animation: fbRowIn 220ms cubic-bezier(0.4,0,0.2,1) both; }
+    @keyframes fbSheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes fbSpin { to { transform: rotate(360deg); } }
+    .fb-spin { animation: fbSpin 0.8s linear infinite; }
   </style>
 </head>
 <body>
@@ -45,6 +48,8 @@
   <script type="text/babel" src="frames/android-frame.jsx"></script>
   <script type="text/babel" src="frames/tweaks-panel.jsx"></script>
   <script type="text/babel" src="fb-ui.jsx"></script>
+  <script type="text/babel" src="fb-nutrition.jsx"></script>
+  <script type="text/babel" src="fb-import.jsx"></script>
   <script type="text/babel" src="fb-screens-home.jsx"></script>
   <script type="text/babel" src="fb-screens-recipe.jsx"></script>
   <script type="text/babel" src="fb-screens-misc.jsx"></script>

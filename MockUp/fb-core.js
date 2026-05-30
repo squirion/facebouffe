@@ -37,14 +37,14 @@
         "servings": 12, "prepTimeMinutes": 30, "cookTimeMinutes": 15,
         "tags": ["tag-dessert", "tag-fav"], "variantGroupId": "vg-beignes", "links": ["rec-glacage-erable"],
         "ingredients": [
-          { "quantity": 500, "unit": "g",   "name": "farine tout usage" },
-          { "quantity": 200, "unit": "g",   "name": "sucre" },
-          { "quantity": 2,   "unit": "tsp", "name": "poudre à pâte" },
-          { "quantity": 0.5, "unit": "tsp", "name": "sel" },
-          { "quantity": 2,   "unit": null,  "name": "oeufs", "note": "gros, à température pièce" },
-          { "quantity": 250, "unit": "ml",  "name": "lait" },
-          { "quantity": 60,  "unit": "g",   "name": "beurre", "note": "fondu" },
-          { "quantity": 1.5, "unit": "l",   "name": "huile végétale", "note": "pour la friture" }
+          { "quantity": 500, "unit": "g",   "name": "farine tout usage", "nutritionRef": { "foodCode": "F-2587", "matchedName": "Farine de blé, tout usage", "confidence": 0.92, "includeInCalc": true } },
+          { "quantity": 200, "unit": "g",   "name": "sucre", "nutritionRef": { "foodCode": "F-1903", "matchedName": "Sucre blanc, granulé", "confidence": 0.88, "includeInCalc": true } },
+          { "quantity": 2,   "unit": "tsp", "name": "poudre à pâte", "nutritionRef": { "foodCode": "F-0780", "matchedName": "Poudre à pâte", "confidence": 0.81, "includeInCalc": true } },
+          { "quantity": 0.5, "unit": "tsp", "name": "sel", "nutritionRef": { "foodCode": "F-0500", "matchedName": "Sel de table", "confidence": 0.86, "includeInCalc": false } },
+          { "quantity": 2,   "unit": null,  "name": "oeufs", "note": "gros, à température pièce", "nutritionRef": { "foodCode": "F-0123", "matchedName": "Œuf, entier, cru", "confidence": 0.74, "includeInCalc": true } },
+          { "quantity": 250, "unit": "ml",  "name": "lait", "nutritionRef": { "foodCode": "F-0011", "matchedName": "Lait, 2 % M.G.", "confidence": 0.83, "includeInCalc": true } },
+          { "quantity": 60,  "unit": "g",   "name": "beurre", "note": "fondu", "nutritionRef": { "foodCode": "F-0142", "matchedName": "Beurre, salé", "confidence": 0.9, "includeInCalc": true } },
+          { "quantity": 1.5, "unit": "l",   "name": "huile végétale", "note": "pour la friture", "nutritionRef": { "foodCode": "F-0451", "matchedName": "Huile végétale", "confidence": 0.88, "includeInCalc": false } }
         ],
         "steps": [
           { "text": "Mélanger les ingrédients secs : farine, sucre, poudre à pâte et sel.", "image": null, "timerSeconds": null },
@@ -53,7 +53,12 @@
           { "text": "Chauffer l'huile à {{temp:180:c}}. Façonner les beignes et les frire jusqu'à ce qu'ils soient dorés.", "image": null, "timerSeconds": 180 },
           { "text": "Égoutter sur un papier absorbant et glacer au goût.", "image": null, "timerSeconds": null }
         ],
-        "personal": { "notes": "La pâte gagne à reposer 20 min plutôt que 15. Ne pas surcharger la friteuse.", "rating": 5, "lastCooked": "2026-02-03T00:00:00Z", "madeCount": 4 }
+        "personal": { "notes": "La pâte gagne à reposer 20 min plutôt que 15. Ne pas surcharger la friteuse.", "rating": 5, "lastCooked": "2026-02-03T00:00:00Z", "madeCount": 4 },
+        "nutrition": {
+          "perServing": { "calories": 240, "fat": 9, "satFat": 3.5, "transFat": 0, "carbs": 36, "fiber": 1, "sugars": 16, "protein": 4, "cholesterol": 35, "sodium": 180, "potassium": 70, "calcium": 60, "iron": 1.6 },
+          "total": { "calories": 2880, "fat": 108, "satFat": 42, "transFat": 0, "carbs": 432, "fiber": 12, "sugars": 192, "protein": 48, "cholesterol": 420, "sodium": 2160, "potassium": 840, "calcium": 720, "iron": 19.2 },
+          "isEstimate": true, "hasUnmatched": true, "computedAt": "2026-02-03T14:10:00Z", "servingsBasis": 12
+        }
       },
       {
         "id": "rec-beignes-four", "title": "Beignes au four (plus légers)", "createdBy": "demo_chef",
@@ -188,7 +193,12 @@
           { "text": "Verser les tomates et les haricots, puis laisser mijoter à découvert.", "image": null, "timerSeconds": 2400 },
           { "text": "Rectifier l'assaisonnement et servir.", "image": null, "timerSeconds": null }
         ],
-        "personal": { "notes": "~38 g de protéines par portion. Excellent avec un peu de yogourt grec sur le dessus.", "rating": 5, "lastCooked": "2026-05-18T00:00:00Z", "madeCount": 6 }
+        "personal": { "notes": "~38 g de protéines par portion. Excellent avec un peu de yogourt grec sur le dessus.", "rating": 5, "lastCooked": "2026-05-18T00:00:00Z", "madeCount": 6 },
+        "nutrition": {
+          "perServing": { "calories": 330, "fat": 11, "satFat": 4, "transFat": 0.3, "carbs": 24, "fiber": 8, "sugars": 6, "protein": 32, "cholesterol": 75, "sodium": 520, "potassium": 900, "calcium": 90, "iron": 5 },
+          "total": { "calories": 1980, "fat": 66, "satFat": 24, "transFat": 1.8, "carbs": 144, "fiber": 48, "sugars": 36, "protein": 192, "cholesterol": 450, "sodium": 3120, "potassium": 5400, "calcium": 540, "iron": 30 },
+          "isEstimate": true, "hasUnmatched": false, "computedAt": "2026-04-11T18:20:00Z", "servingsBasis": 6
+        }
       }
     ]
   };
@@ -238,7 +248,7 @@
       set_temp: "Température", set_volume: "Volume", set_weight: "Poids", set_textsize: "Taille du texte",
       metric: "Métrique", imperial: "Impérial", celsius: "Celsius", fahrenheit: "Fahrenheit",
       size_small: "Petit", size_medium: "Moyen", size_large: "Grand", about: "À propos",
-      version: "Facebouffe — version 1.0", recipes_saved: "recettes enregistrées",
+      version: "Facebouffe — version 1.1.0", recipes_saved: "recettes enregistrées",
       sc_ingredients: "Ingrédients", sc_steps: "Étapes", sc_step: "Étape", sc_of: "sur",
       sc_done: "Terminé\u00A0!", sc_next: "Suivante", sc_prev: "Précédente", sc_finish: "Terminer",
       sc_swipe: "Glissez", sc_start_timer: "Démarrer le minuteur", sc_timer_done: "Minuteur terminé",
@@ -252,6 +262,60 @@
       save: "Enregistrer", cancel: "Annuler", delete: "Supprimer", done: "OK",
       fav_add: "Ajouter aux favoris", fav_remove: "Retirer des favoris",
       unrated: "Non noté", base_variant: "Recette principale", scale_reset: "Rétablir",
+      // Phase 1.5 — books (save/load), import engine, nutrition
+      book_group: "Mon livre", save_book: "Sauvegarder les recettes", load_book: "Charger des recettes",
+      save_book_sub: "Copie de sauvegarde (JSON)", load_book_sub: "Fusionner un fichier (JSON)",
+      book_saved: "Livre sauvegardé", book_loaded: "Chargé",
+      import_group: "Importation", import_backend: "Moteur d'import",
+      import_tier0: "Règles seules", import_ondevice: "Sur l'appareil", import_byok: "Votre clé API",
+      import_tier0_sub: "Lit les pages web structurées · gratuit, hors ligne.",
+      import_ondevice_sub: "OCR + petit modèle local · gratuit, privé.",
+      import_byok_sub: "Meilleure qualité · facturé à votre compte.",
+      import_key_label: "Clé API", import_key_ph: "collez votre clé…", import_key_saved: "Clé enregistrée",
+      import_privacy: "Les niveaux 0–1 restent sur l'appareil. Avec votre clé, le contenu de la recette (et les images) est envoyé au fournisseur, sous votre compte.",
+      import_share_note: "Partager vers Facebouffe : envoyez un lien ou une photo depuis une autre app — vous arrivez sur le même écran de révision.",
+      add_method_title: "Ajouter une recette",
+      method_manual: "Manuellement", method_manual_sub: "Page blanche",
+      method_link: "À partir d'un lien", method_link_sub: "Coller l'URL d'une recette",
+      method_photo: "À partir d'une photo", method_photo_sub: "Numériser une recette",
+      method_text: "À partir de texte", method_text_sub: "Coller le texte d'une recette",
+      import_run: "Importer", import_link_ph: "https://…",
+      import_text_ph: "Collez le texte de la recette ici…",
+      import_photo_drop: "Déposez une photo ou touchez pour choisir",
+      import_use_sample: "Utiliser un exemple", import_paste_sample: "Coller un exemple",
+      import_reading_web: "Lecture de la page (Niveau 0)…",
+      import_ondevice_run: "Modèle sur l'appareil…", import_byok_run: "Modèle infonuagique…",
+      import_done_draft: "Brouillon prêt", import_need_key: "Ajoutez d'abord votre clé API dans les Réglages.",
+      import_review_banner: "Brouillon importé — vérifiez et ajustez avant d'enregistrer.",
+      import_via_link: "Importé d'un lien", import_via_photo: "Importé d'une photo", import_via_text: "Importé d'un texte",
+      nutrition_section: "Valeur nutritive", nutrition_estimate: "Estimation",
+      nutrition_gen: "Générer l'étiquette nutritionnelle", nutrition_regen: "Recalculer l'étiquette",
+      nutrition_view: "Voir la valeur nutritive", nutrition_hide: "Masquer",
+      nutrition_per_serving: "par portion", nutrition_amount_total: "Recette entière",
+      nutrition_disclaimer: "Estimation calculée à partir des ingrédients. Ce n'est pas un tableau réglementaire de valeur nutritive.",
+      nutrition_unmatched: "Des ingrédients sont exclus ou non appariés — l'estimation est approximative.",
+      nutrition_intro: "Apparie chaque ingrédient à un aliment du Fichier canadien sur les éléments nutritifs, puis estime la valeur nutritive.",
+      match_title: "Appariement des ingrédients", match_include: "Inclure", match_excluded: "Exclu",
+      match_unmatched: "Non apparié", match_check: "À vérifier",
+      match_correct: "Corriger l'appariement", match_search: "Rechercher un aliment (FCÉN)",
+      match_set_default: "Définir par défaut pour cet ingrédient", match_default_done: "Défini par défaut",
+      cnf_label: "FCÉN", per_100: "/ 100 g",
+      aliases_title: "Aliases d'ingrédients",
+      aliases_empty: "Aucun alias appris. Corrigez un appariement et touchez « Définir par défaut ».",
+      aliases_hint: "Appariements appris : nom d'ingrédient → aliment préféré.",
+      default_import_engine: "Moteur d'import par défaut",
+      ondevice_unsupported: "Non pris en charge sur cet appareil (nécessite l'IA sur appareil : Apple Foundation Models ou Android Gemini Nano).",
+      byok_disabled: "Ajoutez une clé API ci-dessous pour activer cette option.",
+      api_keys: "Clés API", provider: "Fournisseur",
+      test_key: "Tester la clé", delete_key: "Supprimer la clé",
+      key_testing: "Test en cours…", key_valid: "Clé valide", key_invalid: "Clé invalide",
+      key_empty: "Entrez une clé d'abord", key_none: "Aucune clé enregistrée", key_saved_prov: "Clé enregistrée",
+      tw_ondevice: "IA sur appareil",
+      advanced: "Paramètres avancés", advanced_sub: "Tags, alias, importation, clés API",
+      coach_tags: "Créez, renommez ou supprimez vos propres catégories. Supprimer un tag le retire des recettes, sans les effacer.",
+      coach_aliases: "Quand vous corrigez l'appariement d'un ingrédient, votre choix est mémorisé ici comme défaut pour la prochaine fois.",
+      coach_import_engine: "Choisissez le moteur utilisé par défaut pour importer une recette : règles, IA sur appareil, ou votre propre clé API.",
+      coach_apikeys: "Ajoutez la clé d'un fournisseur (Claude, Gemini, ChatGPT) pour activer l'import infonuagique. Vous pouvez la tester ou la supprimer.",
     },
     en: {
       tab_home: "Home", tab_search: "Search", tab_list: "Groceries", tab_settings: "Settings",
@@ -294,7 +358,7 @@
       set_temp: "Temperature", set_volume: "Volume", set_weight: "Weight", set_textsize: "Text size",
       metric: "Metric", imperial: "Imperial", celsius: "Celsius", fahrenheit: "Fahrenheit",
       size_small: "Small", size_medium: "Medium", size_large: "Large", about: "About",
-      version: "Facebouffe — version 1.0", recipes_saved: "recipes saved",
+      version: "Facebouffe — version 1.1.0", recipes_saved: "recipes saved",
       sc_ingredients: "Ingredients", sc_steps: "Steps", sc_step: "Step", sc_of: "of",
       sc_done: "Done!", sc_next: "Next", sc_prev: "Previous", sc_finish: "Finish",
       sc_swipe: "Swipe", sc_start_timer: "Start timer", sc_timer_done: "Timer done",
@@ -308,6 +372,60 @@
       save: "Save", cancel: "Cancel", delete: "Delete", done: "Done",
       fav_add: "Add to favorites", fav_remove: "Remove from favorites",
       unrated: "Unrated", base_variant: "Main recipe", scale_reset: "Reset",
+      // Phase 1.5 — books (save/load), import engine, nutrition
+      book_group: "My book", save_book: "Save recipes", load_book: "Load recipes",
+      save_book_sub: "Backup copy (JSON)", load_book_sub: "Merge a file (JSON)",
+      book_saved: "Book saved", book_loaded: "Loaded",
+      import_group: "Import", import_backend: "Import engine",
+      import_tier0: "Rules only", import_ondevice: "On-device", import_byok: "Your API key",
+      import_tier0_sub: "Reads structured web pages · free, offline.",
+      import_ondevice_sub: "On-device OCR + small model · free, private.",
+      import_byok_sub: "Best quality · billed to your account.",
+      import_key_label: "API key", import_key_ph: "paste your key…", import_key_saved: "Key saved",
+      import_privacy: "Tiers 0–1 stay on-device. With your key, recipe content (and images) is sent to the provider, under your account.",
+      import_share_note: "Share to Facebouffe: send a link or photo from another app — you land on the same review screen.",
+      add_method_title: "Add a recipe",
+      method_manual: "Manually", method_manual_sub: "Blank page",
+      method_link: "From a link", method_link_sub: "Paste a recipe URL",
+      method_photo: "From a photo", method_photo_sub: "Scan a recipe",
+      method_text: "From text", method_text_sub: "Paste recipe text",
+      import_run: "Import", import_link_ph: "https://…",
+      import_text_ph: "Paste the recipe text here…",
+      import_photo_drop: "Drop a photo or tap to choose",
+      import_use_sample: "Use a sample", import_paste_sample: "Paste a sample",
+      import_reading_web: "Reading page (Tier 0)…",
+      import_ondevice_run: "On-device model…", import_byok_run: "Cloud model…",
+      import_done_draft: "Draft ready", import_need_key: "Add your API key in Settings first.",
+      import_review_banner: "Imported draft — review and adjust before saving.",
+      import_via_link: "Imported from a link", import_via_photo: "Imported from a photo", import_via_text: "Imported from text",
+      nutrition_section: "Nutrition", nutrition_estimate: "Estimate",
+      nutrition_gen: "Generate nutrition label", nutrition_regen: "Recalculate label",
+      nutrition_view: "View nutrition", nutrition_hide: "Hide",
+      nutrition_per_serving: "per serving", nutrition_amount_total: "Whole recipe",
+      nutrition_disclaimer: "Estimated from the ingredients. This is not a regulatory Nutrition Facts table.",
+      nutrition_unmatched: "Some ingredients are excluded or unmatched — the estimate is approximate.",
+      nutrition_intro: "Matches each ingredient to a food in the Canadian Nutrient File, then estimates nutrition.",
+      match_title: "Ingredient matching", match_include: "Include", match_excluded: "Excluded",
+      match_unmatched: "Unmatched", match_check: "Check this",
+      match_correct: "Correct match", match_search: "Search a food (CNF)",
+      match_set_default: "Set as default for this ingredient", match_default_done: "Set as default",
+      cnf_label: "CNF", per_100: "/ 100 g",
+      aliases_title: "Ingredient aliases",
+      aliases_empty: "No learned aliases yet. Correct a match and tap “Set as default”.",
+      aliases_hint: "Learned matches: ingredient name → preferred food.",
+      default_import_engine: "Default import engine",
+      ondevice_unsupported: "Not supported on this device (requires on-device AI: Apple Foundation Models or Android Gemini Nano).",
+      byok_disabled: "Add an API key below to enable this option.",
+      api_keys: "API keys", provider: "Provider",
+      test_key: "Test key", delete_key: "Delete key",
+      key_testing: "Testing…", key_valid: "Key valid", key_invalid: "Key invalid",
+      key_empty: "Enter a key first", key_none: "No key saved", key_saved_prov: "Key saved",
+      tw_ondevice: "On-device AI",
+      advanced: "Advanced settings", advanced_sub: "Tags, aliases, import, API keys",
+      coach_tags: "Create, rename or delete your own categories. Deleting a tag removes it from recipes without deleting them.",
+      coach_aliases: "When you correct an ingredient's match, your choice is remembered here as the default next time.",
+      coach_import_engine: "Pick the engine used by default to import a recipe: rules, on-device AI, or your own API key.",
+      coach_apikeys: "Add a provider key (Claude, Gemini, ChatGPT) to enable cloud import. You can test or delete it.",
     },
   };
 
@@ -575,6 +693,132 @@
     return (r.prepTimeMinutes || 0) + (r.cookTimeMinutes || 0);
   }
 
+  // ──────────────────────────────────────────────────────────
+  // Phase 1.5 — Nutrition (estimate). The label values are GENERATED
+  // (deterministic, plausible) and intentionally NOT computed from the CNF;
+  // the CNF list below only powers the ingredient-match picker UI.
+  // ──────────────────────────────────────────────────────────
+  const CNF_FOODS = [
+    { code: "F-2587", fr: "Farine de blé, tout usage", en: "Wheat flour, all-purpose", kcal: 364 },
+    { code: "F-1903", fr: "Sucre blanc, granulé", en: "Sugar, white, granulated", kcal: 387 },
+    { code: "F-1904", fr: "Cassonade", en: "Brown sugar", kcal: 380 },
+    { code: "F-0902", fr: "Sucre à glacer", en: "Icing sugar", kcal: 389 },
+    { code: "F-0142", fr: "Beurre, salé", en: "Butter, salted", kcal: 717 },
+    { code: "F-0143", fr: "Beurre, non salé", en: "Butter, unsalted", kcal: 717 },
+    { code: "F-0011", fr: "Lait, 2 % M.G.", en: "Milk, 2% fat", kcal: 50 },
+    { code: "F-0014", fr: "Crème à cuisson 35 %", en: "Cream, 35% (cooking)", kcal: 340 },
+    { code: "F-0123", fr: "Œuf, entier, cru", en: "Egg, whole, raw", kcal: 143 },
+    { code: "F-0905", fr: "Vanille, extrait", en: "Vanilla extract", kcal: 288 },
+    { code: "F-2588", fr: "Pâte à tarte, abaisse", en: "Pie crust, shell", kcal: 480 },
+    { code: "F-0451", fr: "Huile végétale", en: "Vegetable oil", kcal: 884 },
+    { code: "F-0500", fr: "Sel de table", en: "Salt, table", kcal: 0 },
+    { code: "F-0780", fr: "Poudre à pâte", en: "Baking powder", kcal: 53 },
+    { code: "F-0901", fr: "Sirop d'érable", en: "Maple syrup", kcal: 260 },
+    { code: "F-2001", fr: "Bœuf haché, maigre", en: "Beef, ground, lean", kcal: 176 },
+    { code: "F-2002", fr: "Bœuf haché, mi-maigre", en: "Beef, ground, medium", kcal: 254 },
+    { code: "F-3001", fr: "Oignon, cru", en: "Onion, raw", kcal: 40 },
+    { code: "F-3002", fr: "Ail, cru", en: "Garlic, raw", kcal: 149 },
+    { code: "F-3003", fr: "Carotte, crue", en: "Carrot, raw", kcal: 41 },
+    { code: "F-3100", fr: "Tomates, en conserve, en dés", en: "Tomatoes, canned, diced", kcal: 32 },
+    { code: "F-3200", fr: "Haricots rouges, en conserve", en: "Kidney beans, canned", kcal: 127 },
+    { code: "F-3201", fr: "Haricots noirs, en conserve", en: "Black beans, canned", kcal: 132 },
+    { code: "F-4001", fr: "Pois jaunes, secs", en: "Split peas, yellow, dry", kcal: 352 },
+    { code: "F-4100", fr: "Jambon, cuit", en: "Ham, cooked", kcal: 145 },
+    { code: "F-5001", fr: "Laitue romaine", en: "Lettuce, romaine", kcal: 17 },
+    { code: "F-5002", fr: "Parmesan, râpé", en: "Parmesan, grated", kcal: 431 },
+    { code: "F-5003", fr: "Huile d'olive", en: "Olive oil", kcal: 884 },
+    { code: "F-5004", fr: "Anchois, en conserve", en: "Anchovy, canned", kcal: 210 },
+    { code: "F-5005", fr: "Pain, blanc", en: "Bread, white", kcal: 266 },
+    { code: "F-6001", fr: "Poudre de chili", en: "Chili powder", kcal: 282 },
+    { code: "F-6002", fr: "Cumin, moulu", en: "Cumin, ground", kcal: 375 },
+    { code: "F-6003", fr: "Sarriette, séchée", en: "Savory, dried", kcal: 272 },
+  ];
+  const CNF_BY_CODE = Object.fromEntries(CNF_FOODS.map((f) => [f.code, f]));
+  function cnfName(food, lang) {
+    if (typeof food === "string") food = CNF_BY_CODE[food];
+    return food ? (lang === "en" ? food.en : food.fr) : "";
+  }
+  function normalizeName(name) { return String(name || "").toLowerCase().trim().replace(/\s+/g, " "); }
+  // Fold for fuzzy matching: lowercase, strip diacritics, normalize ligatures.
+  function foldStr(s) {
+    return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\u0153/g, "oe").replace(/\u00e6/g, "ae");
+  }
+
+  // Crude fuzzy match: token overlap against bilingual names. Returns
+  // { food, confidence } or null.
+  function cnfMatch(name) {
+    const n = foldStr(normalizeName(name));
+    if (!n) return null;
+    const toks = n.split(/[\s,]+/).filter((w) => w.length > 2);
+    let best = null, bestScore = 0;
+    for (const f of CNF_FOODS) {
+      const hay = foldStr(f.fr + " " + f.en);
+      let score = 0;
+      toks.forEach((w) => { if (hay.includes(w)) score += w.length; });
+      if (score > bestScore) { bestScore = score; best = f; }
+    }
+    if (!best) return null;
+    return { food: best, confidence: Math.min(0.98, 0.4 + bestScore / 16) };
+  }
+
+  // Default include-in-calc: false for things you don't actually eat —
+  // frying oil, "sel au goût", pinch items.
+  function defaultExcluded(ing) {
+    const n = normalizeName(ing.name);
+    const note = normalizeName(ing.note);
+    if (ing.unit === "pinch") return true;
+    if (/\bsel\b|\bsalt\b/.test(n)) return true;
+    if (/(huile|oil)/.test(n) && (ing.unit === "l" || (ing.unit === "ml" && (ing.quantity || 0) >= 500) || /(friture|frying)/.test(n + " " + note))) return true;
+    return false;
+  }
+
+  // Resolve a per-ingredient match, honoring the learned alias table first.
+  function resolveMatch(ing, aliases) {
+    const key = normalizeName(ing.name);
+    const alias = aliases && aliases[key];
+    if (alias && CNF_BY_CODE[alias.foodCode]) {
+      return { foodCode: alias.foodCode, matchedName: cnfName(alias.foodCode, "fr"), confidence: 1, includeInCalc: !defaultExcluded(ing), fromAlias: true };
+    }
+    const m = cnfMatch(ing.name);
+    if (!m) return { foodCode: null, matchedName: null, confidence: 0, includeInCalc: !defaultExcluded(ing) };
+    return { foodCode: m.food.code, matchedName: m.food.fr, confidence: Math.round(m.confidence * 100) / 100, includeInCalc: !defaultExcluded(ing) };
+  }
+
+  // Deterministic plausible nutrition (NOT from CNF) — stable per recipe id.
+  function mockNutrition(recipe, opts) {
+    opts = opts || {};
+    const servings = opts.servings || recipe.servings || 1;
+    const id = recipe.id || recipe.title || "x";
+    const inc = opts.includedCount == null ? 6 : opts.includedCount;
+    const r = (salt, lo, hi) => { const h = hashStr(id + ":" + salt + ":" + inc); return lo + (h % 1000) / 1000 * (hi - lo); };
+    const per = {
+      calories: Math.round(r("cal", 170, 520) / 5) * 5,
+      fat: Math.round(r("fat", 4, 26)),
+      satFat: Math.round(r("sat", 1, 9) * 10) / 10,
+      transFat: Math.round(r("trans", 0, 0.6) * 10) / 10,
+      carbs: Math.round(r("carb", 14, 48)),
+      fiber: Math.round(r("fiber", 1, 10)),
+      sugars: Math.round(r("sug", 2, 22)),
+      protein: Math.round(r("pro", 3, 34)),
+      cholesterol: Math.round(r("chol", 5, 95) / 5) * 5,
+      sodium: Math.round(r("sod", 60, 620) / 10) * 10,
+      potassium: Math.round(r("pot", 60, 950) / 10) * 10,
+      calcium: Math.round(r("cal2", 20, 220) / 5) * 5,
+      iron: Math.round(r("iron", 0.4, 6) * 10) / 10,
+    };
+    const total = {};
+    Object.keys(per).forEach((k) => { total[k] = Math.round(per[k] * servings * 10) / 10; });
+    return { perServing: per, total, isEstimate: true, hasUnmatched: !!opts.hasUnmatched, computedAt: new Date().toISOString(), servingsBasis: servings };
+  }
+
+  // Daily Value reference amounts (Canada, 2016 regulations).
+  const DV_REF = { fat: 75, satTrans: 20, sodium: 2300, fiber: 28, sugars: 100, potassium: 3400, calcium: 1300, iron: 18 };
+  function dvPct(key, value) {
+    const ref = DV_REF[key];
+    if (!ref) return null;
+    return Math.round((value / ref) * 100);
+  }
+
   window.FB = {
     SEED, I18N, MONTHS, FALLBACK_PALETTE,
     t, tagName, fallbackColor, hashStr,
@@ -582,5 +826,7 @@
     fmtDuration, fmtTimer, fmtDate, fmtRelDate,
     prefTempUnit, fmtTemp, findTemps, tokenizeTemps, detokenizeTemps,
     uuid, totalTime,
+    CNF_FOODS, CNF_BY_CODE, cnfName, normalizeName, cnfMatch, defaultExcluded, resolveMatch,
+    mockNutrition, DV_REF, dvPct,
   };
 })();

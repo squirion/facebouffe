@@ -194,6 +194,9 @@ function RecipeScreen({ route }) {
             </div>
           )}
 
+          {/* Nutrition (estimate) — saved label */}
+          <NutritionCard recipe={recipe} />
+
           {/* See also (links) */}
           {linked.length > 0 && (
             <div style={{ marginTop: 30 }}>

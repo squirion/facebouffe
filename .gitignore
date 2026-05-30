@@ -51,3 +51,6 @@ tool/shots/
 android/key.properties
 android/app/*.jks
 android/keystore.b64
+
+# CNF raw source (processed into assets/cnf.json by tool/build_cnf.dart)
+tool/cnf_src/

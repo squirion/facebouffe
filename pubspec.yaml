@@ -80,6 +80,7 @@ flutter:
   assets:
     - assets/facebouffe-seed.json
     - assets/logo_mark.png
+    - assets/cnf.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

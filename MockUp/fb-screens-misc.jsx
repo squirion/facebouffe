@@ -157,7 +157,7 @@ function SettingsScreen() {
     const a = document.createElement("a");
     a.href = url; a.download = "facebouffe-livre.json"; a.click();
     URL.revokeObjectURL(url);
-    setFlash(lang === "fr" ? "Livre exporté" : "Book exported");
+    setFlash(t("book_saved"));
     setTimeout(() => setFlash(null), 1800);
   };
   const doImport = (e) => {
@@ -165,7 +165,7 @@ function SettingsScreen() {
     if (!f) return;
     const rd = new FileReader();
     rd.onload = () => {
-      try { const data = JSON.parse(rd.result); const n = app.importData(data); setFlash((lang === "fr" ? "Importé : " : "Imported: ") + n + (lang === "fr" ? " recettes" : " recipes")); }
+      try { const data = JSON.parse(rd.result); const n = app.importData(data); setFlash((lang === "fr" ? "Chargé : " : "Loaded: ") + n + (lang === "fr" ? " recettes" : " recipes")); }
       catch (err) { setFlash(lang === "fr" ? "Fichier invalide" : "Invalid file"); }
       setTimeout(() => setFlash(null), 2200);
     };
@@ -231,16 +231,23 @@ function SettingsScreen() {
             </SettingsRow>
           </Group>
 
-          <Group label={t("custom_tags")}>
-            <TagManager />
-          </Group>
-
-          <Group label={t("import_export")}>
-            <ActionRow icon="basket" label={t("import_book")} onClick={() => fileRef.current && fileRef.current.click()} />
-            <ActionRow icon="note" label={t("export_json")} onClick={doExport} />
+          <Group label={t("book_group")}>
+            <ActionRow icon="note" label={t("save_book")} onClick={doExport} />
+            <ActionRow icon="basket" label={t("load_book")} onClick={() => fileRef.current && fileRef.current.click()} />
             <ActionRow icon="note" label={t("export_book_pdf")} onClick={() => window.print()} isLast />
           </Group>
           <input ref={fileRef} type="file" accept="application/json,.json" onChange={doImport} style={{ display: "none" }} />
+
+          <Group label={lang === "fr" ? "Avancé" : "Advanced"}>
+            <button onClick={() => app.nav.go("advanced")} style={{ display: "flex", alignItems: "center", gap: 13, width: "100%", border: "none", background: "transparent", cursor: "pointer", padding: "14px 18px", textAlign: "left" }}>
+              <span style={{ width: 30, height: 30, borderRadius: 9, background: th.accentSoft, display: "grid", placeItems: "center", flexShrink: 0 }}><Icon name="sliders" size={17} color={th.accent} /></span>
+              <span style={{ flex: 1 }}>
+                <span style={{ display: "block", fontFamily: th.fontUI, fontSize: th.fs(15.5), fontWeight: 600, color: th.ink }}>{t("advanced")}</span>
+                <span style={{ display: "block", fontFamily: th.fontUI, fontSize: th.fs(12.5), color: th.inkFaint, marginTop: 1 }}>{t("advanced_sub")}</span>
+              </span>
+              <Icon name="chevR" size={th.fs(17)} color={th.inkFaint} />
+            </button>
+          </Group>
 
           <Group label={t("help_section")}>
             <ActionRow icon="note" label={t("help_title")} onClick={() => app.nav.go("help")} />
@@ -398,11 +405,13 @@ function EditScreen({ route }) {
     personal: { notes: "", rating: 0, lastCooked: null, madeCount: 0 },
   });
   const [form, setForm] = React.useState(() => {
-    const f = existing ? JSON.parse(JSON.stringify(existing)) : blank();
+    const f = existing ? JSON.parse(JSON.stringify(existing)) : (route.draft ? JSON.parse(JSON.stringify(route.draft)) : blank());
     f.description = FB.detokenizeTemps(f.description || "");
     f.steps = (f.steps || []).map((s) => ({ ...s, text: FB.detokenizeTemps(s.text || "") }));
     return f;
   });
+  const imported = !existing && !!route.draft;
+  const [bannerOpen, setBannerOpen] = React.useState(true);
   const [section, setSection] = React.useState("infos");
   React.useEffect(() => { if (!existing) app.setRecipePhoto("__draft", null); }, []);
   const [error, setError] = React.useState(null);
@@ -461,6 +470,13 @@ function EditScreen({ route }) {
       </div>
 
       <div className="fb-scroll" style={{ flex: 1, overflowY: "auto", padding: `18px 18px ${30 + app.insets.bottom}px` }}>
+        {imported && bannerOpen && (
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 9, marginBottom: 16, padding: "12px 14px", borderRadius: 14, background: th.accentSoft, border: `1px solid ${th.accent}55` }}>
+            <Icon name="note" size={17} color={th.accent} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div style={{ flex: 1, fontFamily: th.fontUI, fontSize: th.fs(13.5), color: th.ink, fontWeight: 600, lineHeight: 1.45 }}>{t("import_review_banner")}</div>
+            <button onClick={() => setBannerOpen(false)} style={{ border: "none", background: "none", cursor: "pointer", padding: 2, lineHeight: 0, flexShrink: 0 }}><Icon name="x" size={16} color={th.inkSoft} /></button>
+          </div>
+        )}
         {error && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, padding: "11px 14px", borderRadius: 12, background: "#C0563B18", border: "1px solid #C0563B55", color: "#9c3f29", fontFamily: th.fontUI, fontSize: th.fs(13.5), fontWeight: 600 }}>
             <Icon name="x" size={16} color="#9c3f29" /> {error}
@@ -511,6 +527,9 @@ function EditScreen({ route }) {
               ))}
             </div>
             <AddRowBtn label={t("f_add_ing")} onClick={() => up({ ingredients: [...form.ingredients, { quantity: null, unit: null, name: "", note: "" }] })} />
+            <div style={{ marginTop: 26, paddingTop: 22, borderTop: `1px solid ${th.line}` }}>
+              <NutritionPanel form={form} setForm={setForm} existing={existing} />
+            </div>
           </>
         )}
 
@@ -684,6 +703,60 @@ function TagManager() {
   );
 }
 
+// ── Advanced settings (pushed sub-page) ───────────────────────
+function AdvancedSettingsScreen() {
+  const th = useTheme();
+  const app = useApp();
+  const { t, lang, nav } = app;
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <StickyHeader>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px 14px" }}>
+          <button onClick={() => nav.back()} style={{ width: 40, height: 40, borderRadius: 999, border: "none", background: "transparent", cursor: "pointer", display: "grid", placeItems: "center" }}>
+            <Icon name="back" size={th.fs(24)} color={th.ink} />
+          </button>
+          <h1 style={{ margin: 0, fontFamily: th.fontDisplay, fontSize: th.fs(25), fontWeight: 600, color: th.ink }}>{t("advanced")}</h1>
+        </div>
+      </StickyHeader>
+      <ScreenScroll>
+        <div style={{ padding: "16px 16px 0" }}>
+          {(() => {
+            const tipOrder = ["customTags", "ingredientAliases", "importEngine", "apiKeys"];
+            const activeTip = tipOrder.find((f) => !app.tipsSeen[f]) || null;
+            return (
+              <>
+                <Coach feature="customTags" active={activeTip === "customTags"} text={t("coach_tags")} placement="bottom" wrapStyle={{ marginBottom: 22 }}>
+                  <Group label={t("custom_tags")}>
+                    <TagManager />
+                  </Group>
+                </Coach>
+
+                <Coach feature="ingredientAliases" active={activeTip === "ingredientAliases"} text={t("coach_aliases")} placement="bottom" wrapStyle={{ marginBottom: 22 }}>
+                  <Group label={t("aliases_title")}>
+                    <AliasManager />
+                  </Group>
+                </Coach>
+
+                <Coach feature="importEngine" active={activeTip === "importEngine"} text={t("coach_import_engine")} placement="top" wrapStyle={{ marginBottom: 22 }}>
+                  <Group label={t("import_group")}>
+                    <ImportSettings />
+                  </Group>
+                </Coach>
+
+                <Coach feature="apiKeys" active={activeTip === "apiKeys"} text={t("coach_apikeys")} placement="top" wrapStyle={{ marginBottom: 22 }}>
+                  <Group label={t("api_keys")}>
+                    <ApiKeyManager />
+                  </Group>
+                </Coach>
+              </>
+            );
+          })()}
+        </div>
+      </ScreenScroll>
+    </div>
+  );
+}
+
 function HelpScreen() {
   const th = useTheme();
   const app = useApp();
@@ -693,22 +766,32 @@ function HelpScreen() {
     ["Variante", "Une autre version du même plat (ex. beignes frits vs au four). Les variantes sont regroupées ; basculez entre elles avec les pastilles en haut de la recette."],
     ["Catégorie (tag)", "Étiquette colorée (Déjeuner, Dessert, Soupe…) pour classer et filtrer vos recettes. Vous pouvez créer les vôtres."],
     ["Lien de recette", "Dans une description, un mot peut renvoyer à une autre recette. Touchez-le pour y aller."],
+    ["Alias d'ingrédient", "Appariement mémorisé entre un ingrédient et un aliment du Fichier canadien. Corrigez-le une fois, il devient le défaut. Modifiable dans les Réglages avancés."],
+    ["Moteur d'import", "La méthode pour transformer un lien, une photo ou du texte en recette : règles (gratuit), IA sur appareil (gratuit), ou votre clé API."],
+    ["Clé API", "Votre propre clé d'un fournisseur (Claude, Gemini, ChatGPT) pour l'import infonuagique. Facturée à votre compte ; stockée sur l'appareil."],
   ] : [
     ["Sous-chef mode", "A simplified cooking view: a checklist of ingredients and large step-by-step instructions with timers. The screen stays awake."],
     ["Variant", "Another version of the same dish (e.g. fried vs baked donuts). Variants are grouped; switch between them with the chips at the top of a recipe."],
     ["Category (tag)", "A colored label (Breakfast, Dessert, Soup…) to organize and filter your recipes. You can create your own."],
     ["Recipe link", "Inside a description, a word can point to another recipe. Tap it to jump there."],
+    ["Ingredient alias", "A remembered match between an ingredient and a Canadian Nutrient File food. Correct it once and it becomes the default. Editable in Advanced settings."],
+    ["Import engine", "How a link, photo or text becomes a recipe: rules (free), on-device AI (free), or your own API key."],
+    ["API key", "Your own key from a provider (Claude, Gemini, ChatGPT) for cloud import. Billed to your account; stored on device."],
   ];
   const howtos = lang === "fr" ? [
     ["flame", "Cuisiner pas à pas", "Ouvrez une recette puis touchez Mode sous-chef."],
     ["basket", "Composer l'épicerie", "Sur une recette, touchez Ajouter à l'épicerie ; les quantités suivent les portions."],
     ["plus", "Créer une variante", "Sur une recette, touchez Ajouter une variante pour partir d'une copie."],
     ["sliders", "Unités, langue, thème", "Tout se règle dans les Réglages."],
+    ["plus", "Importer une recette", "Touchez + puis choisissez lien, photo ou texte. Le résultat ouvre l'éditeur pour révision."],
+    ["sliders", "Réglages avancés", "Tags, alias d'ingrédients, moteur d'import et clés API sont dans Réglages › Paramètres avancés."],
   ] : [
     ["flame", "Cook step-by-step", "Open a recipe, then tap Sous-chef mode."],
     ["basket", "Build your groceries", "On a recipe, tap Add to groceries; amounts follow the servings."],
     ["plus", "Create a variant", "On a recipe, tap Add a variant to start from a copy."],
     ["sliders", "Units, language, theme", "Everything is set in Settings."],
+    ["plus", "Import a recipe", "Tap + then pick link, photo or text. The result opens the editor for review."],
+    ["sliders", "Advanced settings", "Tags, ingredient aliases, import engine and API keys live in Settings › Advanced settings."],
   ];
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
