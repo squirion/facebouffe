@@ -272,8 +272,14 @@ class _NutritionPanelState extends State<NutritionPanel> {
   void _generate() {
     final app = context.read<AppState>();
     for (final ing in form.ingredients) {
-      if (ing.name.trim().isEmpty || ing.nutritionRef != null) continue;
-      ing.nutritionRef = Cnf.instance.resolveMatch(ing, app.aliases);
+      if (ing.name.trim().isEmpty) continue;
+      final old = ing.nutritionRef;
+      // Preserve manual corrections (picker pick → confidence 1, or a learned
+      // alias); re-match everything else so Recalculate picks up better matches.
+      if (old != null && (old.fromAlias || old.confidence >= 1)) continue;
+      final fresh = Cnf.instance.resolveMatch(ing, app.aliases);
+      if (old != null) fresh.includeInCalc = old.includeInCalc; // keep the user's include toggle
+      ing.nutritionRef = fresh;
     }
     _recompute();
     widget.onChanged();

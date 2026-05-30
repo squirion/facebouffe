@@ -38,6 +38,31 @@ void main() {
     expect(cnf.defaultExcluded(Ingredient(name: 'farine', quantity: 500, unit: 'g')), false);
   });
 
+  test('curated seed pins the donut recipe staples', () {
+    final expected = {
+      'farine tout usage': '4501',
+      'sucre': '4318',
+      'poudre à pâte': '4003',
+      'sel': '214',
+      'oeufs': '125',
+      'lait': '113',
+      'beurre': '118',
+      'huile végétale': '451',
+    };
+    expected.forEach((name, code) {
+      final ref = cnf.resolveMatch(Ingredient(name: name), {});
+      expect(ref.foodCode, code, reason: '"$name" should seed-match $code (${cnf.cnfName(code, 'fr')})');
+      expect(ref.matched, true);
+    });
+  });
+
+  test('seed handles common English + accent/punctuation variants', () {
+    expect(cnf.resolveMatch(Ingredient(name: 'All-Purpose Flour'), {}).foodCode, '4501');
+    expect(cnf.resolveMatch(Ingredient(name: "huile d'olive"), {}).foodCode, '422');
+    expect(cnf.resolveMatch(Ingredient(name: 'Cassonade'), {}).foodCode, '4317');
+    expect(cnf.resolveMatch(Ingredient(name: 'baking soda'), {}).foodCode, '4005');
+  });
+
   test('alias resolution wins over fuzzy match', () {
     // pick any food code and alias "beurre" to it
     final code = cnf.foods.first.code;

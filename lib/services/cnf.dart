@@ -28,7 +28,10 @@ class Cnf {
   final List<CnfFood> foods = [];
   final Map<String, CnfFood> _byCode = {};
   List<String> nutrientOrder = const [];
-  final List<String> _folded = []; // foods[i] name haystack, folded, for fuzzy match
+  final List<String> _folded = []; // foods[i] folded name haystack, for picker search
+  final List<List<String>> _tokFr = []; // foods[i] French name tokens, for matching
+  final List<List<String>> _tokEn = []; // foods[i] English name tokens, for matching
+  final Map<String, String> _seed = {}; // folded ingredient name → CNF code (curated)
   Future<void>? _loadFuture;
 
   bool get loaded => foods.isNotEmpty;
@@ -52,7 +55,14 @@ class Cnf {
       foods.add(food);
       _byCode[food.code] = food;
       _folded.add(_fold('${food.fr} ${food.en}'));
+      _tokFr.add(_toks(food.fr));
+      _tokEn.add(_toks(food.en));
     }
+    _seedSpec.forEach((code, variants) {
+      for (final v in variants) {
+        _seed[_seedNorm(v)] = code;
+      }
+    });
   }
 
   CnfFood? byCode(String? code) => code == null ? null : _byCode[code];
@@ -76,39 +86,84 @@ class Cnf {
       .replaceAll('œ', 'oe')
       .replaceAll('æ', 'ae');
 
-  /// Top fuzzy matches for the food picker (by folded name search).
-  List<CnfFood> search(String query, {int limit = 12}) {
-    final q = _fold(query.trim());
-    if (q.isEmpty) return foods.take(limit).toList();
-    final out = <CnfFood>[];
-    for (var i = 0; i < foods.length && out.length < limit; i++) {
-      if (_folded[i].contains(q)) out.add(foods[i]);
-    }
-    return out;
+  // Filler words that carry no matching signal in either language.
+  static const _stop = {'de', 'le', 'la', 'les', 'des', 'du', 'au', 'aux', 'et', 'en', 'the', 'of', 'and', 'with', 'to', 'ou', 'or', 'a'};
+
+  static List<String> _toks(String s) =>
+      _fold(s).split(RegExp(r'[^a-z0-9]+')).where((w) => w.length >= 2 && !_stop.contains(w)).toList();
+
+  // A query token matches a food token on equality or a shared prefix (≥3
+  // chars) — this absorbs plurals and inflections (sucre/sucré, oeuf/oeufs).
+  static bool _tokMatch(String q, String f) {
+    if (q == f) return true;
+    return q.length >= 3 && f.length >= 3 && (f.startsWith(q) || q.startsWith(f));
   }
 
-  /// Crude fuzzy match: token overlap against the bilingual name. Returns
-  /// (food, confidence 0–1) or null.
-  ({CnfFood food, double confidence})? _bestMatch(String name) {
-    final n = _fold(name.toLowerCase().trim());
-    if (n.isEmpty) return null;
-    final toks = n.split(RegExp(r'[\s,]+')).where((w) => w.length > 2).toList();
-    if (toks.isEmpty) return null;
-    CnfFood? best;
-    var bestScore = 0;
-    for (var i = 0; i < foods.length; i++) {
-      final hay = _folded[i];
-      var score = 0;
-      for (final w in toks) {
-        if (hay.contains(w)) score += w.length;
+  // Score query against one language's tokens: recall of the query times a
+  // precision factor that rewards concise names (so a category-prefixed
+  // staple beats a long prepared-food name that merely mentions the word).
+  static double _sideScore(List<String> qt, List<String> ft) {
+    if (qt.isEmpty || ft.isEmpty) return 0;
+    var matchedQuery = 0;
+    final usedFood = <int>{};
+    for (final q in qt) {
+      var hit = false;
+      for (var i = 0; i < ft.length; i++) {
+        if (_tokMatch(q, ft[i])) {
+          hit = true;
+          usedFood.add(i);
+        }
       }
-      if (score > bestScore) {
-        bestScore = score;
+      if (hit) matchedQuery++;
+    }
+    final qcov = matchedQuery / qt.length;
+    final fcov = usedFood.length / ft.length;
+    return qcov * (0.45 + 0.55 * fcov);
+  }
+
+  static String _seedNorm(String s) => _fold(s).replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim().replaceAll(RegExp(r'\s+'), ' ');
+
+  /// Top matches for the food picker, ranked by the same scorer as auto-match
+  /// (falls back to substring when the query is too short to tokenize).
+  List<CnfFood> search(String query, {int limit = 12}) {
+    final qt = _toks(query);
+    if (qt.isEmpty) {
+      final q = _fold(query.trim());
+      if (q.isEmpty) return foods.take(limit).toList();
+      final out = <CnfFood>[];
+      for (var i = 0; i < foods.length && out.length < limit; i++) {
+        if (_folded[i].contains(q)) out.add(foods[i]);
+      }
+      return out;
+    }
+    final scored = <(int, double)>[];
+    for (var i = 0; i < foods.length; i++) {
+      final s = _sideScore(qt, _tokFr[i]);
+      final e = _sideScore(qt, _tokEn[i]);
+      final best = s > e ? s : e;
+      if (best > 0) scored.add((i, best));
+    }
+    scored.sort((a, b) => b.$2.compareTo(a.$2));
+    return [for (final (i, _) in scored.take(limit)) foods[i]];
+  }
+
+  /// Best fuzzy match by per-language token scoring. Returns (food, confidence).
+  ({CnfFood food, double confidence})? _bestMatch(String name) {
+    final qt = _toks(name);
+    if (qt.isEmpty) return null;
+    CnfFood? best;
+    var bestScore = 0.0;
+    for (var i = 0; i < foods.length; i++) {
+      final s = _sideScore(qt, _tokFr[i]);
+      final e = _sideScore(qt, _tokEn[i]);
+      final sc = s > e ? s : e;
+      if (sc > bestScore) {
+        bestScore = sc;
         best = foods[i];
       }
     }
-    if (best == null) return null;
-    return (food: best, confidence: (0.4 + bestScore / 16).clamp(0, 0.98));
+    if (best == null || bestScore <= 0) return null;
+    return (food: best, confidence: bestScore.clamp(0, 0.98));
   }
 
   /// Default include-in-calc = false for things you don't actually eat:
@@ -125,18 +180,60 @@ class Cnf {
     return false;
   }
 
-  /// Resolve a per-ingredient match: learned alias first, then fuzzy match.
+  /// Resolve a per-ingredient match, in priority order: a user-learned alias,
+  /// then the curated common-staples seed table, then fuzzy matching.
   NutritionRef resolveMatch(Ingredient ing, Map<String, String> aliases) {
+    final excluded = defaultExcluded(ing);
+    // 1. user-learned alias
     final key = ing.name.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
     final aliasCode = aliases[key];
-    final excluded = defaultExcluded(ing);
     if (aliasCode != null && _byCode.containsKey(aliasCode)) {
       return NutritionRef(foodCode: aliasCode, matchedName: cnfName(aliasCode, 'fr'), confidence: 1, includeInCalc: !excluded, fromAlias: true);
     }
+    // 2. curated seed for common Canadian-recipe staples
+    final seedCode = _seed[_seedNorm(ing.name)];
+    if (seedCode != null && _byCode.containsKey(seedCode)) {
+      return NutritionRef(foodCode: seedCode, matchedName: cnfName(seedCode, 'fr'), confidence: 0.95, includeInCalc: !excluded);
+    }
+    // 3. fuzzy match
     final m = _bestMatch(ing.name);
     if (m == null) return NutritionRef(foodCode: null, matchedName: null, confidence: 0, includeInCalc: !excluded);
     return NutritionRef(foodCode: m.food.code, matchedName: m.food.fr, confidence: (m.confidence * 100).round() / 100, includeInCalc: !excluded);
   }
+
+  // Curated matches for the most common Canadian-recipe staples → CNF code.
+  // Each food lists the spellings (FR + EN) a user is likely to type; keys are
+  // normalized (diacritic-folded, punctuation stripped) when the table loads.
+  static const Map<String, List<String>> _seedSpec = {
+    '4501': ['farine', 'farine tout usage', 'farine blanche', 'flour', 'all-purpose flour', 'all purpose flour', 'white flour'],
+    '4318': ['sucre', 'sucre blanc', 'sucre granule', 'sugar', 'white sugar', 'granulated sugar'],
+    '4317': ['cassonade', 'sucre brun', 'brown sugar'],
+    '4319': ['sucre a glacer', 'sucre glace', 'sucre en poudre', 'icing sugar', 'powdered sugar', 'confectioners sugar'],
+    '214': ['sel', 'salt', 'table salt', 'sel de table'],
+    '118': ['beurre', 'beurre sale', 'butter', 'salted butter'],
+    '92': ['beurre non sale', 'beurre doux', 'unsalted butter'],
+    '125': ['oeuf', 'oeufs', 'oeuf entier', 'egg', 'eggs', 'whole egg'],
+    '113': ['lait', 'lait entier', 'milk', 'whole milk'],
+    '4003': ['poudre a pate', 'levure chimique', 'baking powder'],
+    '4005': ['bicarbonate', 'bicarbonate de soude', 'baking soda'],
+    '216': ['vanille', 'extrait de vanille', 'vanilla', 'vanilla extract'],
+    '4294': ['miel', 'honey'],
+    '4326': ['sirop d erable', 'sirop derable', "sirop d'erable", 'maple syrup'],
+    '451': ['huile', 'huile vegetale', 'huile de canola', 'vegetable oil', 'canola oil', 'oil', 'cooking oil'],
+    '422': ["huile d'olive", 'huile d olive', 'huile dolive', 'olive oil'],
+    '2401': ['oignon', 'oignons', 'onion'],
+    '2394': ['ail', 'gousse d ail', "gousse d'ail", 'garlic'],
+    '2380': ['carotte', 'carottes', 'carrot', 'carrots'],
+    '2417': ['pomme de terre', 'pommes de terre', 'patate', 'patates', 'potato', 'potatoes'],
+    '2460': ['tomate', 'tomates', 'tomato', 'tomatoes'],
+    '198': ['poivre', 'poivre noir', 'black pepper', 'pepper'],
+    '178': ['cannelle', 'cinnamon'],
+    '2786': ['boeuf hache', 'viande hachee', 'ground beef'],
+    '841': ['poitrine de poulet', 'poulet', 'chicken breast', 'chicken'],
+    '4471': ['riz', 'riz blanc', 'rice', 'white rice'],
+    '119': ['cheddar', 'fromage cheddar', 'cheddar cheese'],
+    '2933': ['eau', 'water'],
+  };
 
   // ── volume / count / weight → grams (uses CNF measures) ──
   // Metric measures consistent with the CNF-derived density (cup = 250 ml).
