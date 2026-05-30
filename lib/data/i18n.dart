@@ -72,6 +72,12 @@ const Map<String, Map<String, String>> kI18n = {
     'ios_a2hs': 'Ajoutez Facebouffe à l\'écran d\'accueil : Partager → Sur l\'écran d\'accueil.',
     'check_update': 'Vérifier les mises à jour', 'checking': 'Vérification…',
     'up_to_date': 'Vous êtes à jour', 'update_failed': 'Vérification impossible',
+    'import_web_title': 'Importer depuis le web', 'import_url_hint': 'Collez l\'adresse de la recette',
+    'import_action': 'Importer', 'importing': 'Importation…',
+    'import_supported_hint': 'Site pris en charge : ricardocuisine.com',
+    'import_unsupported': 'Source non prise en charge (ricardocuisine.com seulement)',
+    'import_failed': 'Importation échouée. Vérifiez le lien (ou réessayez sur l\'appli Android).',
+    'import_tags_hint': 'Tags suggérés :',
   },
   'en': {
     'tab_home': 'Home', 'tab_search': 'Search', 'tab_list': 'Groceries', 'tab_settings': 'Settings',
@@ -144,6 +150,12 @@ const Map<String, Map<String, String>> kI18n = {
     'ios_a2hs': 'Add Facebouffe to your home screen: Share → Add to Home Screen.',
     'check_update': 'Check for updates', 'checking': 'Checking…',
     'up_to_date': 'You\'re up to date', 'update_failed': 'Couldn\'t check',
+    'import_web_title': 'Import from web', 'import_url_hint': 'Paste the recipe URL',
+    'import_action': 'Import', 'importing': 'Importing…',
+    'import_supported_hint': 'Supported site: ricardocuisine.com',
+    'import_unsupported': 'Unsupported source (ricardocuisine.com only)',
+    'import_failed': 'Import failed. Check the link (or try the Android app).',
+    'import_tags_hint': 'Suggested tags:',
   },
 };
 

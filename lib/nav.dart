@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'data/models.dart' show Recipe;
 import 'screens/recipe_screen.dart';
 import 'screens/souschef_screen.dart';
 import 'screens/edit_screen.dart';
@@ -23,6 +24,10 @@ class Nav {
 
   static Future<void> addRecipe(BuildContext context) =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => const EditScreen()));
+
+  /// Open the editor pre-filled with an unsaved recipe (e.g. from web import).
+  static Future<void> editRecipeInitial(BuildContext context, Recipe recipe) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => EditScreen(initial: recipe)));
 
   static Future<void> openFilter(BuildContext context, String tagId) =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => FilterScreen(tagId: tagId)));

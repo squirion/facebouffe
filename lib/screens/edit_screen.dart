@@ -14,7 +14,8 @@ const _sections = [('infos', 'sec_infos'), ('ing', 'ingredients'), ('steps', 'st
 
 class EditScreen extends StatefulWidget {
   final String? id;
-  const EditScreen({super.key, this.id});
+  final Recipe? initial; // pre-fill a NEW (unsaved) recipe, e.g. from web import
+  const EditScreen({super.key, this.id, this.initial});
 
   @override
   State<EditScreen> createState() => _EditScreenState();
@@ -33,6 +34,9 @@ class _EditScreenState extends State<EditScreen> {
     existing = widget.id != null ? app.getRecipe(widget.id) : null;
     if (existing != null) {
       form = existing!.deepCopy();
+    } else if (widget.initial != null) {
+      // Imported draft — keep any hero photo already staged on "__draft".
+      form = widget.initial!.deepCopy();
     } else {
       form = Recipe(
         id: '',
