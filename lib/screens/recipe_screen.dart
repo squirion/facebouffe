@@ -12,6 +12,7 @@ import '../widgets/chrome.dart';
 import '../widgets/coach.dart';
 import '../widgets/common.dart';
 import '../widgets/fb_icon.dart';
+import '../widgets/nutrition.dart';
 
 class RecipeScreen extends StatefulWidget {
   final String id;
@@ -289,6 +290,8 @@ class _RecipeScreenState extends State<RecipeScreen> {
                             ),
                           ),
                       ],
+                      // nutrition label (estimate)
+                      NutritionCard(recipe: recipe),
                       // personal journal
                       const SizedBox(height: 30),
                       _Journal(recipe: recipe),

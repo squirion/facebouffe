@@ -8,6 +8,7 @@ import '../theme.dart';
 import '../services/image_pick.dart';
 import '../widgets/common.dart';
 import '../widgets/fb_icon.dart';
+import '../widgets/nutrition.dart';
 
 const _units = [null, 'g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'oz', 'lb', 'pinch'];
 const _sections = [('infos', 'sec_infos'), ('ing', 'ingredients'), ('steps', 'steps'), ('desc', 'f_desc')];
@@ -277,6 +278,14 @@ class _EditScreenState extends State<EditScreen> {
         ],
       ),
       _addRowBtn(fb, app.t('f_add_ing'), () => setState(() => form.ingredients.add(Ingredient(name: '')))),
+      Padding(
+        padding: const EdgeInsets.only(top: 24),
+        child: Divider(height: 1, color: fb.line),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: 22),
+        child: NutritionPanel(form: form, onChanged: () => setState(() {})),
+      ),
     ];
   }
 

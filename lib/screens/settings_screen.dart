@@ -92,32 +92,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ]),
                   ),
-                  _Group(label: app.t('set_language'), children: [
+                  SettingsGroup(label: app.t('set_language'), children: [
                     _SettingsRow(label: app.t('set_language'), width: 178, child: Segmented(value: lang, onChange: app.setLanguage, options: const [('fr', 'Français'), ('en', 'English')])),
                   ]),
-                  _Group(label: app.t('set_units'), children: [
+                  SettingsGroup(label: app.t('set_units'), children: [
                     _SettingsRow(label: app.t('set_temp'), width: 150, child: Segmented(value: app.profile.temperature, onChange: app.setTemp, options: const [('celsius', '°C'), ('fahrenheit', '°F')])),
                     _SettingsRow(label: app.t('set_volume'), width: 178, child: Segmented(value: app.profile.volume, onChange: app.setVolume, options: [('metric', app.t('metric')), ('imperial', app.t('imperial'))])),
                     _SettingsRow(label: app.t('set_weight'), width: 178, last: true, child: Segmented(value: app.profile.weight, onChange: app.setWeight, options: [('metric', app.t('metric')), ('imperial', app.t('imperial'))])),
                   ]),
-                  _Group(label: app.t('set_textsize'), children: [
+                  SettingsGroup(label: app.t('set_textsize'), children: [
                     _SettingsRow(label: app.t('set_textsize'), width: 150, last: true, child: Segmented(value: app.profile.fontSize, onChange: app.setFontSize, options: const [('small', 'A'), ('medium', 'A'), ('large', 'A')])),
                   ]),
-                  _Group(label: app.t('appearance'), children: [
+                  SettingsGroup(label: app.t('appearance'), children: [
                     _SettingsRow(label: app.t('dark_mode'), last: true, child: _Toggle(on: app.dark, onTap: () => app.setDark(!app.dark))),
                   ]),
-                  _Group(label: app.t('timer_sound'), children: const [
+                  SettingsGroup(label: app.t('timer_sound'), children: const [
                     _SoundRow(alarm: true),
                     _SoundRow(alarm: false),
                     _SoundHint(),
                   ]),
-                  _Group(label: app.t('custom_tags'), children: const [TagManager()]),
-                  _Group(label: app.t('import_export'), children: [
-                    _ActionRow(icon: 'basket', label: app.t('import_book'), onTap: () => _import(app)),
-                    _ActionRow(icon: 'note', label: app.t('export_json'), onTap: () => _exportJson(app)),
+                  SettingsGroup(label: app.t('import_export'), children: [
+                    _ActionRow(icon: 'note', label: app.t('save_recipes'), onTap: () => _exportJson(app)),
+                    _ActionRow(icon: 'basket', label: app.t('load_recipes'), onTap: () => _import(app)),
                     _ActionRow(icon: 'note', label: app.t('export_book_pdf'), onTap: () => _exportBook(app), last: true),
                   ]),
-                  _Group(label: app.t('help_section'), children: [
+                  SettingsGroup(label: app.lang == 'fr' ? 'Avancé' : 'Advanced', children: [
+                    _NavRow(icon: 'sliders', label: app.t('advanced'), sub: app.t('advanced_sub'), onTap: () => Nav.openAdvanced(context), last: true),
+                  ]),
+                  SettingsGroup(label: app.t('help_section'), children: [
                     _ActionRow(icon: 'download', label: app.t('check_update'), onTap: () => _checkUpdate(app)),
                     _ActionRow(icon: 'note', label: app.t('help_title'), onTap: () => Nav.openHelp(context)),
                     _ActionRow(icon: 'timer', label: app.t('replay_tips'), onTap: () { app.resetTips(); _showFlash(app.t('tips_reset_done')); }, last: true),
@@ -327,10 +329,10 @@ class _Toggle extends StatelessWidget {
   }
 }
 
-class _Group extends StatelessWidget {
+class SettingsGroup extends StatelessWidget {
   final String label;
   final List<Widget> children;
-  const _Group({required this.label, required this.children});
+  const SettingsGroup({super.key, required this.label, required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -391,6 +393,39 @@ class _ActionRow extends StatelessWidget {
           Container(width: 30, height: 30, decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(9)), child: Center(child: FbIcon(icon, size: 17, color: fb.accent))),
           const SizedBox(width: 13),
           Expanded(child: Text(label, style: fb.ui(size: 15.5, weight: FontWeight.w600))),
+          FbIcon('chevR', size: fb.fs(17), color: fb.inkFaint),
+        ]),
+      ),
+    );
+  }
+}
+
+// Navigation row with a subtitle (used for the Advanced settings entry).
+class _NavRow extends StatelessWidget {
+  final String icon, label, sub;
+  final VoidCallback onTap;
+  final bool last;
+  const _NavRow({required this.icon, required this.label, required this.sub, required this.onTap, this.last = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final fb = context.fb;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: last ? null : BoxDecoration(border: Border(bottom: BorderSide(color: fb.line))),
+        child: Row(children: [
+          Container(width: 30, height: 30, decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(9)), child: Center(child: FbIcon(icon, size: 17, color: fb.accent))),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text(label, style: fb.ui(size: 15.5, weight: FontWeight.w600)),
+              const SizedBox(height: 1),
+              Text(sub, style: fb.ui(size: 12.5, color: fb.inkFaint)),
+            ]),
+          ),
           FbIcon('chevR', size: fb.fs(17), color: fb.inkFaint),
         ]),
       ),

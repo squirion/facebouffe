@@ -34,12 +34,14 @@ class HelpScreen extends StatelessWidget {
             ['basket', 'Composer l\'épicerie', 'Sur une recette, touchez Ajouter à l\'épicerie ; les quantités suivent les portions.'],
             ['plus', 'Créer une variante', 'Sur une recette, touchez Ajouter une variante pour partir d\'une copie.'],
             ['sliders', 'Unités, langue, thème', 'Tout se règle dans les Réglages.'],
+            ['sliders', 'Réglages avancés', 'Tags personnalisés et alias d\'ingrédients (l\'appariement nutritionnel) sont dans Réglages › Paramètres avancés.'],
           ]
         : const [
             ['flame', 'Cook step-by-step', 'Open a recipe, then tap Sous-chef mode.'],
             ['basket', 'Build your groceries', 'On a recipe, tap Add to groceries; amounts follow the servings.'],
             ['plus', 'Create a variant', 'On a recipe, tap Add a variant to start from a copy.'],
             ['sliders', 'Units, language, theme', 'Everything is set in Settings.'],
+            ['sliders', 'Advanced settings', 'Custom tags and ingredient aliases (nutrition matching) live in Settings › Advanced settings.'],
           ];
 
     return Scaffold(
