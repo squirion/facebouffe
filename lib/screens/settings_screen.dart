@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../state/app_state.dart';
 import '../data/models.dart';
@@ -11,6 +13,8 @@ import '../services/pdf_export.dart';
 import '../services/data_export.dart';
 import '../services/timer_notifications.dart';
 import '../services/ringtone_picker.dart';
+import '../services/update_check.dart';
+import '../services/web_env.dart';
 import 'export_select_screen.dart';
 import '../widgets/chrome.dart';
 import '../widgets/fb_icon.dart';
@@ -114,10 +118,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _ActionRow(icon: 'note', label: app.t('export_book_pdf'), onTap: () => _exportBook(app), last: true),
                   ]),
                   _Group(label: app.t('help_section'), children: [
+                    _ActionRow(icon: 'download', label: app.t('check_update'), onTap: () => _checkUpdate(app)),
                     _ActionRow(icon: 'note', label: app.t('help_title'), onTap: () => Nav.openHelp(context)),
                     _ActionRow(icon: 'timer', label: app.t('replay_tips'), onTap: () { app.resetTips(); _showFlash(app.t('tips_reset_done')); }, last: true),
                   ]),
-                  Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Center(child: Text(app.t('version'), style: fb.ui(size: 12.5, color: fb.inkFaint)))),
+                  Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Center(child: Text(app.appVersion.isEmpty ? app.t('version') : 'Facebouffe · v${app.appVersion}', style: fb.ui(size: 12.5, color: fb.inkFaint)))),
                 ],
               ),
               if (flash != null)
@@ -138,6 +143,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _checkUpdate(AppState app) async {
+    _showFlash(app.t('checking'));
+    UpdateInfo? info;
+    var failed = false;
+    try {
+      info = await UpdateCheck.check(ignoreDismissed: true, throwOnError: true);
+    } catch (_) {
+      failed = true;
+    }
+    if (!mounted) return;
+    if (failed) {
+      _showFlash(app.t('update_failed'));
+      return;
+    }
+    if (info == null) {
+      _showFlash(app.t('up_to_date'));
+      return;
+    }
+    final fb = context.fb;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: fb.card,
+        title: Text('${app.t('update_available')} · v${info!.version}', style: fb.display(size: 19, weight: FontWeight.w600)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(app.t('cancel'), style: fb.ui(size: 14, weight: FontWeight.w600, color: fb.inkSoft))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(kIsWeb ? app.t('update_refresh') : app.t('update_get'), style: fb.ui(size: 14, weight: FontWeight.w700, color: fb.accent))),
+        ],
+      ),
+    );
+    if (go != true) return;
+    if (kIsWeb) {
+      reloadApp();
+    } else {
+      final uri = Uri.parse(info.apkUrl);
+      if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   Future<void> _exportBook(AppState app) async {

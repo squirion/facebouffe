@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models.dart';
@@ -32,6 +33,7 @@ class AppState extends ChangeNotifier {
   bool get chimeIsAlarm => chimeSound == 'alarm';
 
   bool reduceMotion = false;
+  String appVersion = ''; // e.g. "1.0.1+2" — loaded from package_info
   SharedPreferences? _prefs;
   bool ready = false;
 
@@ -98,6 +100,10 @@ class AppState extends ChangeNotifier {
         recipeGallery = (jsonDecode(gallery) as Map).map((k, v) => MapEntry(k as String, (v as List).map((e) => e as String).toList()));
       } catch (_) {}
     }
+    try {
+      final pkg = await PackageInfo.fromPlatform();
+      appVersion = '${pkg.version}+${pkg.buildNumber}';
+    } catch (_) {}
     ready = true;
     notifyListeners();
   }

@@ -43,6 +43,8 @@ class FbIcon extends StatelessWidget {
     'leaf': Icons.eco_outlined,
     'dumbbell': Icons.fitness_center,
     'drag': Icons.drag_indicator,
+    'refresh': Icons.refresh,
+    'download': Icons.download_rounded,
   };
 
   static const _filled = {

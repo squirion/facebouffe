@@ -81,7 +81,7 @@ class HelpScreen extends StatelessWidget {
                       Text(glossary[i][1], style: fb.ui(size: 13.5, color: fb.inkSoft, height: 1.5)),
                     ])),
                 ]),
-                Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Center(child: Text(app.t('version'), style: fb.ui(size: 12.5, color: fb.inkFaint)))),
+                Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Center(child: Text(app.appVersion.isEmpty ? app.t('version') : 'Facebouffe · v${app.appVersion}', style: fb.ui(size: 12.5, color: fb.inkFaint)))),
               ],
             ),
           ),

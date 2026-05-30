@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Needed in RELEASE builds for the update check, Google Fonts, and other
+         network use (Flutter only auto-adds this to debug/profile builds). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Cooking-timer chimes: scheduled local notifications that fire on the
          alarm channel even when the phone is asleep / in doze. USE_EXACT_ALARM
          is auto-granted for genuine timer apps (no runtime prompt); if Play
