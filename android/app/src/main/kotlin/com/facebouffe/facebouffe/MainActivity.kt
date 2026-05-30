@@ -7,11 +7,11 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.lifecycle.lifecycleScope
-import com.google.ai.edge.aicore.GenerativeModel
-import com.google.ai.edge.aicore.generationConfig
+import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -58,21 +58,24 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        // On-device AI (Tier 1 import) — Gemini Nano via Google AI Edge SDK.
+        // On-device LLM (Tier 1 import) — MediaPipe LLM Inference on a local
+        // Gemma .task model the user loaded onto the device.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "facebouffe/ondevice_ai").setMethodCallHandler { call, result ->
             when (call.method) {
-                "available" -> result.success(onDeviceAvailable())
                 "diagnose" -> result.success(diagnose())
                 "generate" -> {
+                    val modelPath = call.argument<String>("modelPath")
                     val text = call.argument<String>("text") ?: ""
                     val prompt = call.argument<String>("prompt") ?: ""
-                    Log.i(NANO_TAG, "generate() called: textLen=${text.length} promptLen=${prompt.length}")
-                    // catch Throwable, not just Exception: a release build can hit
-                    // NoClassDefFoundError / LinkageError if the SDK was stripped,
-                    // which would otherwise fail silently/instantly.
+                    Log.i(NANO_TAG, "generate(): model=$modelPath textLen=${text.length} promptLen=${prompt.length}")
+                    if (modelPath.isNullOrEmpty() || !File(modelPath).exists()) {
+                        result.error("no_model", "model file missing: $modelPath", null)
+                        return@setMethodCallHandler
+                    }
+                    // catch Throwable: model loading can throw Errors (OOM / native link).
                     lifecycleScope.launch {
                         try {
-                            val out = generateOnDevice("$prompt\n\n$text")
+                            val out = runLlm(modelPath, "$prompt\n\n$text")
                             Log.i(NANO_TAG, "generate() OK: responseLen=${out.length}")
                             result.success(out)
                         } catch (t: Throwable) {
@@ -87,41 +90,8 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    // Cheap availability proxy: API 31+ and an AICore service package present.
-    // Actual model download/eligibility is only known when generate() runs.
-    private fun onDeviceAvailable(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            Log.i(NANO_TAG, "available=false (SDK ${Build.VERSION.SDK_INT} < 31)")
-            return false
-        }
-        val google = hasPackage("com.google.android.aicore")
-        val samsung = hasPackage("com.samsung.android.aicore")
-        Log.i(NANO_TAG, "available check: googleAICore=$google samsungAICore=$samsung")
-        return google || samsung
-    }
-
-    private fun hasPackage(name: String): Boolean = try {
-        packageManager.getPackageInfo(name, 0); true
-    } catch (t: Throwable) {
-        false
-    }
-
-    // Verbose capability report for debugging Tier 1.
-    private fun diagnose(): String {
-        val sb = StringBuilder()
-        sb.append("SDK_INT=${Build.VERSION.SDK_INT}\n")
-        sb.append("device=${Build.MANUFACTURER} ${Build.MODEL}\n")
-        sb.append("googleAICore=${hasPackage("com.google.android.aicore")}\n")
-        sb.append("samsungAICore=${hasPackage("com.samsung.android.aicore")}\n")
-        sb.append("aicoreSdkClass=")
-        try {
-            Class.forName("com.google.ai.edge.aicore.GenerativeModel")
-            sb.append("loaded")
-        } catch (t: Throwable) {
-            sb.append("MISSING (${t.javaClass.simpleName})")
-        }
-        return sb.toString()
-    }
+    private fun diagnose(): String =
+        "device=${Build.MANUFACTURER} ${Build.MODEL} SDK=${Build.VERSION.SDK_INT}\nllmLoaded=${llm != null} path=$llmPath"
 
     private fun errorDetail(t: Throwable): String {
         val sb = StringBuilder()
@@ -137,25 +107,25 @@ class MainActivity : FlutterActivity() {
         return sb.toString()
     }
 
-    private suspend fun generateOnDevice(fullPrompt: String): String = withContext(Dispatchers.IO) {
-        Log.i(NANO_TAG, "constructing GenerativeModel…")
-        val model = GenerativeModel(
-            generationConfig = generationConfig {
-                context = applicationContext
-                temperature = 0.2f
-                topK = 16
-                maxOutputTokens = 2048
-            }
-        )
-        try {
-            Log.i(NANO_TAG, "prepareInferenceEngine()…")
-            model.prepareInferenceEngine()
-            Log.i(NANO_TAG, "generateContent()…")
-            val response = model.generateContent(fullPrompt)
-            response.text ?: throw IllegalStateException("model returned no text")
-        } finally {
-            model.close()
+    // Cache one LlmInference per model path — construction loads the whole model
+    // into memory (seconds + lots of RAM), so we keep it alive across calls.
+    private var llm: LlmInference? = null
+    private var llmPath: String? = null
+
+    private suspend fun runLlm(modelPath: String, fullPrompt: String): String = withContext(Dispatchers.IO) {
+        if (llm == null || llmPath != modelPath) {
+            Log.i(NANO_TAG, "loading LlmInference from $modelPath")
+            llm?.close()
+            val options = LlmInference.LlmInferenceOptions.builder()
+                .setModelPath(modelPath)
+                .setMaxTokens(2048)
+                .build()
+            llm = LlmInference.createFromOptions(applicationContext, options)
+            llmPath = modelPath
+            Log.i(NANO_TAG, "model loaded")
         }
+        Log.i(NANO_TAG, "generateResponse()")
+        llm!!.generateResponse(fullPrompt) ?: throw IllegalStateException("model returned no text")
     }
 
     private fun titleFor(uri: String?): String? {

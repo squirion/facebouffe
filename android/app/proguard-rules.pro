@@ -5,6 +5,8 @@
 -dontwarn com.google.mlkit.vision.text.japanese.**
 -dontwarn com.google.mlkit.vision.text.korean.**
 
-# Google AI Edge SDK (on-device Gemini Nano) — keep its API surface.
--keep class com.google.ai.edge.aicore.** { *; }
--dontwarn com.google.ai.edge.aicore.**
+# MediaPipe LLM Inference (on-device Tier 1) — keep its API + native bindings.
+-keep class com.google.mediapipe.** { *; }
+-dontwarn com.google.mediapipe.**
+-keep class com.google.protobuf.** { *; }
+-dontwarn com.google.protobuf.**

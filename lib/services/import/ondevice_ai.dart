@@ -1,33 +1,81 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 import '../recipe_import.dart' show ImportException;
 import 'import_debug.dart';
 
-/// Bridge to the platform's on-device small LLM (Android Gemini Nano via the
-/// Google AI Edge SDK; Apple Foundation Models on native iOS — not the web app).
-/// Used by Tier 1 import to turn OCR'd / pasted text into a recipe JSON locally,
-/// with no network. Gracefully reports unavailable when the device lacks it.
+/// Tier 1 on-device LLM via MediaPipe LLM Inference (native). Runs a local
+/// Gemma `.task` model the user has loaded onto the device — no network, no
+/// AICore allowlist. "Available" simply means a model file is present.
 class OnDeviceAi {
   static const _channel = MethodChannel('facebouffe/ondevice_ai');
-  static bool? _cached;
+  static const _modelFileName = 'ondevice_llm.task';
 
-  /// Whether a usable on-device model is present (AICore + Gemini Nano, etc.).
-  /// Cached after the first query.
-  static Future<bool> available() async {
-    if (_cached != null) return _cached!;
-    if (kIsWeb) return _cached = false;
-    try {
-      _cached = await _channel.invokeMethod<bool>('available') ?? false;
-    } catch (e) {
-      importLog('available() channel error: $e');
-      _cached = false;
-    }
-    importLog('on-device available = $_cached');
-    return _cached!;
+  static Future<File> _modelFile() async {
+    final dir = await getApplicationSupportDirectory();
+    return File('${dir.path}/$_modelFileName');
   }
 
-  /// A multiline capability report from the native side (debugging only).
+  /// Absolute path to the loaded model, or null if none is present.
+  static Future<String?> modelPath() async {
+    if (kIsWeb) return null;
+    final f = await _modelFile();
+    return await f.exists() ? f.path : null;
+  }
+
+  /// Tier 1 is available iff a model file has been loaded.
+  static Future<bool> available() async => (await modelPath()) != null;
+
+  static Future<int> modelSizeBytes() async {
+    final p = await modelPath();
+    return p == null ? 0 : File(p).length();
+  }
+
+  /// Copy a user-picked model file into app storage (becomes the active model).
+  static Future<void> importModelFromFile(String srcPath) async {
+    final dest = await _modelFile();
+    await File(srcPath).copy(dest.path);
+  }
+
+  /// Stream-download a model from [url] into app storage, reporting 0..1 progress.
+  static Future<void> downloadModel(String url, {void Function(double)? onProgress}) async {
+    final dest = await _modelFile();
+    final tmp = File('${dest.path}.part');
+    final client = http.Client();
+    try {
+      final req = http.Request('GET', Uri.parse(url));
+      final res = await client.send(req);
+      if (res.statusCode != 200) throw ImportException('download_failed', 'HTTP ${res.statusCode}');
+      final total = res.contentLength ?? 0;
+      var received = 0;
+      final sink = tmp.openWrite();
+      await for (final chunk in res.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (total > 0 && onProgress != null) onProgress(received / total);
+      }
+      await sink.close();
+      await tmp.rename(dest.path);
+    } finally {
+      client.close();
+      if (await tmp.exists()) {
+        try {
+          await tmp.delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+  static Future<void> deleteModel() async {
+    final f = await _modelFile();
+    if (await f.exists()) await f.delete();
+  }
+
+  /// A short capability report from the native side (debugging only).
   static Future<String> diagnose() async {
     try {
       return await _channel.invokeMethod<String>('diagnose') ?? '(no diagnose)';
@@ -36,29 +84,25 @@ class OnDeviceAi {
     }
   }
 
-  /// Ask the on-device model to return recipe JSON for [text], guided by
-  /// [schemaPrompt]. Returns the raw model string (JSON), or throws.
+  /// Run the local model on [text], guided by [schemaPrompt]. Returns raw JSON.
   static Future<String> generate(String text, String schemaPrompt) async {
-    importLog('on-device generate: textLen=${text.length} promptLen=${schemaPrompt.length}');
+    final mp = await modelPath();
+    if (mp == null) throw ImportException('ondevice_unavailable', 'no on-device model loaded');
+    importLog('on-device generate: model=$mp textLen=${text.length} promptLen=${schemaPrompt.length}');
     final String? out;
     try {
       out = await _channel.invokeMethod<String>('generate', {
+        'modelPath': mp,
         'text': text,
         'prompt': schemaPrompt,
       });
     } on PlatformException catch (e) {
       final detail = '${e.code}: ${e.message}${e.details != null ? '\n${e.details}' : ''}';
       importLog('on-device generate FAILED → $detail');
-      // AICore declines to serve the LLM feature to this (sideloaded / non-
-      // allowlisted) app or un-provisioned device — distinct from a real error.
-      final blob = '${e.message ?? ''} ${e.details ?? ''}';
-      final unavailable = blob.contains('NOT_AVAILABLE') || blob.contains('feature not found') || blob.contains('FEATURE_NOT_FOUND');
-      throw ImportException(unavailable ? 'ondevice_unavailable' : 'ondevice', detail);
+      throw ImportException('ondevice', detail);
     }
     importLog('on-device generate OK: responseLen=${out?.length ?? 0}');
-    if (out == null || out.trim().isEmpty) {
-      throw ImportException('ondevice', 'empty on-device response');
-    }
+    if (out == null || out.trim().isEmpty) throw ImportException('ondevice', 'empty on-device response');
     return out;
   }
 }

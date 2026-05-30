@@ -70,8 +70,8 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    // On-device Gemini Nano (Tier 1 import). Experimental; gated at runtime so
-    // devices without AICore degrade to "unsupported".
-    implementation("com.google.ai.edge.aicore:aicore:0.0.1-exp01")
+    // On-device LLM (Tier 1 import) via MediaPipe LLM Inference — runs a local
+    // Gemma .task model the user loads onto the device (no AICore allowlist).
+    implementation("com.google.mediapipe:tasks-genai:0.10.24")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }

@@ -535,9 +535,15 @@ class AppState extends ChangeNotifier {
   /// The configured backend, falling back to tier0 if it's not currently usable.
   String get effectiveBackend => engineAvailable(importBackend) ? importBackend : 'tier0';
 
+  /// Recompute Tier 1 availability after the on-device model is imported/deleted.
+  Future<void> refreshOnDevice() async {
+    onDeviceAI = await OnDeviceAi.available();
+    notifyListeners();
+  }
+
   /// Called when an on-device import attempt proves the model isn't actually
-  /// usable here (AICore declined the LLM feature). Disables Tier 1 for this
-  /// session and moves off it so the user isn't stuck on a dead engine.
+  /// usable here. Disables Tier 1 for this session and moves off it so the
+  /// user isn't stuck on a dead engine.
   void markOnDeviceUnavailable() {
     onDeviceAI = false;
     if (importBackend == 'ondevice') {
