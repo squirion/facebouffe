@@ -4,13 +4,12 @@ import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import '../theme.dart';
-import '../nav.dart';
 import '../widgets/fb_icon.dart';
 import 'home_screen.dart';
 import 'search_screen.dart';
 import 'shopping_screen.dart';
 import 'settings_screen.dart';
-import 'import_dialog.dart';
+import 'import_sheet.dart';
 
 /// Holds the active bottom-tab index; screens switch tabs via [go].
 class ShellTab extends ValueNotifier<int> {
@@ -49,8 +48,7 @@ class RootShell extends StatelessWidget {
           ? Padding(
               padding: const EdgeInsets.only(bottom: 8, right: 2),
               child: GestureDetector(
-                onTap: () => Nav.addRecipe(context),
-                onLongPress: () => showImportDialog(context), // import a recipe from the web
+                onTap: () => showImportSheet(context), // method chooser: manual / link / photo / text (§2f)
                 child: Container(
                   width: 60,
                   height: 60,

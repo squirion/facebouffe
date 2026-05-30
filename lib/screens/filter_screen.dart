@@ -8,7 +8,7 @@ import '../nav.dart';
 import '../widgets/cards.dart';
 import '../widgets/chrome.dart';
 import '../widgets/fb_icon.dart';
-import 'import_dialog.dart';
+import 'import_sheet.dart';
 
 class FilterScreen extends StatelessWidget {
   final String tagId;
@@ -27,8 +27,7 @@ class FilterScreen extends StatelessWidget {
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 8, right: 2),
         child: GestureDetector(
-          onTap: () => Nav.addRecipe(context),
-          onLongPress: () => showImportDialog(context),
+          onTap: () => showImportSheet(context),
           child: Container(
             width: 60,
             height: 60,
