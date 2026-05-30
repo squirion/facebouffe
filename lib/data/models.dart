@@ -2,19 +2,52 @@
 // the shape of facebouffe-seed.json. All structures round-trip to/from JSON so
 // import/export and local persistence share one serialization path.
 
+/// Phase 1.5 — per-ingredient resolved CNF match, persisted on the recipe.
+class NutritionRef {
+  String? foodCode; // CNF food code
+  String? matchedName; // e.g. "Beurre, salé"
+  double confidence; // 0–1 matcher certainty
+  bool includeInCalc; // false = excluded (frying oil, "sel au goût"…)
+  bool fromAlias; // matched via the learned alias table (UI hint; persisted harmlessly)
+
+  NutritionRef({this.foodCode, this.matchedName, this.confidence = 0, this.includeInCalc = true, this.fromAlias = false});
+
+  bool get matched => foodCode != null && foodCode!.isNotEmpty;
+
+  factory NutritionRef.fromJson(Map<String, dynamic> j) => NutritionRef(
+        foodCode: j['foodCode'] as String?,
+        matchedName: j['matchedName'] as String?,
+        confidence: (j['confidence'] as num?)?.toDouble() ?? 0,
+        includeInCalc: j['includeInCalc'] as bool? ?? true,
+        fromAlias: j['fromAlias'] as bool? ?? false,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'foodCode': foodCode,
+        'matchedName': matchedName,
+        'confidence': confidence,
+        'includeInCalc': includeInCalc,
+        if (fromAlias) 'fromAlias': true,
+      };
+
+  NutritionRef copy() => NutritionRef(foodCode: foodCode, matchedName: matchedName, confidence: confidence, includeInCalc: includeInCalc, fromAlias: fromAlias);
+}
+
 class Ingredient {
   num? quantity; // null = uncounted / handled via unit
   String? unit; // g,kg,ml,l,tsp,tbsp,cup,oz,lb,pinch... null = countable
   String name;
   String? note;
+  NutritionRef? nutritionRef; // Phase 1.5 CNF match
 
-  Ingredient({this.quantity, this.unit, required this.name, this.note});
+  Ingredient({this.quantity, this.unit, required this.name, this.note, this.nutritionRef});
 
   factory Ingredient.fromJson(Map<String, dynamic> j) => Ingredient(
         quantity: j['quantity'] as num?,
         unit: j['unit'] as String?,
         name: j['name'] as String? ?? '',
         note: j['note'] as String?,
+        nutritionRef: j['nutritionRef'] != null ? NutritionRef.fromJson(j['nutritionRef'] as Map<String, dynamic>) : null,
       );
 
   Map<String, dynamic> toJson() => {
@@ -22,9 +55,52 @@ class Ingredient {
         'unit': unit,
         'name': name,
         if (note != null && note!.isNotEmpty) 'note': note,
+        if (nutritionRef != null) 'nutritionRef': nutritionRef!.toJson(),
       };
 
-  Ingredient copy() => Ingredient(quantity: quantity, unit: unit, name: name, note: note);
+  Ingredient copy() => Ingredient(quantity: quantity, unit: unit, name: name, note: note, nutritionRef: nutritionRef?.copy());
+}
+
+/// Phase 1.5 — computed nutrition label, stored on the recipe. Always an estimate.
+class Nutrition {
+  Map<String, num> perServing;
+  Map<String, num> total;
+  bool isEstimate;
+  bool hasUnmatched;
+  String computedAt; // ISO
+  int servingsBasis;
+
+  Nutrition({required this.perServing, required this.total, this.isEstimate = true, this.hasUnmatched = false, this.computedAt = '', this.servingsBasis = 1});
+
+  static Map<String, num> _numMap(dynamic v) {
+    final out = <String, num>{};
+    if (v is Map) {
+      v.forEach((k, val) {
+        if (val is num) out[k.toString()] = val;
+      });
+    }
+    return out;
+  }
+
+  factory Nutrition.fromJson(Map<String, dynamic> j) => Nutrition(
+        perServing: _numMap(j['perServing']),
+        total: _numMap(j['total']),
+        isEstimate: j['isEstimate'] as bool? ?? true,
+        hasUnmatched: j['hasUnmatched'] as bool? ?? false,
+        computedAt: j['computedAt'] as String? ?? '',
+        servingsBasis: (j['servingsBasis'] as num?)?.toInt() ?? 1,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'perServing': perServing,
+        'total': total,
+        'isEstimate': isEstimate,
+        'hasUnmatched': hasUnmatched,
+        'computedAt': computedAt,
+        'servingsBasis': servingsBasis,
+      };
+
+  Nutrition copy() => Nutrition.fromJson(toJson());
 }
 
 class Step {
@@ -93,6 +169,7 @@ class Recipe {
   List<Ingredient> ingredients;
   List<Step> steps;
   Personal personal;
+  Nutrition? nutrition; // Phase 1.5 — computed estimate, null until generated
 
   Recipe({
     required this.id,
@@ -113,6 +190,7 @@ class Recipe {
     List<Ingredient>? ingredients,
     List<Step>? steps,
     Personal? personal,
+    this.nutrition,
   })  : gallery = gallery ?? [],
         tags = tags ?? [],
         links = links ?? [],
@@ -139,6 +217,7 @@ class Recipe {
         ingredients: (j['ingredients'] as List?)?.map((e) => Ingredient.fromJson(e as Map<String, dynamic>)).toList() ?? [],
         steps: (j['steps'] as List?)?.map((e) => Step.fromJson(e as Map<String, dynamic>)).toList() ?? [],
         personal: j['personal'] != null ? Personal.fromJson(j['personal'] as Map<String, dynamic>) : Personal(),
+        nutrition: j['nutrition'] != null ? Nutrition.fromJson(j['nutrition'] as Map<String, dynamic>) : null,
       );
 
   Map<String, dynamic> toJson() => {
@@ -160,6 +239,7 @@ class Recipe {
         'ingredients': ingredients.map((e) => e.toJson()).toList(),
         'steps': steps.map((e) => e.toJson()).toList(),
         'personal': personal.toJson(),
+        if (nutrition != null) 'nutrition': nutrition!.toJson(),
       };
 
   Recipe deepCopy() => Recipe.fromJson(toJson());

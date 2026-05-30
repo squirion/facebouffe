@@ -22,6 +22,7 @@ class AppState extends ChangeNotifier {
   TipsSeen tipsSeen = TipsSeen();
   Map<String, String> recipePhotos = {}; // recipe id (or "__draft") -> hero photo path
   Map<String, List<String>> recipeGallery = {}; // recipe id (or "__draft") -> gallery photo paths
+  Map<String, String> aliases = {}; // normalized ingredient name -> CNF food code (learned defaults, §2e)
 
   // App-only settings (not part of the recipe schema)
   bool dark = false;
@@ -98,6 +99,12 @@ class AppState extends ChangeNotifier {
     if (gallery != null) {
       try {
         recipeGallery = (jsonDecode(gallery) as Map).map((k, v) => MapEntry(k as String, (v as List).map((e) => e as String).toList()));
+      } catch (_) {}
+    }
+    final al = _prefs!.getString('fb_aliases');
+    if (al != null) {
+      try {
+        aliases = Map<String, String>.from(jsonDecode(al) as Map);
       } catch (_) {}
     }
     try {
@@ -450,6 +457,23 @@ class AppState extends ChangeNotifier {
     list.removeAt(index);
     if (list.isEmpty) recipeGallery.remove(id);
     _persistGallery();
+    notifyListeners();
+  }
+
+  // ── ingredient aliases (learned CNF defaults, §2e) ──
+  static String normalizeIngredientName(String name) => name.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+
+  void addAlias(String name, String foodCode) {
+    final key = normalizeIngredientName(name);
+    if (key.isEmpty) return;
+    aliases[key] = foodCode;
+    _prefs?.setString('fb_aliases', jsonEncode(aliases));
+    notifyListeners();
+  }
+
+  void removeAlias(String key) {
+    aliases.remove(key);
+    _prefs?.setString('fb_aliases', jsonEncode(aliases));
     notifyListeners();
   }
 
