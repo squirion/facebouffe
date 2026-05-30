@@ -8,9 +8,15 @@ import 'package:path_provider/path_provider.dart';
 import '../data/models.dart';
 
 /// Thrown when an import can't be completed (network blocked, no recipe data…).
+/// [detail] carries a verbose, developer-facing reason (surfaced in the UI while
+/// debugging the import engine — see import_debug.dart).
 class ImportException implements Exception {
   final String code;
-  ImportException(this.code);
+  final String? detail;
+  ImportException(this.code, [this.detail]);
+
+  @override
+  String toString() => 'ImportException($code${detail != null ? ': $detail' : ''})';
 }
 
 class ImportResult {

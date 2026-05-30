@@ -51,9 +51,11 @@ class ByokClient {
       text == null || text.trim().isEmpty ? 'Extract the recipe from the attached image.' : 'Recipe input:\n\n${text.trim()}';
 
   static Never _fail(http.Response r) {
-    if (r.statusCode == 401 || r.statusCode == 403) throw ImportException('bad_key');
-    if (r.statusCode == 429) throw ImportException('rate_limited');
-    throw ImportException('provider_error');
+    final body = r.body.length > 400 ? r.body.substring(0, 400) : r.body;
+    final detail = 'HTTP ${r.statusCode}\n$body';
+    if (r.statusCode == 401 || r.statusCode == 403) throw ImportException('bad_key', detail);
+    if (r.statusCode == 429) throw ImportException('rate_limited', detail);
+    throw ImportException('provider_error', detail);
   }
 
   // ── Anthropic Messages API ──

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../../state/app_state.dart';
 import '../recipe_import.dart';
 import 'byok_client.dart';
+import 'import_debug.dart';
 import 'ocr.dart';
 import 'ondevice_ai.dart';
 import 'recipe_schema.dart';
@@ -30,10 +31,19 @@ class ImportEngine {
     Uint8List? imageBytes,
     String mediaType = 'image/jpeg',
   }) async {
+    importLog('run: method=$method backend=${app.effectiveBackend} (configured=${app.importBackend}, onDeviceAI=${app.onDeviceAI}, provider=${app.importProvider})');
     if (method == ImportMethod.link) {
       final u = (url ?? '').trim();
       if (u.isEmpty) throw ImportException('empty_input');
-      return RecipeImport.importFromUrl(u); // Tier 0 — JSON-LD, zero cost
+      importLog('link → Tier 0 JSON-LD: $u');
+      try {
+        return await RecipeImport.importFromUrl(u); // Tier 0 — JSON-LD, zero cost
+      } on ImportException {
+        rethrow;
+      } catch (e) {
+        importLog('Tier 0 error: $e');
+        throw ImportException('provider_error', e.toString());
+      }
     }
 
     final backend = app.effectiveBackend;
@@ -41,6 +51,7 @@ class ImportEngine {
       final provider = app.importProvider;
       final key = app.importKeys[provider] ?? '';
       if (key.trim().isEmpty) throw ImportException('needs_ai');
+      importLog('byok → $provider (textLen=${text?.length ?? 0}, hasImage=${imageBytes != null})');
       final raw = await ByokClient.extract(
         provider: provider,
         apiKey: key,
@@ -48,6 +59,7 @@ class ImportEngine {
         imageBytes: imageBytes,
         mediaType: mediaType,
       );
+      importLog('byok raw response (first 300): ${raw.length > 300 ? raw.substring(0, 300) : raw}');
       return draftFromModelJson(raw, source: _sourceLabel(method));
     }
 
@@ -55,10 +67,13 @@ class ImportEngine {
       // On-device works on text; for photos we OCR first, then prompt locally.
       var input = text ?? '';
       if (method == ImportMethod.photo && imageBytes != null) {
+        importLog('ondevice → OCR ${imageBytes.length} bytes');
         input = await Ocr.recognize(imageBytes);
+        importLog('OCR text (${input.length} chars): ${input.length > 200 ? input.substring(0, 200) : input}');
       }
-      if (input.trim().isEmpty) throw ImportException('empty_input');
+      if (input.trim().isEmpty) throw ImportException('empty_input', 'no text to feed the on-device model');
       final raw = await OnDeviceAi.generate(input, kImportPrompt);
+      importLog('ondevice raw response (first 300): ${raw.length > 300 ? raw.substring(0, 300) : raw}');
       return draftFromModelJson(raw, source: _sourceLabel(method));
     }
 

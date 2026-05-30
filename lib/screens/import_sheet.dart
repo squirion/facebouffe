@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../nav.dart';
 import '../services/recipe_import.dart' show RecipeImport, ImportResult, ImportException;
 import '../services/import/import_engine.dart';
+import '../services/import/import_debug.dart';
 import '../widgets/fb_icon.dart';
 
 /// The "+" entry point (§2f): opens a method chooser; non-manual methods run the
@@ -116,9 +117,11 @@ class _ImportSheetState extends State<_ImportSheet> {
       if (!mounted) return;
       await _finish(res);
     } on ImportException catch (e) {
-      if (mounted) setState(() { _busy = false; _error = _msg(e.code); });
-    } catch (_) {
-      if (mounted) setState(() { _busy = false; _error = app.t('import_err_generic'); });
+      importLog('import failed: ${e.code} | ${e.detail ?? ''}');
+      if (mounted) setState(() { _busy = false; _error = kImportDebug ? '[${e.code}]\n${e.detail ?? '(no detail)'}' : _msg(e.code); });
+    } catch (e, st) {
+      importLog('import crashed: $e\n$st');
+      if (mounted) setState(() { _busy = false; _error = kImportDebug ? e.toString() : app.t('import_err_generic'); });
     }
   }
 
@@ -281,12 +284,22 @@ class _ImportSheetState extends State<_ImportSheet> {
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
                   decoration: BoxDecoration(color: const Color(0xFFC0563B).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const FbIcon('note', size: 15, color: Color(0xFFC0563B)),
                     const SizedBox(width: 8),
-                    Expanded(child: Text(_error!, style: fb.ui(size: 12.5, weight: FontWeight.w600, color: const Color(0xFF9C3F29), height: 1.4))),
+                    Expanded(
+                      child: kImportDebug
+                          ? ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 180),
+                              child: SingleChildScrollView(
+                                child: SelectableText(_error!, style: TextStyle(fontFamily: 'monospace', fontSize: fb.fs(11.5), color: const Color(0xFF9C3F29), height: 1.4)),
+                              ),
+                            )
+                          : Text(_error!, style: fb.ui(size: 12.5, weight: FontWeight.w600, color: const Color(0xFF9C3F29), height: 1.4)),
+                    ),
                   ]),
                 ),
               ),

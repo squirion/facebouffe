@@ -5,6 +5,7 @@ import android.content.Intent
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.lifecycle.lifecycleScope
 import com.google.ai.edge.aicore.GenerativeModel
 import com.google.ai.edge.aicore.generationConfig
@@ -14,6 +15,9 @@ import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+// Logcat tag for Tier 1 on-device import debugging (filter: `adb logcat -s FB_NANO`).
+private const val NANO_TAG = "FB_NANO"
 
 /// Bridges to the system ALARM ringtone picker so the user can choose any of
 /// the phone's own alarm sounds for cooking-timer chimes (alarm tones only —
@@ -58,15 +62,23 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "facebouffe/ondevice_ai").setMethodCallHandler { call, result ->
             when (call.method) {
                 "available" -> result.success(onDeviceAvailable())
+                "diagnose" -> result.success(diagnose())
                 "generate" -> {
                     val text = call.argument<String>("text") ?: ""
                     val prompt = call.argument<String>("prompt") ?: ""
+                    Log.i(NANO_TAG, "generate() called: textLen=${text.length} promptLen=${prompt.length}")
+                    // catch Throwable, not just Exception: a release build can hit
+                    // NoClassDefFoundError / LinkageError if the SDK was stripped,
+                    // which would otherwise fail silently/instantly.
                     lifecycleScope.launch {
                         try {
                             val out = generateOnDevice("$prompt\n\n$text")
+                            Log.i(NANO_TAG, "generate() OK: responseLen=${out.length}")
                             result.success(out)
-                        } catch (e: Exception) {
-                            result.error("ondevice_failed", e.message, null)
+                        } catch (t: Throwable) {
+                            val detail = errorDetail(t)
+                            Log.e(NANO_TAG, "generate() FAILED\n$detail", t)
+                            result.error("ondevice_failed", detail, null)
                         }
                     }
                 }
@@ -75,19 +87,58 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    // Cheap, honest availability proxy: API 31+ and AICore present on the device.
-    // Actual model download happens lazily on first generate().
+    // Cheap availability proxy: API 31+ and an AICore service package present.
+    // Actual model download/eligibility is only known when generate() runs.
     private fun onDeviceAvailable(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
-        return try {
-            packageManager.getPackageInfo("com.google.android.aicore", 0)
-            true
-        } catch (e: Exception) {
-            false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            Log.i(NANO_TAG, "available=false (SDK ${Build.VERSION.SDK_INT} < 31)")
+            return false
         }
+        val google = hasPackage("com.google.android.aicore")
+        val samsung = hasPackage("com.samsung.android.aicore")
+        Log.i(NANO_TAG, "available check: googleAICore=$google samsungAICore=$samsung")
+        return google || samsung
+    }
+
+    private fun hasPackage(name: String): Boolean = try {
+        packageManager.getPackageInfo(name, 0); true
+    } catch (t: Throwable) {
+        false
+    }
+
+    // Verbose capability report for debugging Tier 1.
+    private fun diagnose(): String {
+        val sb = StringBuilder()
+        sb.append("SDK_INT=${Build.VERSION.SDK_INT}\n")
+        sb.append("device=${Build.MANUFACTURER} ${Build.MODEL}\n")
+        sb.append("googleAICore=${hasPackage("com.google.android.aicore")}\n")
+        sb.append("samsungAICore=${hasPackage("com.samsung.android.aicore")}\n")
+        sb.append("aicoreSdkClass=")
+        try {
+            Class.forName("com.google.ai.edge.aicore.GenerativeModel")
+            sb.append("loaded")
+        } catch (t: Throwable) {
+            sb.append("MISSING (${t.javaClass.simpleName})")
+        }
+        return sb.toString()
+    }
+
+    private fun errorDetail(t: Throwable): String {
+        val sb = StringBuilder()
+        sb.append("${t.javaClass.name}: ${t.message}")
+        var cause = t.cause
+        var depth = 0
+        while (cause != null && depth < 4) {
+            sb.append("\ncaused by ${cause.javaClass.name}: ${cause.message}")
+            cause = cause.cause
+            depth++
+        }
+        t.stackTrace.take(6).forEach { sb.append("\n  at $it") }
+        return sb.toString()
     }
 
     private suspend fun generateOnDevice(fullPrompt: String): String = withContext(Dispatchers.IO) {
+        Log.i(NANO_TAG, "constructing GenerativeModel…")
         val model = GenerativeModel(
             generationConfig = generationConfig {
                 context = applicationContext
@@ -97,9 +148,11 @@ class MainActivity : FlutterActivity() {
             }
         )
         try {
+            Log.i(NANO_TAG, "prepareInferenceEngine()…")
             model.prepareInferenceEngine()
+            Log.i(NANO_TAG, "generateContent()…")
             val response = model.generateContent(fullPrompt)
-            response.text ?: throw IllegalStateException("empty response")
+            response.text ?: throw IllegalStateException("model returned no text")
         } finally {
             model.close()
         }
