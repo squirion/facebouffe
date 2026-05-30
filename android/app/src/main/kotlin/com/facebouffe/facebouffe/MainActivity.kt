@@ -118,7 +118,7 @@ class MainActivity : FlutterActivity() {
             llm?.close()
             val options = LlmInference.LlmInferenceOptions.builder()
                 .setModelPath(modelPath)
-                .setMaxTokens(2048)
+                .setMaxTokens(4096) // input + output; recipe prompts run ~1k+ tokens
                 .build()
             llm = LlmInference.createFromOptions(applicationContext, options)
             llmPath = modelPath
