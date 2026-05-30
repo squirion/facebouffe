@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/fb_icon.dart';
+import '../services/import/share_import.dart';
 import 'home_screen.dart';
 import 'search_screen.dart';
 import 'shopping_screen.dart';
@@ -20,7 +21,7 @@ class ShellTab extends ValueNotifier<int> {
 /// Root scaffold: the 4 tab screens in an IndexedStack, a blurred bottom tab
 /// bar, and a floating "+" on Home / Search. Pushed screens (recipe, edit,
 /// sous-chef, filter, help) cover this via the root Navigator.
-class RootShell extends StatelessWidget {
+class RootShell extends StatefulWidget {
   const RootShell({super.key});
 
   static const _tabs = [
@@ -29,6 +30,20 @@ class RootShell extends StatelessWidget {
     ('basket', 'tab_list'),
     ('sliders', 'tab_settings'),
   ];
+
+  @override
+  State<RootShell> createState() => _RootShellState();
+}
+
+class _RootShellState extends State<RootShell> {
+  @override
+  void initState() {
+    super.initState();
+    // "Partager vers Facebouffe" — handle links/images shared from other apps.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ShareImport.init(context);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
