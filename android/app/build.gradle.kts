@@ -38,7 +38,8 @@ android {
         applicationId = "com.facebouffe.facebouffe"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Google AI Edge SDK (on-device Gemini Nano, Tier 1 import) requires API 31+.
+        minSdk = maxOf(flutter.minSdkVersion, 31)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -68,4 +69,8 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // On-device Gemini Nano (Tier 1 import). Experimental; gated at runtime so
+    // devices without AICore degrade to "unsupported".
+    implementation("com.google.ai.edge.aicore:aicore:0.0.1-exp01")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
