@@ -118,6 +118,7 @@ class _ImportSheetState extends State<_ImportSheet> {
       await _finish(res);
     } on ImportException catch (e) {
       importLog('import failed: ${e.code} | ${e.detail ?? ''}');
+      if (e.code == 'ondevice_unavailable') app.markOnDeviceUnavailable();
       if (mounted) setState(() { _busy = false; _error = kImportDebug ? '[${e.code}]\n${e.detail ?? '(no detail)'}' : _msg(e.code); });
     } catch (e, st) {
       importLog('import crashed: $e\n$st');
@@ -148,6 +149,8 @@ class _ImportSheetState extends State<_ImportSheet> {
     switch (code) {
       case 'needs_ai':
         return app.t('import_err_needs_ai');
+      case 'ondevice_unavailable':
+        return app.t('import_err_ondevice_na');
       case 'bad_key':
         return app.t('import_err_bad_key');
       case 'rate_limited':

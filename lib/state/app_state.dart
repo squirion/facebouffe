@@ -535,6 +535,18 @@ class AppState extends ChangeNotifier {
   /// The configured backend, falling back to tier0 if it's not currently usable.
   String get effectiveBackend => engineAvailable(importBackend) ? importBackend : 'tier0';
 
+  /// Called when an on-device import attempt proves the model isn't actually
+  /// usable here (AICore declined the LLM feature). Disables Tier 1 for this
+  /// session and moves off it so the user isn't stuck on a dead engine.
+  void markOnDeviceUnavailable() {
+    onDeviceAI = false;
+    if (importBackend == 'ondevice') {
+      importBackend = hasAnyImportKey ? 'byok' : 'tier0';
+      _prefs?.setString('fb_import_backend', importBackend);
+    }
+    notifyListeners();
+  }
+
   // ── shopping ──
   void shoppingAdd(ShoppingItem it) {
     shopping.add(it);

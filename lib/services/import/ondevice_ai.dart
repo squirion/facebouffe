@@ -49,7 +49,11 @@ class OnDeviceAi {
     } on PlatformException catch (e) {
       final detail = '${e.code}: ${e.message}${e.details != null ? '\n${e.details}' : ''}';
       importLog('on-device generate FAILED → $detail');
-      throw ImportException('ondevice', detail);
+      // AICore declines to serve the LLM feature to this (sideloaded / non-
+      // allowlisted) app or un-provisioned device — distinct from a real error.
+      final blob = '${e.message ?? ''} ${e.details ?? ''}';
+      final unavailable = blob.contains('NOT_AVAILABLE') || blob.contains('feature not found') || blob.contains('FEATURE_NOT_FOUND');
+      throw ImportException(unavailable ? 'ondevice_unavailable' : 'ondevice', detail);
     }
     importLog('on-device generate OK: responseLen=${out?.length ?? 0}');
     if (out == null || out.trim().isEmpty) {
