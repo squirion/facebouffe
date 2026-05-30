@@ -63,6 +63,24 @@ void main() {
     expect(cnf.resolveMatch(Ingredient(name: 'baking soda'), {}).foodCode, '4005');
   });
 
+  test('expanded seed covers cheeses, cuisine staples, produce, proteins', () {
+    final cases = {
+      'parmesan': '40', 'mozzarella': '35', 'fromage à la crème': '28', 'féta': '108',
+      "blanc d'oeuf": '126', "jaune d'oeuf": '127', 'farine de blé entier': '4500',
+      'sauce soya': '3403', 'lait de coco': '2565', 'tofu': '4911', 'gingembre': '2091',
+      'haricots noirs': '3376', 'avocat': '1511', 'coriandre': '2067', 'jalapeño': '4860',
+      'pois chiches': '3389', 'lentilles': '3392', 'curcuma': '211', 'curry': '183',
+      'épinard': '2213', 'champignon': '2399', 'citron': '1587', 'pomme': '1696',
+      'saumon': '3182', 'crevettes': '3211', 'bacon': '1936', 'beurre d\'arachide': '6289',
+      'cacao': '4223', 'brisures de chocolat': '4148', 'mayonnaise': '531', 'pâte de tomate': '2258',
+      'bouillon de poulet': '6541', 'cassonade': '4317', 'riz basmati': '4471',
+    };
+    cases.forEach((name, code) {
+      final ref = cnf.resolveMatch(Ingredient(name: name), {});
+      expect(ref.foodCode, code, reason: '"$name" should seed-match $code (${cnf.cnfName(code, 'fr')})');
+    });
+  });
+
   test('alias resolution wins over fuzzy match', () {
     // pick any food code and alias "beurre" to it
     final code = cnf.foods.first.code;
