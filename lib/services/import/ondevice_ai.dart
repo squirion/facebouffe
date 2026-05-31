@@ -171,12 +171,42 @@ class OnDeviceAi {
     final size = await f.length();
     final isZip = head.length >= 4 && head[0] == 0x50 && head[1] == 0x4B && head[2] == 0x03 && head[3] == 0x04;
     final isTflite = head.length >= 8 && head[4] == 0x54 && head[5] == 0x46 && head[6] == 0x4C && head[7] == 0x33; // "TFL3"
-    if (isZip || isTflite || size > 50 * 1024 * 1024) return;
+    if (isZip) {
+      // A `.task` is a ZIP; verify the End-Of-Central-Directory record is present
+      // so a truncated transfer is caught here, not as a cryptic native crash.
+      if (!await _hasZipEocd(f)) {
+        try {
+          await f.delete();
+        } catch (_) {}
+        throw ImportException('bad_model', 'The model ZIP is incomplete (no end-of-central-directory at $size bytes) — the file didn\'t fully download/transfer. Re-download and re-import.');
+      }
+      return;
+    }
+    if (isTflite || size > 50 * 1024 * 1024) return;
     final hex = head.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
     try {
       await f.delete();
     } catch (_) {}
     throw ImportException('bad_model', 'This doesn\'t look like a model file. size=$size bytes, header [$hex] — likely an HTML/error page or the wrong file.');
+  }
+
+  // Look for the ZIP end-of-central-directory signature (PK\x05\x06) in the last
+  // ~64 KB. Present → the archive is complete; absent → truncated/not a real zip.
+  static Future<bool> _hasZipEocd(File f) async {
+    final len = await f.length();
+    if (len < 22) return false;
+    final raf = await f.open();
+    try {
+      final readLen = len < 65557 ? len : 65557;
+      await raf.setPosition(len - readLen);
+      final tail = await raf.read(readLen);
+      for (var i = tail.length - 22; i >= 0; i--) {
+        if (tail[i] == 0x50 && tail[i + 1] == 0x4B && tail[i + 2] == 0x05 && tail[i + 3] == 0x06) return true;
+      }
+      return false;
+    } finally {
+      await raf.close();
+    }
   }
 
   /// Stream-download a model from [url] into app storage, reporting 0..1 progress.
