@@ -248,13 +248,30 @@ class OnDeviceAi {
     }
   }
 
-  /// Run the local model on [text], guided by [schemaPrompt]. Returns raw JSON.
-  static Future<String> generate(String text, String schemaPrompt) async {
+  // Cap the recipe text so prompt+input stays well under small models' context
+  // (e.g. ekv1280); without this a long OCR result overflows the KV cache.
+  static const _maxInputChars = 1400;
+
+  static String _wrapPrompt(String template, String body) {
+    switch (template) {
+      case 'qwen': // ChatML
+        return '<|im_start|>user\n$body<|im_end|>\n<|im_start|>assistant\n';
+      case 'generic':
+        return body;
+      case 'gemma':
+      default:
+        return '<start_of_turn>user\n$body<end_of_turn>\n<start_of_turn>model\n';
+    }
+  }
+
+  /// Run the local model on [text], guided by [schemaPrompt], formatted with the
+  /// [template] matching the loaded model family. Returns raw JSON.
+  static Future<String> generate(String text, String schemaPrompt, {String template = 'gemma'}) async {
     final mp = await modelPath();
     if (mp == null) throw ImportException('ondevice_unavailable', 'no on-device model loaded');
-    importLog('on-device generate: model=$mp textLen=${text.length} promptLen=${schemaPrompt.length}');
-    // Gemma instruction-tuned chat template — small models ramble without it.
-    final full = '<start_of_turn>user\n$schemaPrompt\n\nRecipe input:\n$text<end_of_turn>\n<start_of_turn>model\n';
+    final clipped = text.length > _maxInputChars ? text.substring(0, _maxInputChars) : text;
+    importLog('on-device generate: model=$mp template=$template textLen=${clipped.length}/${text.length} promptLen=${schemaPrompt.length}');
+    final full = _wrapPrompt(template, '$schemaPrompt\n\nRecipe input:\n$clipped');
     final String? out;
     try {
       out = await _channel.invokeMethod<String>('generate', {

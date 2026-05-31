@@ -31,8 +31,10 @@ String _stripFences(String raw) => raw
     .trim()
     .replaceAll(RegExp(r'^```[a-zA-Z]*\s*'), '')
     .replaceAll(RegExp(r'\s*```$'), '')
-    .replaceAll('<end_of_turn>', '')
+    .replaceAll('<end_of_turn>', '') // Gemma
     .replaceAll('<eos>', '')
+    .replaceAll('<|im_end|>', '') // Qwen / ChatML
+    .replaceAll('<|endoftext|>', '')
     .trim();
 
 Map<String, dynamic>? _tryDecode(String s) {

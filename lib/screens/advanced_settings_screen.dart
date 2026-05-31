@@ -397,12 +397,16 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
     final picked = res?.files.single;
     final stream = picked?.readStream;
     if (stream == null) return;
-    setState(() { _busy = true; _busyLabel = context.read<AppState>().t('ondevice_importing'); _progress = picked!.size > 0 ? 0 : null; _error = null; });
+    final detected = AppState.detectTemplate(picked!.name);
+    setState(() { _busy = true; _busyLabel = context.read<AppState>().t('ondevice_importing'); _progress = picked.size > 0 ? 0 : null; _error = null; });
     try {
-      await OnDeviceAi.importModelFromStream(stream, total: picked!.size, onProgress: (p) {
+      await OnDeviceAi.importModelFromStream(stream, total: picked.size, onProgress: (p) {
         if (mounted) setState(() => _progress = p);
       });
-      if (mounted) await context.read<AppState>().refreshOnDevice();
+      if (mounted) {
+        context.read<AppState>().setOnDeviceTemplate(detected);
+        await context.read<AppState>().refreshOnDevice();
+      }
       await _refreshSize();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
@@ -415,12 +419,16 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
     final url = _urlController.text.trim();
     if (url.isEmpty) return;
     final app = context.read<AppState>();
+    final detected = AppState.detectTemplate(url);
     setState(() { _busy = true; _busyLabel = app.t('ondevice_downloading'); _progress = 0; _error = null; });
     try {
       await OnDeviceAi.downloadModel(url, onProgress: (p) {
         if (mounted) setState(() => _progress = p);
       });
-      if (mounted) await context.read<AppState>().refreshOnDevice();
+      if (mounted) {
+        context.read<AppState>().setOnDeviceTemplate(detected);
+        await context.read<AppState>().refreshOnDevice();
+      }
       await _refreshSize();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
@@ -462,6 +470,28 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
               Text(_progress != null ? '$_busyLabel ${(_progress! * 100).round()}%' : _busyLabel, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: fb.inkSoft)),
             ]),
           ] else if (loaded) ...[
+            // model family / chat template (auto-set on import; override here)
+            Text(app.t('ondevice_template').toUpperCase(), style: fb.ui(size: 11, weight: FontWeight.w700, color: fb.inkFaint, letterSpacing: 0.4)),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(color: fb.dark ? Colors.white.withValues(alpha: 0.06) : fb.canvas2, borderRadius: BorderRadius.circular(11)),
+              child: Row(children: [
+                for (final t in const [('gemma', 'Gemma'), ('qwen', 'Qwen'), ('generic', 'Autre')])
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => context.read<AppState>().setOnDeviceTemplate(t.$1),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(color: app.onDeviceTemplate == t.$1 ? fb.card : Colors.transparent, borderRadius: BorderRadius.circular(9), boxShadow: app.onDeviceTemplate == t.$1 ? fb.shadow : null),
+                        alignment: Alignment.center,
+                        child: Text(t.$2, style: fb.ui(size: 13, weight: app.onDeviceTemplate == t.$1 ? FontWeight.w700 : FontWeight.w600, color: app.onDeviceTemplate == t.$1 ? fb.ink : fb.inkSoft)),
+                      ),
+                    ),
+                  ),
+              ]),
+            ),
+            const SizedBox(height: 12),
             GestureDetector(
               onTap: _delete,
               child: Container(

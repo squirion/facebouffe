@@ -72,7 +72,7 @@ class ImportEngine {
         importLog('OCR text (${input.length} chars): ${input.length > 200 ? input.substring(0, 200) : input}');
       }
       if (input.trim().isEmpty) throw ImportException('empty_input', 'no text to feed the on-device model');
-      final raw = await OnDeviceAi.generate(input, kImportPrompt);
+      final raw = await OnDeviceAi.generate(input, kImportPrompt, template: app.onDeviceTemplate);
       importLog('ondevice raw response (first 300): ${raw.length > 300 ? raw.substring(0, 300) : raw}');
       return draftFromModelJson(raw, source: _sourceLabel(method));
     }

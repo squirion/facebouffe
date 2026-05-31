@@ -32,6 +32,7 @@ class AppState extends ChangeNotifier {
   String importProvider = 'claude'; // selected BYOK provider: claude | openai | gemini
   Map<String, String> importKeys = {}; // provider -> API key, cached from secure storage
   bool onDeviceAI = false; // whether Tier 1 (on-device model) is usable on this device
+  String onDeviceTemplate = 'gemma'; // chat template for the loaded model: gemma | qwen | generic
   static const _secure = FlutterSecureStorage();
 
   // App-only settings (not part of the recipe schema)
@@ -119,6 +120,7 @@ class AppState extends ChangeNotifier {
     }
     importBackend = _prefs!.getString('fb_import_backend') ?? importBackend;
     importProvider = _prefs!.getString('fb_import_provider') ?? importProvider;
+    onDeviceTemplate = _prefs!.getString('fb_ondevice_tpl') ?? onDeviceTemplate;
     try {
       for (final p in const ['claude', 'openai', 'gemini']) {
         final k = await _secure.read(key: 'fb_key_$p');
@@ -539,6 +541,20 @@ class AppState extends ChangeNotifier {
   Future<void> refreshOnDevice() async {
     onDeviceAI = await OnDeviceAi.available();
     notifyListeners();
+  }
+
+  void setOnDeviceTemplate(String t) {
+    onDeviceTemplate = t;
+    _prefs?.setString('fb_ondevice_tpl', t);
+    notifyListeners();
+  }
+
+  /// Guess the chat template from a model's filename/URL (set on import).
+  static String detectTemplate(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('qwen')) return 'qwen';
+    if (n.contains('gemma')) return 'gemma';
+    return 'gemma';
   }
 
   /// Called when an on-device import attempt proves the model isn't actually

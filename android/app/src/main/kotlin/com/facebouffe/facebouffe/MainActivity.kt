@@ -119,7 +119,12 @@ class MainActivity : FlutterActivity() {
             llm?.close()
             val options = LlmInference.LlmInferenceOptions.builder()
                 .setModelPath(modelPath)
-                .setMaxTokens(8192) // input + output; leave plenty of room for the JSON
+                // Must not exceed the model's compiled context (e.g. ekv1280):
+                // over-allocating lets generation run past the KV cache and
+                // crash natively. 1280 is the safe floor for the litert-community
+                // *_ekv1280 bundles; input is clamped on the Dart side to leave
+                // room for the output.
+                .setMaxTokens(1280)
                 .build()
             llm = LlmInference.createFromOptions(applicationContext, options)
             llmPath = modelPath
