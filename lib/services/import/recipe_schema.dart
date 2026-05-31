@@ -70,7 +70,8 @@ ImportResult draftFromModelJson(String raw, {String? source}) {
   try {
     j = jsonDecode(_extractJson(raw)) as Map<String, dynamic>;
   } catch (_) {
-    throw ImportException('bad_json');
+    final snip = raw.trim();
+    throw ImportException('bad_json', 'Model output was not valid JSON.\n--- raw (${raw.length} chars) ---\n${snip.length > 800 ? snip.substring(0, 800) : snip}');
   }
 
   final title = (j['title'] as String? ?? '').trim();

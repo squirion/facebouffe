@@ -223,12 +223,14 @@ class OnDeviceAi {
     final mp = await modelPath();
     if (mp == null) throw ImportException('ondevice_unavailable', 'no on-device model loaded');
     importLog('on-device generate: model=$mp textLen=${text.length} promptLen=${schemaPrompt.length}');
+    // Gemma instruction-tuned chat template — small models ramble without it.
+    final full = '<start_of_turn>user\n$schemaPrompt\n\nRecipe input:\n$text<end_of_turn>\n<start_of_turn>model\n';
     final String? out;
     try {
       out = await _channel.invokeMethod<String>('generate', {
         'modelPath': mp,
-        'text': text,
-        'prompt': schemaPrompt,
+        'text': '',
+        'prompt': full,
       });
     } on PlatformException catch (e) {
       final detail = '${e.code}: ${e.message}${e.details != null ? '\n${e.details}' : ''}';

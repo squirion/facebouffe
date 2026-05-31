@@ -73,9 +73,10 @@ class MainActivity : FlutterActivity() {
                         return@setMethodCallHandler
                     }
                     // catch Throwable: model loading can throw Errors (OOM / native link).
+                    val full = if (text.isBlank()) prompt else "$prompt\n\n$text"
                     lifecycleScope.launch {
                         try {
-                            val out = runLlm(modelPath, "$prompt\n\n$text")
+                            val out = runLlm(modelPath, full)
                             Log.i(NANO_TAG, "generate() OK: responseLen=${out.length}")
                             result.success(out)
                         } catch (t: Throwable) {
