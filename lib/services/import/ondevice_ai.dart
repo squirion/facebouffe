@@ -36,7 +36,8 @@ class OnDeviceAi {
   }
 
   /// Stream a picked model file into app storage in chunks (robust for multi-GB
-  /// files where a plain copy of file_picker's cached temp can truncate).
+  /// files where a plain copy of file_picker's cached temp can truncate), then
+  /// unwrap it if it's a .tar.gz / .tar (Kaggle ships models wrapped).
   static Future<void> importModelFromStream(Stream<List<int>> stream, {int total = 0, void Function(double)? onProgress}) async {
     final dest = await _modelFile();
     final tmp = File('${dest.path}.part');
@@ -49,19 +50,114 @@ class OnDeviceAi {
         if (total > 0 && onProgress != null) onProgress(received / total);
       }
       await sink.close();
-      await tmp.rename(dest.path);
-      await _validateTaskBundle(dest);
+      await _finalizeModel(tmp);
     } catch (_) {
       try {
         await sink.close();
       } catch (_) {}
-      if (await tmp.exists()) {
-        try {
-          await tmp.delete();
-        } catch (_) {}
-      }
+      await _cleanup(tmp);
       rethrow;
     }
+  }
+
+  // Turn whatever was downloaded/picked (raw [src]) into the final `.task` model
+  // at the canonical path: gunzip + untar a Kaggle bundle, or use it directly.
+  static Future<void> _finalizeModel(File src) async {
+    final dest = await _modelFile();
+    final head = await _peek(src, 6);
+    final isGzip = head.length >= 2 && head[0] == 0x1f && head[1] == 0x8b;
+    // ustar magic lives at offset 257, but the cheap signal is gzip; for a bare
+    // .tar we detect by extension-less header check below.
+    if (isGzip) {
+      final tar = File('${dest.path}.tar');
+      try {
+        await src.openRead().transform(gzip.decoder).pipe(tar.openWrite());
+        await _extractLargestFromTar(tar, dest);
+      } finally {
+        await _cleanup(src);
+        await _cleanup(tar);
+      }
+    } else if (await _looksLikeTar(src)) {
+      try {
+        await _extractLargestFromTar(src, dest);
+      } finally {
+        await _cleanup(src);
+      }
+    } else {
+      if (await dest.exists()) await dest.delete();
+      await src.rename(dest.path);
+    }
+    await _validateTaskBundle(dest);
+  }
+
+  static Future<List<int>> _peek(File f, int n) async {
+    final raf = await f.open();
+    final b = await raf.read(n);
+    await raf.close();
+    return b;
+  }
+
+  static Future<bool> _looksLikeTar(File f) async {
+    final raf = await f.open();
+    try {
+      if (await f.length() < 263) return false;
+      await raf.setPosition(257);
+      final magic = await raf.read(5); // "ustar"
+      return magic.length == 5 && magic[0] == 0x75 && magic[1] == 0x73 && magic[2] == 0x74 && magic[3] == 0x61 && magic[4] == 0x72;
+    } finally {
+      await raf.close();
+    }
+  }
+
+  // Extract the largest regular file from an (uncompressed) tar — the model
+  // bundle — streaming, so we never hold the ~1 GB payload in memory.
+  static Future<void> _extractLargestFromTar(File tar, File dest) async {
+    final raf = await tar.open();
+    try {
+      final length = await tar.length();
+      var pos = 0, bestOff = -1, bestSize = 0;
+      while (pos + 512 <= length) {
+        await raf.setPosition(pos);
+        final header = await raf.read(512);
+        if (header.every((b) => b == 0)) break; // end-of-archive
+        final size = _tarSize(header);
+        final dataOff = pos + 512;
+        if (size > bestSize) {
+          bestSize = size;
+          bestOff = dataOff;
+        }
+        pos = dataOff + ((size + 511) ~/ 512) * 512;
+      }
+      if (bestOff < 0 || bestSize == 0) throw ImportException('bad_model', 'tar bundle had no extractable file');
+      await raf.setPosition(bestOff);
+      if (await dest.exists()) await dest.delete();
+      final sink = dest.openWrite();
+      var remaining = bestSize;
+      const chunk = 1 << 20;
+      while (remaining > 0) {
+        final bytes = await raf.read(remaining < chunk ? remaining : chunk);
+        if (bytes.isEmpty) break;
+        sink.add(bytes);
+        remaining -= bytes.length;
+      }
+      await sink.close();
+    } finally {
+      await raf.close();
+    }
+  }
+
+  static int _tarSize(List<int> header) {
+    // size: 12 octal-ASCII bytes at offset 124
+    final raw = header.sublist(124, 136);
+    final s = String.fromCharCodes(raw).replaceAll('\x00', '').trim();
+    if (s.isEmpty) return 0;
+    return int.tryParse(s, radix: 8) ?? 0;
+  }
+
+  static Future<void> _cleanup(File f) async {
+    try {
+      if (await f.exists()) await f.delete();
+    } catch (_) {}
   }
 
   // A MediaPipe `.task` model is a ZIP bundle (magic "PK\x03\x04"). Reject
@@ -100,15 +196,10 @@ class OnDeviceAi {
         if (total > 0 && onProgress != null) onProgress(received / total);
       }
       await sink.close();
-      await tmp.rename(dest.path);
-      await _validateTaskBundle(dest);
+      await _finalizeModel(tmp);
     } finally {
       client.close();
-      if (await tmp.exists()) {
-        try {
-          await tmp.delete();
-        } catch (_) {}
-      }
+      await _cleanup(tmp);
     }
   }
 
