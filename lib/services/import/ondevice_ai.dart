@@ -35,11 +35,33 @@ class OnDeviceAi {
     return p == null ? 0 : File(p).length();
   }
 
-  /// Copy a user-picked model file into app storage (becomes the active model).
-  static Future<void> importModelFromFile(String srcPath) async {
+  /// Stream a picked model file into app storage in chunks (robust for multi-GB
+  /// files where a plain copy of file_picker's cached temp can truncate).
+  static Future<void> importModelFromStream(Stream<List<int>> stream, {int total = 0, void Function(double)? onProgress}) async {
     final dest = await _modelFile();
-    await File(srcPath).copy(dest.path);
-    await _validateTaskBundle(dest);
+    final tmp = File('${dest.path}.part');
+    final sink = tmp.openWrite();
+    var received = 0;
+    try {
+      await for (final chunk in stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (total > 0 && onProgress != null) onProgress(received / total);
+      }
+      await sink.close();
+      await tmp.rename(dest.path);
+      await _validateTaskBundle(dest);
+    } catch (_) {
+      try {
+        await sink.close();
+      } catch (_) {}
+      if (await tmp.exists()) {
+        try {
+          await tmp.delete();
+        } catch (_) {}
+      }
+      rethrow;
+    }
   }
 
   // A MediaPipe `.task` model is a ZIP bundle (magic "PK\x03\x04"). Reject

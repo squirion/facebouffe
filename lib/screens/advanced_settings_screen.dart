@@ -393,12 +393,15 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
   }
 
   Future<void> _importFile() async {
-    final res = await FilePicker.platform.pickFiles(type: FileType.any);
-    final path = res?.files.single.path;
-    if (path == null) return;
-    setState(() { _busy = true; _busyLabel = context.read<AppState>().t('ondevice_importing'); _progress = null; _error = null; });
+    final res = await FilePicker.platform.pickFiles(type: FileType.any, withReadStream: true);
+    final picked = res?.files.single;
+    final stream = picked?.readStream;
+    if (stream == null) return;
+    setState(() { _busy = true; _busyLabel = context.read<AppState>().t('ondevice_importing'); _progress = picked!.size > 0 ? 0 : null; _error = null; });
     try {
-      await OnDeviceAi.importModelFromFile(path);
+      await OnDeviceAi.importModelFromStream(stream, total: picked!.size, onProgress: (p) {
+        if (mounted) setState(() => _progress = p);
+      });
       if (mounted) await context.read<AppState>().refreshOnDevice();
       await _refreshSize();
     } catch (e) {
