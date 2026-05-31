@@ -8,32 +8,24 @@ const List<String> kImportUnits = ['g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', '
 
 /// Strict instruction handed to any AI tier (BYOK or on-device). Keeps the
 /// recipe in its original language, constrains units to the editor's enum, and
-/// demands JSON only — we still validate and the user still reviews.
+/// demands JSON only — we still validate and the user still reviews. The
+/// one-shot example + "no quotes inside strings" rule keep small on-device
+/// models from emitting the malformed JSON they otherwise tend to.
 const String kImportPrompt = '''
-You convert a recipe (given as text, HTML, or an image) into strict JSON for a recipe app.
-Return ONLY a single JSON object — no markdown, no code fences, no commentary.
+You convert a recipe into strict JSON for a recipe app.
+Output ONLY one JSON object — no markdown, no ``` fences, no text before or after.
+NEVER put a double-quote (") inside a string value.
 
 Rules:
-- Keep all text in the recipe's ORIGINAL language (usually French or English). Do not translate.
-- "unit" must be one of: "g","kg","ml","l","tsp","tbsp","cup","oz","lb","pinch" — or null for countable items (e.g. eggs) or when unknown.
-- "quantity" is a number (use decimals, e.g. 0.5) or null.
-- Put each cooking step in "steps" as a sentence. Write temperatures inline as text like "180 °C" or "350 °F".
-- "tags" is an array of short lowercase keyword strings (e.g. "dessert","souper") — best-effort, may be empty.
-- Numbers for servings/prepTimeMinutes/cookTimeMinutes; use 0 if unknown.
+- Keep all text in the recipe's ORIGINAL language (usually French). Do not translate.
+- "unit" must be EXACTLY one of: "g","kg","ml","l","tsp","tbsp","cup","oz","lb","pinch" — or null for countable items (e.g. eggs) or when unknown. The unit is the measure only, NEVER an ingredient name.
+- "quantity" is a number (decimals allowed, e.g. 0.5) or null.
+- "servings","prepTimeMinutes","cookTimeMinutes" are numbers (0 if unknown).
+- Each cooking step is one sentence in "steps"; write temperatures inline like "180 °C".
+- "tags": short lowercase keywords (e.g. "dessert"); may be empty [].
 
-JSON shape:
-{
-  "title": string,
-  "description": string,
-  "source": string,
-  "servings": number,
-  "prepTimeMinutes": number,
-  "cookTimeMinutes": number,
-  "tags": [string],
-  "ingredients": [ { "quantity": number|null, "unit": string|null, "name": string, "note": string } ],
-  "steps": [ { "text": string, "timerSeconds": number|null } ]
-}
-''';
+Example of a valid answer:
+{"title":"Crêpes","description":"Recette simple.","source":"","servings":4,"prepTimeMinutes":10,"cookTimeMinutes":15,"tags":["dejeuner"],"ingredients":[{"quantity":250,"unit":"g","name":"farine tout usage","note":""},{"quantity":2,"unit":null,"name":"oeufs","note":"gros"},{"quantity":500,"unit":"ml","name":"lait","note":""}],"steps":[{"text":"Mélanger la farine, les oeufs et le lait.","timerSeconds":null},{"text":"Cuire chaque crêpe à feu moyen.","timerSeconds":null}]}''';
 
 String _stripFences(String raw) => raw
     .trim()
