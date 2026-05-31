@@ -39,6 +39,25 @@ class OnDeviceAi {
   static Future<void> importModelFromFile(String srcPath) async {
     final dest = await _modelFile();
     await File(srcPath).copy(dest.path);
+    await _validateTaskBundle(dest);
+  }
+
+  // A MediaPipe `.task` model is a ZIP bundle (magic "PK\x03\x04"). Reject
+  // anything else early (a .litertlm/.bin/.gguf, an HTML error page from a gated
+  // download, or a truncated file) with a clear message instead of a native crash.
+  static Future<void> _validateTaskBundle(File f) async {
+    final raf = await f.open();
+    final head = await raf.read(4);
+    await raf.close();
+    final isZip = head.length >= 4 && head[0] == 0x50 && head[1] == 0x4B && head[2] == 0x03 && head[3] == 0x04;
+    if (!isZip) {
+      final size = await f.length();
+      final hex = head.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+      try {
+        await f.delete();
+      } catch (_) {}
+      throw ImportException('bad_model', 'Not a .task bundle (expected a ZIP archive). Got $size bytes, header [$hex]. Use a MediaPipe ".task" model, not .litertlm/.bin/.gguf, and check the download wasn\'t an HTML page.');
+    }
   }
 
   /// Stream-download a model from [url] into app storage, reporting 0..1 progress.
@@ -60,6 +79,7 @@ class OnDeviceAi {
       }
       await sink.close();
       await tmp.rename(dest.path);
+      await _validateTaskBundle(dest);
     } finally {
       client.close();
       if (await tmp.exists()) {
