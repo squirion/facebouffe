@@ -35,16 +35,80 @@ JSON shape:
 }
 ''';
 
-/// Pull the first balanced JSON object out of a model response that may be
-/// wrapped in prose or ```json fences.
-String _extractJson(String raw) {
-  var s = raw.trim();
-  // strip a leading ```json / ``` fence and trailing ```
-  s = s.replaceAll(RegExp(r'^```[a-zA-Z]*\s*'), '').replaceAll(RegExp(r'\s*```$'), '');
+String _stripFences(String raw) => raw
+    .trim()
+    .replaceAll(RegExp(r'^```[a-zA-Z]*\s*'), '')
+    .replaceAll(RegExp(r'\s*```$'), '')
+    .replaceAll('<end_of_turn>', '')
+    .replaceAll('<eos>', '')
+    .trim();
+
+Map<String, dynamic>? _tryDecode(String s) {
+  try {
+    final v = jsonDecode(s);
+    return v is Map<String, dynamic> ? v : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Small LLMs routinely drop the comma between a value and the next "key" (e.g.
+// `"unit": "g"\n  "name"`). Insert it.
+String _insertMissingCommas(String s) =>
+    s.replaceAllMapped(RegExp(r'([}\]"]|\d|true|false|null)(\s*\r?\n\s*)(")'), (m) => '${m[1]},${m[2]}${m[3]}');
+
+// Close a truncated JSON: track bracket depth (ignoring string contents) and
+// append the missing closers so a cut-off response still parses.
+String _balance(String s) {
+  final stack = <String>[];
+  var inStr = false, esc = false;
+  for (final ch in s.runes) {
+    final c = String.fromCharCode(ch);
+    if (inStr) {
+      if (esc) {
+        esc = false;
+      } else if (c == '\\') {
+        esc = true;
+      } else if (c == '"') {
+        inStr = false;
+      }
+      continue;
+    }
+    if (c == '"') {
+      inStr = true;
+    } else if (c == '{') {
+      stack.add('}');
+    } else if (c == '[') {
+      stack.add(']');
+    } else if ((c == '}' || c == ']') && stack.isNotEmpty) {
+      stack.removeLast();
+    }
+  }
+  final buf = StringBuffer(s);
+  if (inStr) buf.write('"');
+  for (var i = stack.length - 1; i >= 0; i--) {
+    buf.write(stack[i]);
+  }
+  return buf.toString();
+}
+
+/// Best-effort parse of a model response: strip fences/turn tokens, then try the
+/// raw object, a comma-repaired version, and a bracket-balanced (de-truncated)
+/// version in turn. Throws bad_json (with the raw output) if none parse.
+Map<String, dynamic> _parseModelJson(String raw) {
+  final s = _stripFences(raw);
   final start = s.indexOf('{');
-  final end = s.lastIndexOf('}');
-  if (start < 0 || end <= start) throw ImportException('bad_json');
-  return s.substring(start, end + 1);
+  if (start >= 0) {
+    final end = s.lastIndexOf('}');
+    final clipped = end > start ? s.substring(start, end + 1) : s.substring(start);
+    final fromStart = s.substring(start);
+    for (final candidate in [clipped, _insertMissingCommas(clipped), _balance(_insertMissingCommas(fromStart))]) {
+      final m = _tryDecode(candidate);
+      if (m != null) return m;
+    }
+  }
+  final snip = raw.trim();
+  throw ImportException('bad_json', 'Model output was not valid JSON.\n--- raw (${raw.length} chars) ---\n${snip.length > 800 ? snip.substring(0, 800) : snip}');
 }
 
 num? _numOrNull(dynamic v) {
@@ -66,13 +130,7 @@ String? _unit(dynamic v) {
 /// Validate model JSON and map it to a reviewable draft [ImportResult].
 /// Throws [ImportException] when the payload isn't a usable recipe.
 ImportResult draftFromModelJson(String raw, {String? source}) {
-  final Map<String, dynamic> j;
-  try {
-    j = jsonDecode(_extractJson(raw)) as Map<String, dynamic>;
-  } catch (_) {
-    final snip = raw.trim();
-    throw ImportException('bad_json', 'Model output was not valid JSON.\n--- raw (${raw.length} chars) ---\n${snip.length > 800 ? snip.substring(0, 800) : snip}');
-  }
+  final j = _parseModelJson(raw);
 
   final title = (j['title'] as String? ?? '').trim();
   final rawIngredients = (j['ingredients'] as List?) ?? const [];

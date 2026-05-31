@@ -35,6 +35,21 @@ void main() {
     expect(res.recipe.ingredients.first.quantity, 2); // string number parsed
   });
 
+  test('repairs missing commas from small-model output', () {
+    const raw = '{"title":"X","ingredients":[{"quantity":250,"unit":"g"\n"name":"cassonade"}],"steps":[{"text":"Go"}]}';
+    final res = draftFromModelJson(raw);
+    expect(res.recipe.title, 'X');
+    expect(res.recipe.ingredients.first.name, 'cassonade');
+    expect(res.recipe.ingredients.first.unit, 'g');
+  });
+
+  test('salvages a truncated response by balancing brackets', () {
+    const raw = '{"title":"Tarte","ingredients":[{"quantity":1,"unit":null,"name":"oeuf"}],"steps":[{"text":"Préc';
+    final res = draftFromModelJson(raw);
+    expect(res.recipe.title, 'Tarte');
+    expect(res.recipe.ingredients.first.name, 'oeuf');
+  });
+
   test('throws on non-JSON and on empty recipe', () {
     expect(() => draftFromModelJson('sorry, I cannot help'), throwsA(isA<ImportException>()));
     expect(() => draftFromModelJson('{"title":"","ingredients":[],"steps":[]}'), throwsA(isA<ImportException>()));
