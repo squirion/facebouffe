@@ -160,22 +160,23 @@ class OnDeviceAi {
     } catch (_) {}
   }
 
-  // A MediaPipe `.task` model is a ZIP bundle (magic "PK\x03\x04"). Reject
-  // anything else early (a .litertlm/.bin/.gguf, an HTML error page from a gated
-  // download, or a truncated file) with a clear message instead of a native crash.
+  // Sanity-check the model file. Accept a `.task` ZIP bundle ("PK"), a `.bin`
+  // TFLite flatbuffer ("TFL3" at offset 4), or any sufficiently large file
+  // (let MediaPipe give the authoritative verdict). Only reject small junk —
+  // an HTML error page from a gated download, or a truncated stub.
   static Future<void> _validateTaskBundle(File f) async {
     final raf = await f.open();
-    final head = await raf.read(4);
+    final head = await raf.read(8);
     await raf.close();
+    final size = await f.length();
     final isZip = head.length >= 4 && head[0] == 0x50 && head[1] == 0x4B && head[2] == 0x03 && head[3] == 0x04;
-    if (!isZip) {
-      final size = await f.length();
-      final hex = head.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-      try {
-        await f.delete();
-      } catch (_) {}
-      throw ImportException('bad_model', 'Not a .task bundle (expected a ZIP archive). Got $size bytes, header [$hex]. Use a MediaPipe ".task" model, not .litertlm/.bin/.gguf, and check the download wasn\'t an HTML page.');
-    }
+    final isTflite = head.length >= 8 && head[4] == 0x54 && head[5] == 0x46 && head[6] == 0x4C && head[7] == 0x33; // "TFL3"
+    if (isZip || isTflite || size > 50 * 1024 * 1024) return;
+    final hex = head.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+    try {
+      await f.delete();
+    } catch (_) {}
+    throw ImportException('bad_model', 'This doesn\'t look like a model file. size=$size bytes, header [$hex] — likely an HTML/error page or the wrong file.');
   }
 
   /// Stream-download a model from [url] into app storage, reporting 0..1 progress.
