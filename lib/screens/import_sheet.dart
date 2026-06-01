@@ -11,6 +11,7 @@ import '../services/recipe_import.dart' show RecipeImport, ImportResult, ImportE
 import '../services/import/import_engine.dart';
 import '../services/import/import_debug.dart';
 import '../widgets/fb_icon.dart';
+import 'region_picker.dart';
 
 /// The "+" entry point (§2f): opens a method chooser; non-manual methods run the
 /// tiered importer and always land on the editor as a reviewable draft.
@@ -46,6 +47,7 @@ class _ImportSheetState extends State<_ImportSheet> {
   final _controller = TextEditingController();
   Uint8List? _photo;
   String _mediaType = 'image/jpeg';
+  bool _regions = false; // photo: guide OCR by drawing ingredient/step regions
   bool _busy = false;
   String? _error;
 
@@ -122,6 +124,44 @@ class _ImportSheetState extends State<_ImportSheet> {
       if (mounted) setState(() { _busy = false; _error = kImportDebug ? '[${e.code}]\n${e.detail ?? '(no detail)'}' : _msg(e.code); });
     } catch (e, st) {
       importLog('import crashed: $e\n$st');
+      if (mounted) setState(() { _busy = false; _error = kImportDebug ? e.toString() : app.t('import_err_generic'); });
+    }
+  }
+
+  // Region-guided photo import: draw ingredient boxes, then step boxes, then run.
+  Future<void> _runRegions() async {
+    if (_photo == null || _busy) return;
+    final root = widget.rootContext;
+    final fr = app.lang == 'fr';
+    final ing = await Navigator.of(root).push<List<Rect>>(MaterialPageRoute(builder: (_) => RegionPicker(
+          image: _photo!,
+          title: fr ? 'Encadrez les ingrédients' : 'Box the ingredients',
+          hint: fr ? 'Glissez pour dessiner une ou plusieurs zones' : 'Drag to draw one or more boxes',
+          isLast: false,
+        )));
+    if (ing == null || !mounted || !root.mounted) return;
+    final steps = await Navigator.of(root).push<List<Rect>>(MaterialPageRoute(builder: (_) => RegionPicker(
+          image: _photo!,
+          title: fr ? 'Encadrez les étapes' : 'Box the steps',
+          hint: fr ? 'Glissez pour dessiner une ou plusieurs zones' : 'Drag to draw one or more boxes',
+          isLast: true,
+        )));
+    if (steps == null || !mounted) return;
+    if ((ing.isEmpty) && (steps.isEmpty)) {
+      setState(() => _error = app.t('import_err_no_recipe'));
+      return;
+    }
+    setState(() { _busy = true; _error = null; });
+    try {
+      final res = await ImportEngine.extractFromRegions(app: app, imageBytes: _photo!, ingredientBoxes: ing, stepBoxes: steps);
+      if (!mounted) return;
+      await _finish(res);
+    } on ImportException catch (e) {
+      importLog('region import failed: ${e.code} | ${e.detail ?? ''}');
+      if (e.code == 'ondevice_unavailable') app.markOnDeviceUnavailable();
+      if (mounted) setState(() { _busy = false; _error = kImportDebug ? '[${e.code}]\n${e.detail ?? '(no detail)'}' : _msg(e.code); });
+    } catch (e, st) {
+      importLog('region import crashed: $e\n$st');
       if (mounted) setState(() { _busy = false; _error = kImportDebug ? e.toString() : app.t('import_err_generic'); });
     }
   }
@@ -283,6 +323,19 @@ class _ImportSheetState extends State<_ImportSheet> {
                   ]),
                 ),
               ),
+            if (m == ImportMethod.photo)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: GestureDetector(
+                  onTap: () => setState(() => _regions = !_regions),
+                  behavior: HitTestBehavior.opaque,
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(width: 22, height: 22, decoration: BoxDecoration(color: _regions ? fb.accent : Colors.transparent, borderRadius: BorderRadius.circular(6), border: Border.all(color: _regions ? fb.accent : fb.lineStrong, width: 2)), child: _regions ? const Center(child: FbIcon('check', size: 12, color: Colors.white)) : null),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(app.t('import_regions_toggle'), style: fb.ui(size: 12.5, weight: FontWeight.w600, color: fb.inkSoft, height: 1.4))),
+                  ]),
+                ),
+              ),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -308,14 +361,14 @@ class _ImportSheetState extends State<_ImportSheet> {
               ),
             const SizedBox(height: 16),
             GestureDetector(
-              onTap: _ready ? _run : null,
+              onTap: _ready ? (method == ImportMethod.photo && _regions ? _runRegions : _run) : null,
               child: Container(
                 height: 52,
                 decoration: BoxDecoration(color: _ready ? fb.accent : fb.line, borderRadius: BorderRadius.circular(15)),
                 child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  FbIcon('plus', size: fb.fs(19), color: _ready ? Colors.white : fb.inkFaint),
+                  FbIcon(method == ImportMethod.photo && _regions ? 'camera' : 'plus', size: fb.fs(19), color: _ready ? Colors.white : fb.inkFaint),
                   const SizedBox(width: 8),
-                  Text(app.t('import_run'), style: fb.ui(size: 16, weight: FontWeight.w700, color: _ready ? Colors.white : fb.inkFaint)),
+                  Text(method == ImportMethod.photo && _regions ? app.t('import_regions_run') : app.t('import_run'), style: fb.ui(size: 16, weight: FontWeight.w700, color: _ready ? Colors.white : fb.inkFaint)),
                 ]),
               ),
             ),
