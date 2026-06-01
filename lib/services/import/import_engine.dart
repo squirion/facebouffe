@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' show Rect;
 
@@ -115,23 +116,39 @@ class ImportEngine {
     final ing = ingredientBoxes.isEmpty ? '' : await ocrBoxes(ingredientBoxes);
     final steps = stepBoxes.isEmpty ? '' : await ocrBoxes(stepBoxes);
     importLog('regions OCR: ingLen=${ing.length} stepsLen=${steps.length}');
-    final sb = StringBuffer();
-    if (ing.trim().isNotEmpty) sb.write('INGRÉDIENTS:\n$ing\n\n');
-    if (steps.trim().isNotEmpty) sb.write('ÉTAPES (préparation):\n$steps\n');
-    final structured = sb.toString().trim();
-    if (structured.isEmpty) throw ImportException('no_recipe', 'no text recognized in the selected regions');
+    if (ing.trim().isEmpty && steps.trim().isEmpty) throw ImportException('no_recipe', 'no text recognized in the selected regions');
 
-    final String raw;
     if (backend == 'byok') {
+      // Big cloud models keep sections straight in one labelled call (cheaper).
       final provider = app.importProvider;
       final key = app.importKeys[provider] ?? '';
       if (key.trim().isEmpty) throw ImportException('needs_ai');
-      raw = await ByokClient.extract(provider: provider, apiKey: key, text: structured);
-    } else {
-      raw = await OnDeviceAi.generate(structured, kImportPrompt);
+      final sb = StringBuffer();
+      if (ing.trim().isNotEmpty) sb.write('INGRÉDIENTS:\n$ing\n\n');
+      if (steps.trim().isNotEmpty) sb.write('ÉTAPES (préparation):\n$steps\n');
+      final raw = await ByokClient.extract(provider: provider, apiKey: key, text: sb.toString().trim());
+      return draftFromModelJson(raw, source: 'Importé d\'une photo');
     }
-    importLog('regions raw response (first 300): ${raw.length > 300 ? raw.substring(0, 300) : raw}');
-    return draftFromModelJson(raw, source: 'Importé d\'une photo');
+
+    // On-device: two single-purpose calls so the small model can't bleed step
+    // text into ingredient notes (or vice-versa); then merge.
+    Future<List<dynamic>> field(String region, String prompt, String key) async {
+      if (region.trim().isEmpty) return const [];
+      try {
+        final raw = await OnDeviceAi.generate(region, prompt);
+        importLog('regions $key raw (first 200): ${raw.length > 200 ? raw.substring(0, 200) : raw}');
+        return (parseModelJsonLoose(raw)[key] as List?) ?? const [];
+      } catch (e) {
+        importLog('regions $key pass failed: $e');
+        return const [];
+      }
+    }
+
+    final ingredients = await field(ing, kPromptIngredients, 'ingredients');
+    final stepList = await field(steps, kPromptSteps, 'steps');
+    if (ingredients.isEmpty && stepList.isEmpty) throw ImportException('no_recipe', 'model returned nothing for the selected regions');
+    final merged = {'title': '', 'ingredients': ingredients, 'steps': stepList};
+    return draftFromModelJson(jsonEncode(merged), source: 'Importé d\'une photo');
   }
 
   static String _sourceLabel(ImportMethod method) {

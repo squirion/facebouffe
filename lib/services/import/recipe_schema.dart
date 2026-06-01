@@ -27,6 +27,28 @@ Rules:
 Example of a valid answer:
 {"title":"Crêpes","description":"Recette simple.","source":"","servings":4,"prepTimeMinutes":10,"cookTimeMinutes":15,"tags":["dejeuner"],"ingredients":[{"quantity":250,"unit":"g","name":"farine tout usage","note":""},{"quantity":2,"unit":null,"name":"oeufs","note":"gros"},{"quantity":500,"unit":"ml","name":"lait","note":""}],"steps":[{"text":"Mélanger la farine, les oeufs et le lait.","timerSeconds":null},{"text":"Cuire chaque crêpe à feu moyen.","timerSeconds":null}]}''';
 
+/// Region-guided import uses TWO single-purpose calls (one per region) so a
+/// small model can't bleed step text into ingredient notes or vice-versa.
+const String kPromptIngredients = '''
+Extract ONLY the ingredients from the text below into JSON.
+Output ONLY one JSON object: {"ingredients":[{"quantity":number|null,"unit":string|null,"name":string,"note":string}]}
+Rules:
+- One entry per ingredient. Keep the ORIGINAL language. No markdown, nothing outside the JSON.
+- "unit" must be EXACTLY one of "g","kg","ml","l","tsp","tbsp","cup","oz","lb","pinch" — or null for countable items / when unknown.
+- "quantity" is a number or null.
+- "name" is the ingredient only; "note" is a SHORT qualifier (e.g. "fondu", "haché", "à température pièce") or "". NEVER put cooking steps, sentences, or instructions in "name" or "note".''';
+
+const String kPromptSteps = '''
+Extract ONLY the cooking steps from the text below into JSON.
+Output ONLY one JSON object: {"steps":[{"text":string,"timerSeconds":number|null}]}
+Rules:
+- One entry per step; "text" is a single instruction sentence. Write temperatures inline like "180 °C".
+- Keep the ORIGINAL language. No markdown, nothing outside the JSON. Do NOT include the ingredient list.''';
+
+/// Parse a (possibly messy) model response into a loose JSON map — used to pull
+/// a single field (ingredients[] or steps[]) out of a per-region call.
+Map<String, dynamic> parseModelJsonLoose(String raw) => _parseModelJson(raw);
+
 String _stripFences(String raw) => raw
     .trim()
     .replaceAll(RegExp(r'^```[a-zA-Z]*\s*'), '')
