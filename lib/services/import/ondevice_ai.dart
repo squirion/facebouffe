@@ -4,27 +4,49 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../recipe_import.dart' show ImportException;
 import 'import_debug.dart';
 
 /// Tier 1 on-device LLM via MediaPipe LLM Inference (native). Runs a local
-/// Gemma `.task` model the user has loaded onto the device — no network, no
-/// AICore allowlist. "Available" simply means a model file is present.
+/// Gemma/Qwen `.task` model the user has loaded — no network, no AICore.
+///
+/// Each imported model is stored under a UNIQUE filename. MediaPipe builds an
+/// XNNPACK weight cache keyed by the model path; reusing one fixed path across
+/// different models makes it load a stale cache and crash ("Cannot reserve
+/// space in a cache that isn't building"). Unique paths avoid that.
 class OnDeviceAi {
   static const _channel = MethodChannel('facebouffe/ondevice_ai');
-  static const _modelFileName = 'ondevice_llm.task';
+  static const _prefix = 'ondevice_llm_'; // ondevice_llm_<ts>.task
+  static const _activePref = 'fb_ondevice_model';
 
-  static Future<File> _modelFile() async {
-    final dir = await getApplicationSupportDirectory();
-    return File('${dir.path}/$_modelFileName');
-  }
+  static Future<Directory> _dir() => getApplicationSupportDirectory();
+  static String _newName() => '$_prefix${DateTime.now().microsecondsSinceEpoch}.task';
 
-  /// Absolute path to the loaded model, or null if none is present.
+  /// Absolute path to the active model, or null. Migrates a legacy fixed-name
+  /// file to a unique path (so its stale weight cache is sidestepped).
   static Future<String?> modelPath() async {
     if (kIsWeb) return null;
-    final f = await _modelFile();
-    return await f.exists() ? f.path : null;
+    final dir = await _dir();
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString(_activePref);
+    if (name != null) {
+      final f = File('${dir.path}/$name');
+      if (await f.exists()) return f.path;
+    }
+    final legacy = File('${dir.path}/ondevice_llm.task');
+    if (await legacy.exists()) {
+      final renamed = File('${dir.path}/${_newName()}');
+      try {
+        await legacy.rename(renamed.path);
+        await prefs.setString(_activePref, renamed.uri.pathSegments.last);
+        return renamed.path;
+      } catch (_) {
+        return legacy.path;
+      }
+    }
+    return null;
   }
 
   /// Tier 1 is available iff a model file has been loaded.
@@ -35,11 +57,28 @@ class OnDeviceAi {
     return p == null ? 0 : File(p).length();
   }
 
+  // Make [dest] the active model: record it and delete every other ondevice_llm*
+  // file (old models + their adjacent caches / .part / .tar) to free space and
+  // prevent stale-cache reuse.
+  static Future<void> _activate(File dest) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_activePref, dest.uri.pathSegments.last);
+    final dir = await _dir();
+    await for (final e in dir.list()) {
+      if (e is File && e.path != dest.path && e.uri.pathSegments.last.startsWith('ondevice_llm')) {
+        try {
+          await e.delete();
+        } catch (_) {}
+      }
+    }
+  }
+
   /// Stream a picked model file into app storage in chunks (robust for multi-GB
   /// files where a plain copy of file_picker's cached temp can truncate), then
   /// unwrap it if it's a .tar.gz / .tar (Kaggle ships models wrapped).
   static Future<void> importModelFromStream(Stream<List<int>> stream, {int total = 0, void Function(double)? onProgress}) async {
-    final dest = await _modelFile();
+    final dir = await _dir();
+    final dest = File('${dir.path}/${_newName()}');
     final tmp = File('${dest.path}.part');
     final sink = tmp.openWrite();
     var received = 0;
@@ -50,20 +89,21 @@ class OnDeviceAi {
         if (total > 0 && onProgress != null) onProgress(received / total);
       }
       await sink.close();
-      await _finalizeModel(tmp);
+      await _finalizeModel(tmp, dest);
+      await _activate(dest);
     } catch (_) {
       try {
         await sink.close();
       } catch (_) {}
       await _cleanup(tmp);
+      await _cleanup(dest);
       rethrow;
     }
   }
 
   // Turn whatever was downloaded/picked (raw [src]) into the final `.task` model
-  // at the canonical path: gunzip + untar a Kaggle bundle, or use it directly.
-  static Future<void> _finalizeModel(File src) async {
-    final dest = await _modelFile();
+  // at [dest]: gunzip + untar a Kaggle bundle, or use it directly.
+  static Future<void> _finalizeModel(File src, File dest) async {
     final head = await _peek(src, 6);
     final isGzip = head.length >= 2 && head[0] == 0x1f && head[1] == 0x8b;
     // ustar magic lives at offset 257, but the cheap signal is gzip; for a bare
@@ -211,7 +251,8 @@ class OnDeviceAi {
 
   /// Stream-download a model from [url] into app storage, reporting 0..1 progress.
   static Future<void> downloadModel(String url, {void Function(double)? onProgress}) async {
-    final dest = await _modelFile();
+    final dir = await _dir();
+    final dest = File('${dir.path}/${_newName()}');
     final tmp = File('${dest.path}.part');
     final client = http.Client();
     try {
@@ -227,7 +268,8 @@ class OnDeviceAi {
         if (total > 0 && onProgress != null) onProgress(received / total);
       }
       await sink.close();
-      await _finalizeModel(tmp);
+      await _finalizeModel(tmp, dest);
+      await _activate(dest);
     } finally {
       client.close();
       await _cleanup(tmp);
@@ -235,8 +277,16 @@ class OnDeviceAi {
   }
 
   static Future<void> deleteModel() async {
-    final f = await _modelFile();
-    if (await f.exists()) await f.delete();
+    final dir = await _dir();
+    await for (final e in dir.list()) {
+      if (e is File && e.uri.pathSegments.last.startsWith('ondevice_llm')) {
+        try {
+          await e.delete();
+        } catch (_) {}
+      }
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_activePref);
   }
 
   /// A short capability report from the native side (debugging only).
