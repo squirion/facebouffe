@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart' hide Step;
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
@@ -238,6 +239,8 @@ class _EditScreenState extends State<EditScreen> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         buildDefaultDragHandles: false,
+        onReorderStart: (_) => HapticFeedback.mediumImpact(),
+        proxyDecorator: _liftedCard,
         onReorder: (oldIndex, newIndex) => setState(() => _reorder(form.ingredients, oldIndex, newIndex)),
         children: [
           for (int i = 0; i < form.ingredients.length; i++)
@@ -304,6 +307,30 @@ class _EditScreenState extends State<EditScreen> {
     list.insert(newIndex, item);
   }
 
+  // While dragging, float the actual rounded card (the default proxy wraps it in
+  // a square Material) with a soft rounded shadow + slight lift.
+  Widget _liftedCard(Widget child, int index, Animation<double> animation) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final t = Curves.easeInOut.transform(animation.value);
+        return Transform.scale(
+          scale: 1 + 0.03 * t,
+          child: Material(
+            color: Colors.transparent,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.20 * t), blurRadius: 22 * t, offset: Offset(0, 8 * t))],
+              ),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // ── STEPS ──
   List<Widget> _steps(AppState app, FbTheme fb) {
     return [
@@ -311,6 +338,8 @@ class _EditScreenState extends State<EditScreen> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         buildDefaultDragHandles: false,
+        onReorderStart: (_) => HapticFeedback.mediumImpact(),
+        proxyDecorator: _liftedCard,
         onReorder: (oldIndex, newIndex) => setState(() => _reorder(form.steps, oldIndex, newIndex)),
         children: [
           for (int i = 0; i < form.steps.length; i++)
