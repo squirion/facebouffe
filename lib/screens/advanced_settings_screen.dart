@@ -496,6 +496,29 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
               ]),
             ),
             const SizedBox(height: 12),
+            // context size — MUST match the model's compiled ekvNNNN, else the
+            // engine crashes. Auto-set from the filename on import; override here.
+            Text(app.t('ondevice_context').toUpperCase(), style: fb.ui(size: 11, weight: FontWeight.w700, color: fb.inkFaint, letterSpacing: 0.4)),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(color: fb.dark ? Colors.white.withValues(alpha: 0.06) : fb.canvas2, borderRadius: BorderRadius.circular(11)),
+              child: Row(children: [
+                for (final n in const [1280, 2048, 4096, 8192])
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => context.read<AppState>().setOnDeviceMaxTokens(n),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(color: app.onDeviceMaxTokens == n ? fb.card : Colors.transparent, borderRadius: BorderRadius.circular(9), boxShadow: app.onDeviceMaxTokens == n ? fb.shadow : null),
+                        alignment: Alignment.center,
+                        child: Text('$n', style: fb.ui(size: 12.5, weight: app.onDeviceMaxTokens == n ? FontWeight.w700 : FontWeight.w600, color: app.onDeviceMaxTokens == n ? fb.ink : fb.inkSoft)),
+                      ),
+                    ),
+                  ),
+              ]),
+            ),
+            const SizedBox(height: 12),
             GestureDetector(
               onTap: _delete,
               child: Container(
