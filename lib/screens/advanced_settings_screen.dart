@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:file_picker/file_picker.dart';
 
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -352,8 +353,8 @@ class _ApiKeyManagerState extends State<ApiKeyManager> {
   }
 }
 
-/// Settings — manage the local Tier 1 model (MediaPipe Gemma .task): import a
-/// file, download from a URL with progress, or delete. Everything stays local.
+/// Settings — Tier 1 on-device model: a single one-time Phi download (robust
+/// background DownloadManager), with progress / delete. Everything stays local.
 class OnDeviceModelManager extends StatefulWidget {
   const OnDeviceModelManager({super.key});
   @override
@@ -361,209 +362,120 @@ class OnDeviceModelManager extends StatefulWidget {
 }
 
 class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
-  final _urlController = TextEditingController();
-  bool _busy = false;
-  String _busyLabel = '';
-  double? _progress; // 0..1 during download
-  int _sizeBytes = 0;
-  String? _error;
+  ModelDownloadStatus _status = const ModelDownloadStatus('none', 0, 0, null);
+  Timer? _poll;
 
   @override
   void initState() {
     super.initState();
-    _refreshSize();
+    _refresh();
+    // Poll while the screen is open so a background download shows live progress.
+    _poll = Timer.periodic(const Duration(milliseconds: 1200), (_) => _refresh());
   }
 
   @override
   void dispose() {
-    _urlController.dispose();
+    _poll?.cancel();
     super.dispose();
   }
 
-  Future<void> _refreshSize() async {
-    final s = await OnDeviceAi.modelSizeBytes();
-    if (mounted) setState(() => _sizeBytes = s);
+  Future<void> _refresh() async {
+    final s = await OnDeviceAi.downloadStatus();
+    if (!mounted) return;
+    final wasDone = _status.isDone;
+    setState(() => _status = s);
+    if (s.isDone && !wasDone) await context.read<AppState>().refreshOnDevice();
   }
 
   String _fmtSize(int bytes) {
     if (bytes <= 0) return '';
     final gb = bytes / (1024 * 1024 * 1024);
-    if (gb >= 1) return '${gb.toStringAsFixed(2)} GB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(0)} MB';
+    return gb >= 1 ? '${gb.toStringAsFixed(2)} Go' : '${(bytes / (1024 * 1024)).round()} Mo';
   }
 
-  Future<void> _importFile() async {
-    final res = await FilePicker.platform.pickFiles(type: FileType.any, withReadStream: true);
-    final picked = res?.files.single;
-    final stream = picked?.readStream;
-    if (stream == null) return;
-    final detected = AppState.detectTemplate(picked!.name);
-    final maxTok = AppState.detectMaxTokens(picked.name);
-    setState(() { _busy = true; _busyLabel = context.read<AppState>().t('ondevice_importing'); _progress = picked.size > 0 ? 0 : null; _error = null; });
-    try {
-      await OnDeviceAi.importModelFromStream(stream, total: picked.size, onProgress: (p) {
-        if (mounted) setState(() => _progress = p);
-      });
-      if (mounted) {
-        context.read<AppState>().setOnDeviceTemplate(detected);
-        context.read<AppState>().setOnDeviceMaxTokens(maxTok);
-        await context.read<AppState>().refreshOnDevice();
-      }
-      await _refreshSize();
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() { _busy = false; });
-    }
+  Future<void> _start() async {
+    await OnDeviceAi.startDownload();
+    await _refresh();
   }
 
-  Future<void> _download() async {
-    final url = _urlController.text.trim();
-    if (url.isEmpty) return;
-    final app = context.read<AppState>();
-    final detected = AppState.detectTemplate(url);
-    final maxTok = AppState.detectMaxTokens(url);
-    setState(() { _busy = true; _busyLabel = app.t('ondevice_downloading'); _progress = 0; _error = null; });
-    try {
-      await OnDeviceAi.downloadModel(url, onProgress: (p) {
-        if (mounted) setState(() => _progress = p);
-      });
-      if (mounted) {
-        context.read<AppState>().setOnDeviceTemplate(detected);
-        context.read<AppState>().setOnDeviceMaxTokens(maxTok);
-        await context.read<AppState>().refreshOnDevice();
-      }
-      await _refreshSize();
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() { _busy = false; });
-    }
+  Future<void> _cancel() async {
+    await OnDeviceAi.cancelDownload();
+    await _refresh();
   }
 
   Future<void> _delete() async {
     await OnDeviceAi.deleteModel();
     if (mounted) await context.read<AppState>().refreshOnDevice();
-    await _refreshSize();
+    await _refresh();
   }
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final fb = context.fb;
-    final loaded = app.onDeviceAI && _sizeBytes > 0;
+    final ready = _status.isDone;
+    final running = _status.isRunning;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // status
           Row(children: [
-            Container(width: 30, height: 30, decoration: BoxDecoration(color: loaded ? const Color(0x1F6BA368) : fb.line, borderRadius: BorderRadius.circular(9)), child: Center(child: FbIcon(loaded ? 'check' : 'note', size: 16, color: loaded ? const Color(0xFF4F7D4C) : fb.inkFaint))),
+            Container(width: 30, height: 30, decoration: BoxDecoration(color: ready ? const Color(0x1F6BA368) : fb.line, borderRadius: BorderRadius.circular(9)), child: Center(child: FbIcon(ready ? 'check' : 'note', size: 16, color: ready ? const Color(0xFF4F7D4C) : fb.inkFaint))),
             const SizedBox(width: 11),
-            Expanded(child: Text(loaded ? '${app.t('ondevice_model_loaded')} · ${_fmtSize(_sizeBytes)} · ctx ${app.onDeviceMaxTokens}' : app.t('ondevice_model_none'), style: fb.ui(size: 14.5, weight: FontWeight.w600))),
+            Expanded(child: Text(ready ? '${app.t('ondevice_model_loaded')} · ${_fmtSize(_status.total)}' : app.t('ondevice_model_none'), style: fb.ui(size: 14.5, weight: FontWeight.w600))),
           ]),
           const SizedBox(height: 8),
           Text(app.t('ondevice_model_hint'), style: fb.ui(size: 12, color: fb.inkFaint, height: 1.45)),
           const SizedBox(height: 12),
-          if (_busy) ...[
-            Row(children: [
-              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: fb.accent, value: _progress)),
-              const SizedBox(width: 10),
-              Text(_progress != null ? '$_busyLabel ${(_progress! * 100).round()}%' : _busyLabel, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: fb.inkSoft)),
+          if (running) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(value: _status.progress, minHeight: 8, backgroundColor: fb.line, color: fb.accent),
+            ),
+            const SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('${app.t('ondevice_downloading')} ${_status.progress != null ? '${(_status.progress! * 100).round()}%' : ''}'.trim(), style: fb.ui(size: 12.5, weight: FontWeight.w600, color: fb.inkSoft)),
+              if (_status.total > 0) Text('${_fmtSize(_status.downloaded)} / ${_fmtSize(_status.total)}', style: fb.ui(size: 12, color: fb.inkFaint)),
             ]),
-          ] else if (loaded) ...[
-            // model family / chat template (auto-set on import; override here)
-            Text(app.t('ondevice_template').toUpperCase(), style: fb.ui(size: 11, weight: FontWeight.w700, color: fb.inkFaint, letterSpacing: 0.4)),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(color: fb.dark ? Colors.white.withValues(alpha: 0.06) : fb.canvas2, borderRadius: BorderRadius.circular(11)),
-              child: Row(children: [
-                for (final t in const [('gemma', 'Gemma'), ('qwen', 'Qwen'), ('phi', 'Phi'), ('generic', 'Autre')])
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => context.read<AppState>().setOnDeviceTemplate(t.$1),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(color: app.onDeviceTemplate == t.$1 ? fb.card : Colors.transparent, borderRadius: BorderRadius.circular(9), boxShadow: app.onDeviceTemplate == t.$1 ? fb.shadow : null),
-                        alignment: Alignment.center,
-                        child: Text(t.$2, style: fb.ui(size: 13, weight: app.onDeviceTemplate == t.$1 ? FontWeight.w700 : FontWeight.w600, color: app.onDeviceTemplate == t.$1 ? fb.ink : fb.inkSoft)),
-                      ),
-                    ),
-                  ),
-              ]),
-            ),
-            const SizedBox(height: 12),
-            // context size — MUST match the model's compiled ekvNNNN, else the
-            // engine crashes. Auto-set from the filename on import; override here.
-            Text(app.t('ondevice_context').toUpperCase(), style: fb.ui(size: 11, weight: FontWeight.w700, color: fb.inkFaint, letterSpacing: 0.4)),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(color: fb.dark ? Colors.white.withValues(alpha: 0.06) : fb.canvas2, borderRadius: BorderRadius.circular(11)),
-              child: Row(children: [
-                for (final n in const [1280, 2048, 4096, 8192])
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => context.read<AppState>().setOnDeviceMaxTokens(n),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(color: app.onDeviceMaxTokens == n ? fb.card : Colors.transparent, borderRadius: BorderRadius.circular(9), boxShadow: app.onDeviceMaxTokens == n ? fb.shadow : null),
-                        alignment: Alignment.center,
-                        child: Text('$n', style: fb.ui(size: 12.5, weight: app.onDeviceMaxTokens == n ? FontWeight.w700 : FontWeight.w600, color: app.onDeviceMaxTokens == n ? fb.ink : fb.inkSoft)),
-                      ),
-                    ),
-                  ),
-              ]),
-            ),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: _delete,
-              child: Container(
-                height: 42,
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(11), border: Border.all(color: fb.line)),
-                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  const FbIcon('trash', size: 16, color: Color(0xFFC0563B)),
-                  const SizedBox(width: 7),
-                  Text(app.t('ondevice_delete_model'), style: fb.ui(size: 14, weight: FontWeight.w700, color: const Color(0xFFC0563B))),
-                ]),
-              ),
-            ),
-          ] else ...[
-            GestureDetector(
-              onTap: _importFile,
-              child: Container(
-                height: 44,
-                decoration: BoxDecoration(color: fb.accent, borderRadius: BorderRadius.circular(11)),
-                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  const FbIcon('plus', size: 17, color: Colors.white),
-                  const SizedBox(width: 7),
-                  Text(app.t('ondevice_import_file'), style: fb.ui(size: 14.5, weight: FontWeight.w700, color: Colors.white)),
-                ]),
-              ),
-            ),
             const SizedBox(height: 10),
-            Container(
-              height: 46,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(color: fb.canvas2, borderRadius: BorderRadius.circular(12), border: Border.all(color: fb.line)),
-              child: Row(children: [
-                FbIcon('link', size: 16, color: fb.inkFaint),
-                const SizedBox(width: 8),
-                Expanded(child: TextField(controller: _urlController, keyboardType: TextInputType.url, onChanged: (_) => setState(() {}), style: fb.ui(size: 13.5), decoration: InputDecoration.collapsed(hintText: app.t('ondevice_url_ph'), hintStyle: fb.ui(size: 13.5, color: fb.inkFaint)))),
-                if (_urlController.text.trim().isNotEmpty)
-                  GestureDetector(onTap: _download, child: Padding(padding: const EdgeInsets.only(left: 6), child: Text(app.t('ondevice_download'), style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent)))),
-              ]),
-            ),
+            _btn(fb, app.t('cancel'), 'x', outline: true, onTap: _cancel),
+          ] else if (ready) ...[
+            _btn(fb, app.t('ondevice_delete_model'), 'trash', outline: true, danger: true, onTap: _delete),
+          ] else ...[
+            _btn(fb, app.t('ondevice_download_btn'), 'download', onTap: _start),
+            if (_status.isFailed && _status.reason != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const FbIcon('note', size: 14, color: Color(0xFFC0563B)),
+                  const SizedBox(width: 7),
+                  Expanded(child: Text('${app.t('ondevice_dl_failed')} — ${_status.reason}', style: fb.ui(size: 12, weight: FontWeight.w600, color: const Color(0xFF9C3F29), height: 1.4))),
+                ]),
+              ),
           ],
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(_error!, style: TextStyle(fontFamily: 'monospace', fontSize: fb.fs(11.5), color: const Color(0xFF9C3F29), height: 1.4)),
-            ),
         ],
+      ),
+    );
+  }
+
+  Widget _btn(FbTheme fb, String label, String icon, {bool outline = false, bool danger = false, required VoidCallback onTap}) {
+    final color = danger ? const Color(0xFFC0563B) : (outline ? fb.accent : Colors.white);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: outline ? Colors.transparent : fb.accent,
+          borderRadius: BorderRadius.circular(11),
+          border: outline ? Border.all(color: danger ? const Color(0x33C0563B) : fb.line) : null,
+        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          FbIcon(icon, size: 16, color: color),
+          const SizedBox(width: 7),
+          Text(label, style: fb.ui(size: 14.5, weight: FontWeight.w700, color: color)),
+        ]),
       ),
     );
   }

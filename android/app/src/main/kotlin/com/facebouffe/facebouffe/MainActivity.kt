@@ -1,6 +1,8 @@
 package com.facebouffe.facebouffe
 
 import android.app.Activity
+import android.app.DownloadManager
+import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
 import android.net.Uri
@@ -58,26 +60,41 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        // On-device LLM (Tier 1 import) — MediaPipe LLM Inference on a local
-        // Gemma .task model the user loaded onto the device.
+        // On-device LLM (Tier 1 import) — a single hardcoded Phi .task model,
+        // downloaded in the background via DownloadManager and run with MediaPipe.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "facebouffe/ondevice_ai").setMethodCallHandler { call, result ->
             when (call.method) {
-                "diagnose" -> result.success(diagnose())
+                "ready" -> result.success(modelFile().exists())
+                "startDownload" -> {
+                    val url = call.argument<String>("url")
+                    if (url.isNullOrEmpty()) {
+                        result.error("bad_url", "missing url", null)
+                    } else {
+                        try {
+                            result.success(startDownload(url))
+                        } catch (t: Throwable) {
+                            result.error("dl_failed", t.message, null)
+                        }
+                    }
+                }
+                "downloadStatus" -> result.success(downloadStatus())
+                "cancelDownload" -> { cancelDownload(); result.success(true) }
+                "deleteModel" -> { deleteModel(); result.success(true) }
                 "generate" -> {
-                    val modelPath = call.argument<String>("modelPath")
                     val text = call.argument<String>("text") ?: ""
                     val prompt = call.argument<String>("prompt") ?: ""
-                    val maxTokens = call.argument<Int>("maxTokens") ?: 1280
-                    Log.i(NANO_TAG, "generate(): model=$modelPath maxTokens=$maxTokens textLen=${text.length} promptLen=${prompt.length}")
-                    if (modelPath.isNullOrEmpty() || !File(modelPath).exists()) {
-                        result.error("no_model", "model file missing: $modelPath", null)
+                    val maxTokens = call.argument<Int>("maxTokens") ?: 4096
+                    val mf = modelFile()
+                    Log.i(NANO_TAG, "generate(): maxTokens=$maxTokens textLen=${text.length} promptLen=${prompt.length}")
+                    if (!mf.exists()) {
+                        result.error("no_model", "model not downloaded", null)
                         return@setMethodCallHandler
                     }
-                    // catch Throwable: model loading can throw Errors (OOM / native link).
                     val full = if (text.isBlank()) prompt else "$prompt\n\n$text"
+                    // catch Throwable: model loading can throw Errors (OOM / native link).
                     lifecycleScope.launch {
                         try {
-                            val out = runLlm(modelPath, full, maxTokens)
+                            val out = runLlm(mf.absolutePath, full, maxTokens)
                             Log.i(NANO_TAG, "generate() OK: responseLen=${out.length}")
                             result.success(out)
                         } catch (t: Throwable) {
@@ -92,8 +109,92 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    // ── Tier 1 model download (DownloadManager: survives backgrounding/lock/doze) ──
+    private val dlPrefs get() = getSharedPreferences("fb_dm", Context.MODE_PRIVATE)
+    private fun modelDir() = getExternalFilesDir(null) ?: filesDir
+    private fun modelFile() = File(modelDir(), "ondevice_phi.task")
+    private fun partName() = "ondevice_phi.task.part"
+    private fun partFile() = File(modelDir(), partName())
+
+    private fun startDownload(url: String): Long {
+        cancelDownload() // clear any prior attempt
+        partFile().delete()
+        val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val req = DownloadManager.Request(Uri.parse(url))
+            .setTitle("Facebouffe")
+            .setDescription("Téléchargement du modèle IA hors ligne")
+            .setDestinationInExternalFilesDir(this, null, partName())
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(false)
+        val id = dm.enqueue(req)
+        dlPrefs.edit().putLong("phi_dl_id", id).apply()
+        Log.i(NANO_TAG, "download enqueued id=$id")
+        return id
+    }
+
+    private fun downloadStatus(): HashMap<String, Any?> {
+        val m = HashMap<String, Any?>()
+        if (modelFile().exists()) {
+            m["state"] = "done"; m["downloaded"] = modelFile().length(); m["total"] = modelFile().length()
+            return m
+        }
+        val id = dlPrefs.getLong("phi_dl_id", -1L)
+        if (id < 0L) { m["state"] = "none"; return m }
+        val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val c = dm.query(DownloadManager.Query().setFilterById(id))
+        if (c == null || !c.moveToFirst()) { c?.close(); m["state"] = "none"; return m }
+        val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+        m["downloaded"] = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+        m["total"] = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+        val reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+        c.close()
+        when (status) {
+            DownloadManager.STATUS_SUCCESSFUL -> {
+                if (finalizeDownload()) {
+                    m["state"] = "done"; m["downloaded"] = modelFile().length(); m["total"] = modelFile().length()
+                } else {
+                    m["state"] = "failed"; m["reason"] = "downloaded file is not a valid .task model"
+                }
+            }
+            DownloadManager.STATUS_FAILED -> { m["state"] = "failed"; m["reason"] = "download error ($reason)" }
+            else -> m["state"] = "running" // pending / running / paused
+        }
+        return m
+    }
+
+    // Validate (ZIP magic) and promote the .part to the final model path.
+    private fun finalizeDownload(): Boolean {
+        val part = partFile(); val dest = modelFile()
+        if (!part.exists()) return dest.exists()
+        val head = ByteArray(4)
+        try { part.inputStream().use { it.read(head) } } catch (_: Throwable) {}
+        val isZip = head.size >= 4 && head[0] == 0x50.toByte() && head[1] == 0x4B.toByte() && head[2] == 0x03.toByte() && head[3] == 0x04.toByte()
+        if (!isZip) {
+            part.delete(); dlPrefs.edit().remove("phi_dl_id").apply()
+            return false
+        }
+        if (dest.exists()) dest.delete()
+        return part.renameTo(dest)
+    }
+
+    private fun cancelDownload() {
+        val id = dlPrefs.getLong("phi_dl_id", -1L)
+        if (id >= 0L) {
+            try { (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).remove(id) } catch (_: Throwable) {}
+        }
+        dlPrefs.edit().remove("phi_dl_id").apply()
+        partFile().delete()
+    }
+
+    private fun deleteModel() {
+        cancelDownload()
+        modelFile().delete()
+        llm?.close(); llm = null; llmPath = null
+    }
+
     private fun diagnose(): String =
-        "device=${Build.MANUFACTURER} ${Build.MODEL} SDK=${Build.VERSION.SDK_INT}\nllmLoaded=${llm != null} path=$llmPath"
+        "device=${Build.MANUFACTURER} ${Build.MODEL} SDK=${Build.VERSION.SDK_INT}\nmodel=${modelFile().exists()} llmLoaded=${llm != null}"
 
     private fun errorDetail(t: Throwable): String {
         val sb = StringBuilder()
