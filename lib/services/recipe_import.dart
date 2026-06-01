@@ -38,8 +38,9 @@ class RecipeImport {
   }
 
   static Future<ImportResult> importFromUrl(String url) async {
-    final html = await _fetch(url.trim());
-    return parseHtml(url.trim(), html);
+    final target = await resolveShareUrl(url.trim());
+    final html = await _fetch(target);
+    return parseHtml(target, html);
   }
 
   /// Parse already-fetched HTML (no network) — also the unit-test seam.
@@ -64,7 +65,7 @@ class RecipeImport {
   /// fully local), a needed reader fallback instead throws `reader_consent` so
   /// the UI can ask the user before anything leaves the device.
   static Future<String> fetchReadableText(String url, {int maxChars = 16000, bool allowReader = true}) async {
-    final u = url.trim();
+    final u = await resolveShareUrl(url.trim());
     String text = '';
     try {
       text = htmlToText(await _fetch(u));
@@ -139,6 +140,74 @@ class RecipeImport {
       return _namedEntities[e] ?? m.group(0)!;
     });
   }
+
+  // Share / URL-shortener hosts whose links wrap the real destination. Sharing
+  // a page from Chrome / the Google app yields a share.google link, not the
+  // page URL, so we resolve it to the real recipe page before fetching.
+  static const _shortenerHosts = ['share.google', 'g.co', 'goo.gl', 'bit.ly', 'tinyurl.com', 'ow.ly', 't.co', 'l.facebook.com', 'lnkd.in'];
+
+  static bool _isShortener(String url) {
+    final h = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+    return _shortenerHosts.any((s) => h == s || h.endsWith('.$s'));
+  }
+
+  /// Resolve a share/short link to the real page URL by following HTTP 30x and,
+  /// if the landing page is a `<meta refresh>` / JS interstitial, the redirect
+  /// embedded in it. Non-shortener URLs pass through untouched (no extra
+  /// request); on any error the input is returned as-is. (No-op on web.)
+  static Future<String> resolveShareUrl(String url) async {
+    var current = url.trim();
+    if (kIsWeb || !_isShortener(current)) return current;
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
+    try {
+      for (var hop = 0; hop < 5; hop++) {
+        final req = await client.getUrl(Uri.parse(current));
+        req.followRedirects = false;
+        req.headers.set(HttpHeaders.userAgentHeader, _uaDesktop);
+        final resp = await req.close();
+        if (resp.isRedirect) {
+          final loc = resp.headers.value(HttpHeaders.locationHeader);
+          await resp.drain<void>();
+          if (loc == null) break;
+          current = Uri.parse(current).resolve(loc).toString();
+          continue;
+        }
+        final body = await resp.transform(const Utf8Decoder(allowMalformed: true)).join();
+        final next = _redirectInBody(body);
+        if (next == null) break;
+        final resolved = Uri.parse(current).resolve(next).toString();
+        if (resolved == current) break;
+        current = resolved;
+      }
+    } catch (_) {
+      // keep the best URL we have
+    } finally {
+      client.close();
+    }
+    return current;
+  }
+
+  /// Pull a redirect target out of an interstitial page: a <meta refresh> or a
+  /// common JS `location` assignment. Returns null if none found.
+  static String? _redirectInBody(String html) {
+    final head = html.length > 12000 ? html.substring(0, 12000) : html;
+    final meta = RegExp(r'''<meta[^>]+http-equiv=["']?refresh["']?[^>]*content=["'][^"']*url=([^"'>]+)''', caseSensitive: false).firstMatch(head);
+    if (meta != null) return _unescapeUrl(meta.group(1)!.trim());
+    for (final re in [
+      RegExp(r'''location\.replace\(\s*["']([^"']+)["']''', caseSensitive: false),
+      RegExp(r'''location\.href\s*=\s*["']([^"']+)["']''', caseSensitive: false),
+      RegExp(r'''window\.location(?:\.href)?\s*=\s*["']([^"']+)["']''', caseSensitive: false),
+    ]) {
+      final m = re.firstMatch(head);
+      if (m != null) return _unescapeUrl(m.group(1)!.trim());
+    }
+    return null;
+  }
+
+  static String _unescapeUrl(String u) => u
+      .replaceAll('&amp;', '&')
+      .replaceAll(r'\/', '/')
+      .replaceAllMapped(RegExp(r'\\u([0-9a-fA-F]{4})'), (m) => String.fromCharCode(int.parse(m.group(1)!, radix: 16)));
 
   // A current desktop-Chrome UA + a Googlebot fallback. Many sites bot-block an
   // unfamiliar client (→ 403) but serve crawlers the full page, JSON-LD and all,

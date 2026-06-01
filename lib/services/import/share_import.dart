@@ -54,13 +54,20 @@ class ShareImport {
         return;
       }
     } else {
-      // text or url — the shared string is in `path`
+      // text or url — the shared string is in `path`. Browsers (esp. Chrome /
+      // the Google app) often share "Page Title  https://share.google/…" — a
+      // title plus a link — so pull the first URL out and treat it as a link;
+      // fall back to text only when there's no URL at all.
       final value = item.path.trim();
       if (value.isEmpty) return;
-      final uri = Uri.tryParse(value);
-      final isUrl = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
-      method = isUrl ? ImportMethod.link : ImportMethod.text;
-      text = value;
+      final urlMatch = RegExp(r'https?://[^\s]+', caseSensitive: false).firstMatch(value);
+      if (urlMatch != null) {
+        method = ImportMethod.link;
+        text = urlMatch.group(0)!.trim();
+      } else {
+        method = ImportMethod.text;
+        text = value;
+      }
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
