@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../services/import/ondevice_ai.dart';
 
@@ -28,10 +29,12 @@ class AppState extends ChangeNotifier {
   Map<String, String> aliases = {}; // normalized ingredient name -> CNF food code (learned defaults, §2e)
 
   // ── import engine config (§2f) ──
-  String importBackend = 'tier0'; // tier0 (link/JSON-LD) | ondevice | byok
+  String preferredAI = 'online'; // which AI to prefer when one is needed: online | ondevice
+  bool online = true; // network reachable (connectivity_plus); optimistic default
   String importProvider = 'claude'; // selected BYOK provider: claude | openai | gemini
   Map<String, String> importKeys = {}; // provider -> API key, cached from secure storage
   bool onDeviceAI = false; // whether the Tier 1 model has been downloaded
+  StreamSubscription<List<ConnectivityResult>>? _connSub;
   static const _secure = FlutterSecureStorage();
 
   // App-only settings (not part of the recipe schema)
@@ -117,8 +120,9 @@ class AppState extends ChangeNotifier {
         aliases = Map<String, String>.from(jsonDecode(al) as Map);
       } catch (_) {}
     }
-    importBackend = _prefs!.getString('fb_import_backend') ?? importBackend;
+    preferredAI = _prefs!.getString('fb_preferred_ai') ?? preferredAI;
     importProvider = _prefs!.getString('fb_import_provider') ?? importProvider;
+    _watchConnectivity();
     try {
       for (final p in const ['claude', 'openai', 'gemini']) {
         final k = await _secure.read(key: 'fb_key_$p');
@@ -497,9 +501,30 @@ class AppState extends ChangeNotifier {
   }
 
   // ── import engine config (§2f) ──
-  void setImportBackend(String b) {
-    importBackend = b;
-    _prefs?.setString('fb_import_backend', b);
+  void _watchConnectivity() {
+    Future<void> apply(List<ConnectivityResult> r) async {
+      final up = r.any((c) => c != ConnectivityResult.none);
+      if (up != online) {
+        online = up;
+        notifyListeners();
+      }
+    }
+
+    try {
+      Connectivity().checkConnectivity().then(apply);
+      _connSub = Connectivity().onConnectivityChanged.listen(apply);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _connSub?.cancel();
+    super.dispose();
+  }
+
+  void setPreferredAI(String p) {
+    preferredAI = p;
+    _prefs?.setString('fb_preferred_ai', p);
     notifyListeners();
   }
 
@@ -528,12 +553,9 @@ class AppState extends ChangeNotifier {
   bool importKeyFor(String provider) => (importKeys[provider] ?? '').trim().isNotEmpty;
   bool get hasAnyImportKey => importKeys.values.any((k) => k.trim().isNotEmpty);
 
-  /// Whether a backend tier can run right now (device / keys permitting).
-  bool engineAvailable(String backend) =>
-      backend == 'tier0' || (backend == 'ondevice' && onDeviceAI) || (backend == 'byok' && hasAnyImportKey);
-
-  /// The configured backend, falling back to tier0 if it's not currently usable.
-  String get effectiveBackend => engineAvailable(importBackend) ? importBackend : 'tier0';
+  // ── AI engine availability (for the decision tree) ──
+  bool get onDeviceReady => onDeviceAI; // Tier 1 model present (no network needed)
+  bool get onlineAiReady => hasAnyImportKey && online; // Tier 2 key + connection
 
   /// Recompute Tier 1 availability after the on-device model is imported/deleted.
   Future<void> refreshOnDevice() async {
@@ -542,14 +564,9 @@ class AppState extends ChangeNotifier {
   }
 
   /// Called when an on-device import attempt proves the model isn't actually
-  /// usable here. Disables Tier 1 for this session and moves off it so the
-  /// user isn't stuck on a dead engine.
+  /// usable here. Disables Tier 1 for this session.
   void markOnDeviceUnavailable() {
     onDeviceAI = false;
-    if (importBackend == 'ondevice') {
-      importBackend = hasAnyImportKey ? 'byok' : 'tier0';
-      _prefs?.setString('fb_import_backend', importBackend);
-    }
     notifyListeners();
   }
 

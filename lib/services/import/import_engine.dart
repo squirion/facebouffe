@@ -15,19 +15,56 @@ import 'recipe_schema.dart';
 /// Which starting point the user chose in the "+" method chooser / share sheet.
 enum ImportMethod { link, text, photo }
 
-/// Orchestrates the tiered import (§2f): Tier 0 structured parse for links,
-/// else the configured engine (Tier 1 on-device or Tier 2 BYOK). Always returns
-/// a reviewable [ImportResult] draft — the caller opens the editor; nothing is
-/// saved here.
+/// Orchestrates the tiered import (§2f). A connectivity-aware decision tree
+/// picks which engine to use per source (Tier 0 link parser / Tier 1 on-device /
+/// Tier 2 online API), honoring the user's preferred AI and falling back when an
+/// engine is unavailable or fails. Always returns a reviewable [ImportResult].
 class ImportEngine {
-  /// The tier that will actually run for [method] given the app config —
-  /// used for the live "Tier N" badge in the import sheet.
-  static String tierFor(ImportMethod method, AppState app) {
-    if (method == ImportMethod.link) return 'tier0';
-    return app.effectiveBackend; // tier0 | ondevice | byok
+  static const _providerNames = {'claude': 'Claude', 'openai': 'ChatGPT', 'gemini': 'Gemini'};
+
+  /// Ordered engines to try for [method], best-available first (decision tree):
+  /// AI engines appear only when usable (model present / key + connection), in
+  /// the user's preferred order. Links always try the rule-based parser first.
+  static List<String> resolveChain(ImportMethod method, AppState app) {
+    final ai = <String>[];
+    if (app.preferredAI == 'online') {
+      if (app.onlineAiReady) ai.add('online');
+      if (app.onDeviceReady) ai.add('ondevice');
+    } else {
+      if (app.onDeviceReady) ai.add('ondevice');
+      if (app.onlineAiReady) ai.add('online');
+    }
+    // Links: Tier 0 (any-site JSON-LD) first. (Phase 2 will append `ai` so an
+    // unsupported URL can fold to an LLM.)
+    if (method == ImportMethod.link) return ['tier0'];
+    return ai;
   }
 
-  static Future<ImportResult> run({
+  /// The engine that will run first for [method] ('none' if nothing is usable).
+  static String resolve(ImportMethod method, AppState app) {
+    final chain = resolveChain(method, app);
+    return chain.isEmpty ? 'none' : chain.first;
+  }
+
+  /// Human label for an engine, for the "engine used" badge and messages.
+  static String engineLabel(String engine, AppState app) {
+    final fr = app.lang == 'fr';
+    switch (engine) {
+      case 'tier0':
+        return fr ? 'Niveau 0 · Règles' : 'Tier 0 · Rules';
+      case 'ondevice':
+        return fr ? 'Sur l\'appareil' : 'On-device';
+      case 'online':
+        return _providerNames[app.importProvider] ?? (fr ? 'API en ligne' : 'Online API');
+      default:
+        return fr ? 'Aucun moteur' : 'No engine';
+    }
+  }
+
+  /// Run a SPECIFIC [engine] for [method]. Used by the sheet so it can drive the
+  /// fallback chain (bump to the next tier on failure).
+  static Future<ImportResult> runWith({
+    required String engine,
     required ImportMethod method,
     required AppState app,
     String? url,
@@ -35,54 +72,41 @@ class ImportEngine {
     Uint8List? imageBytes,
     String mediaType = 'image/jpeg',
   }) async {
-    importLog('run: method=$method backend=${app.effectiveBackend} (configured=${app.importBackend}, onDeviceAI=${app.onDeviceAI}, provider=${app.importProvider})');
-    if (method == ImportMethod.link) {
-      final u = (url ?? '').trim();
-      if (u.isEmpty) throw ImportException('empty_input');
-      importLog('link → Tier 0 JSON-LD: $u');
-      try {
-        return await RecipeImport.importFromUrl(u); // Tier 0 — JSON-LD, zero cost
-      } on ImportException {
-        rethrow;
-      } catch (e) {
-        importLog('Tier 0 error: $e');
-        throw ImportException('provider_error', e.toString());
-      }
+    importLog('runWith engine=$engine method=$method online=${app.online}');
+    switch (engine) {
+      case 'tier0':
+        final u = (url ?? '').trim();
+        if (u.isEmpty) throw ImportException('empty_input');
+        try {
+          return await RecipeImport.importFromUrl(u);
+        } on ImportException {
+          rethrow;
+        } catch (e) {
+          importLog('Tier 0 error: $e');
+          throw ImportException('provider_error', e.toString());
+        }
+      case 'online':
+        final provider = app.importProvider;
+        final key = app.importKeys[provider] ?? '';
+        if (key.trim().isEmpty) throw ImportException('needs_ai');
+        if (method == ImportMethod.link) throw ImportException('url_ai_pending', 'URL import via AI arrives in Phase 2');
+        final raw = await ByokClient.extract(provider: provider, apiKey: key, text: text, imageBytes: imageBytes, mediaType: mediaType);
+        importLog('online raw (first 300): ${raw.length > 300 ? raw.substring(0, 300) : raw}');
+        return draftFromModelJson(raw, source: _sourceLabel(method));
+      case 'ondevice':
+        if (method == ImportMethod.link) throw ImportException('url_ai_pending', 'URL import via AI arrives in Phase 2');
+        var input = text ?? '';
+        if (method == ImportMethod.photo && imageBytes != null) {
+          importLog('ondevice → OCR ${imageBytes.length} bytes');
+          input = await Ocr.recognize(imageBytes);
+        }
+        if (input.trim().isEmpty) throw ImportException('empty_input', 'no text to feed the on-device model');
+        final raw = await OnDeviceAi.generate(input, kImportPrompt);
+        importLog('ondevice raw (first 300): ${raw.length > 300 ? raw.substring(0, 300) : raw}');
+        return draftFromModelJson(raw, source: _sourceLabel(method));
+      default:
+        throw ImportException('needs_ai');
     }
-
-    final backend = app.effectiveBackend;
-    if (backend == 'byok') {
-      final provider = app.importProvider;
-      final key = app.importKeys[provider] ?? '';
-      if (key.trim().isEmpty) throw ImportException('needs_ai');
-      importLog('byok → $provider (textLen=${text?.length ?? 0}, hasImage=${imageBytes != null})');
-      final raw = await ByokClient.extract(
-        provider: provider,
-        apiKey: key,
-        text: text,
-        imageBytes: imageBytes,
-        mediaType: mediaType,
-      );
-      importLog('byok raw response (first 300): ${raw.length > 300 ? raw.substring(0, 300) : raw}');
-      return draftFromModelJson(raw, source: _sourceLabel(method));
-    }
-
-    if (backend == 'ondevice') {
-      // On-device works on text; for photos we OCR first, then prompt locally.
-      var input = text ?? '';
-      if (method == ImportMethod.photo && imageBytes != null) {
-        importLog('ondevice → OCR ${imageBytes.length} bytes');
-        input = await Ocr.recognize(imageBytes);
-        importLog('OCR text (${input.length} chars): ${input.length > 200 ? input.substring(0, 200) : input}');
-      }
-      if (input.trim().isEmpty) throw ImportException('empty_input', 'no text to feed the on-device model');
-      final raw = await OnDeviceAi.generate(input, kImportPrompt);
-      importLog('ondevice raw response (first 300): ${raw.length > 300 ? raw.substring(0, 300) : raw}');
-      return draftFromModelJson(raw, source: _sourceLabel(method));
-    }
-
-    // No AI tier available (tier0 can't handle free text / photos).
-    throw ImportException('needs_ai');
   }
 
   /// Region-guided photo import: OCR each user-drawn box per element, then feed
@@ -93,9 +117,10 @@ class ImportEngine {
     required Uint8List imageBytes,
     required List<Rect> ingredientBoxes,
     required List<Rect> stepBoxes,
+    String? engineOverride, // force a specific AI engine (for the failure bump)
   }) async {
-    final backend = app.effectiveBackend;
-    if (backend != 'ondevice' && backend != 'byok') throw ImportException('needs_ai');
+    final backend = engineOverride ?? resolve(ImportMethod.photo, app);
+    if (backend != 'ondevice' && backend != 'online') throw ImportException('needs_ai');
     final decoded = img.decodeImage(imageBytes);
     if (decoded == null) throw ImportException('no_recipe', 'could not decode image');
 
@@ -118,7 +143,7 @@ class ImportEngine {
     importLog('regions OCR: ingLen=${ing.length} stepsLen=${steps.length}');
     if (ing.trim().isEmpty && steps.trim().isEmpty) throw ImportException('no_recipe', 'no text recognized in the selected regions');
 
-    if (backend == 'byok') {
+    if (backend == 'online') {
       // Big cloud models keep sections straight in one labelled call (cheaper).
       final provider = app.importProvider;
       final key = app.importKeys[provider] ?? '';

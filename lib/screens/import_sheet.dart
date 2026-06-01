@@ -102,39 +102,26 @@ class _ImportSheetState extends State<_ImportSheet> {
 
   bool get _ready => method == ImportMethod.photo ? _photo != null : _controller.text.trim().isNotEmpty;
 
-  // On-device inference runs in-app; keep the screen awake so the OS doesn't
-  // background/throttle/kill it mid-run. (The download itself is handled by
-  // DownloadManager and needs no wake-lock.)
-  bool get _keepAwake => method != ImportMethod.link && app.effectiveBackend == 'ondevice';
+  // Engine chosen for the active run + the next fallback (for the "retry with…"
+  // bump). Region import remembers its boxes so a bump can re-run them.
+  String? _engine;
+  String? _nextEngine;
+  (List<Rect>, List<Rect>)? _pendingRegions;
 
-  Future<void> _run() async {
+  // On-device inference runs in-app; keep the screen awake so the OS doesn't
+  // background/throttle/kill it mid-run.
+  bool get _keepAwake => _engine == 'ondevice';
+  String _resolvedEngine() => _engine ?? ImportEngine.resolve(method!, app);
+
+  void _run() {
     if (!_ready || _busy) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    if (_keepAwake) WakelockPlus.enable();
-    try {
-      final res = await ImportEngine.run(
-        method: method!,
-        app: app,
-        url: method == ImportMethod.link ? _controller.text : null,
-        text: method == ImportMethod.text ? _controller.text : null,
-        imageBytes: method == ImportMethod.photo ? _photo : null,
-        mediaType: _mediaType,
-      );
-      if (!mounted) return;
-      await _finish(res);
-    } on ImportException catch (e) {
-      importLog('import failed: ${e.code} | ${e.detail ?? ''}');
-      if (e.code == 'ondevice_unavailable') app.markOnDeviceUnavailable();
-      if (mounted) setState(() { _busy = false; _error = kImportDebug ? '[${e.code}]\n${e.detail ?? '(no detail)'}' : _msg(e.code); });
-    } catch (e, st) {
-      importLog('import crashed: $e\n$st');
-      if (mounted) setState(() { _busy = false; _error = kImportDebug ? e.toString() : app.t('import_err_generic'); });
-    } finally {
-      WakelockPlus.disable();
+    final chain = ImportEngine.resolveChain(method!, app);
+    if (chain.isEmpty) {
+      setState(() => _error = app.t('import_err_needs_ai'));
+      return;
     }
+    _pendingRegions = null;
+    _runEngine(chain.first);
   }
 
   // Region-guided photo import: draw ingredient boxes, then step boxes, then run.
@@ -156,26 +143,62 @@ class _ImportSheetState extends State<_ImportSheet> {
           isLast: true,
         )));
     if (steps == null || !mounted) return;
-    if ((ing.isEmpty) && (steps.isEmpty)) {
+    if (ing.isEmpty && steps.isEmpty) {
       setState(() => _error = app.t('import_err_no_recipe'));
       return;
     }
-    setState(() { _busy = true; _error = null; });
-    if (app.effectiveBackend == 'ondevice') WakelockPlus.enable();
+    final aiChain = ImportEngine.resolveChain(ImportMethod.photo, app);
+    if (aiChain.isEmpty) {
+      setState(() => _error = app.t('import_err_needs_ai'));
+      return;
+    }
+    _pendingRegions = (ing, steps);
+    _runEngine(aiChain.first);
+  }
+
+  Future<void> _runEngine(String engine) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _engine = engine;
+      _nextEngine = null;
+    });
+    if (_keepAwake) WakelockPlus.enable();
     try {
-      final res = await ImportEngine.extractFromRegions(app: app, imageBytes: _photo!, ingredientBoxes: ing, stepBoxes: steps);
+      final ImportResult res;
+      final regions = _pendingRegions;
+      if (regions != null) {
+        res = await ImportEngine.extractFromRegions(app: app, imageBytes: _photo!, ingredientBoxes: regions.$1, stepBoxes: regions.$2, engineOverride: engine);
+      } else {
+        res = await ImportEngine.runWith(
+          engine: engine,
+          method: method!,
+          app: app,
+          url: method == ImportMethod.link ? _controller.text : null,
+          text: method == ImportMethod.text ? _controller.text : null,
+          imageBytes: method == ImportMethod.photo ? _photo : null,
+          mediaType: _mediaType,
+        );
+      }
       if (!mounted) return;
       await _finish(res);
     } on ImportException catch (e) {
-      importLog('region import failed: ${e.code} | ${e.detail ?? ''}');
-      if (e.code == 'ondevice_unavailable') app.markOnDeviceUnavailable();
-      if (mounted) setState(() { _busy = false; _error = kImportDebug ? '[${e.code}]\n${e.detail ?? '(no detail)'}' : _msg(e.code); });
+      importLog('import failed (${e.code}) on $engine | ${e.detail ?? ''}');
+      _failed(engine, e.code, kImportDebug ? '[${e.code}]\n${e.detail ?? '(no detail)'}' : _msg(e.code));
     } catch (e, st) {
-      importLog('region import crashed: $e\n$st');
-      if (mounted) setState(() { _busy = false; _error = kImportDebug ? e.toString() : app.t('import_err_generic'); });
+      importLog('import crashed on $engine: $e\n$st');
+      _failed(engine, 'generic', kImportDebug ? e.toString() : app.t('import_err_generic'));
     } finally {
       WakelockPlus.disable();
     }
+  }
+
+  void _failed(String engine, String code, String message) {
+    if (code == 'ondevice_unavailable') app.markOnDeviceUnavailable();
+    final chain = _pendingRegions != null ? ImportEngine.resolveChain(ImportMethod.photo, app) : ImportEngine.resolveChain(method!, app);
+    final idx = chain.indexOf(engine);
+    final next = (idx >= 0 && idx + 1 < chain.length) ? chain[idx + 1] : null;
+    if (mounted) setState(() { _busy = false; _error = message; _nextEngine = next; });
   }
 
   Future<void> _finish(ImportResult res) async {
@@ -298,10 +321,8 @@ class _ImportSheetState extends State<_ImportSheet> {
 
   Widget _input(FbTheme fb) {
     final m = method!;
-    final tier = ImportEngine.tierFor(m, app);
-    final tierNum = tier == 'tier0' ? '0' : tier == 'ondevice' ? '1' : '2';
-    final tierLabel = tier == 'tier0' ? app.t('import_tier0') : tier == 'ondevice' ? app.t('import_ondevice') : app.t('import_byok');
-    final runLabel = tier == 'tier0' ? app.t('import_reading_web') : tier == 'byok' ? app.t('import_byok_run') : app.t('import_ondevice_run');
+    final engine = _resolvedEngine();
+    final runLabel = engine == 'tier0' ? app.t('import_reading_web') : engine == 'online' ? app.t('import_byok_run') : app.t('import_ondevice_run');
     final titleKey = m == ImportMethod.link ? 'method_link' : m == ImportMethod.photo ? 'method_photo' : 'method_text';
 
     return Padding(
@@ -316,7 +337,7 @@ class _ImportSheetState extends State<_ImportSheet> {
             ),
             const SizedBox(width: 10),
             Expanded(child: Text(app.t(titleKey), style: fb.display(size: 20, weight: FontWeight.w600))),
-            Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(999)), child: Text('${app.lang == 'fr' ? 'Niveau' : 'Tier'} $tierNum · $tierLabel', style: fb.ui(size: 11, weight: FontWeight.w700, color: fb.accent))),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(999)), child: Text(ImportEngine.engineLabel(engine, app), style: fb.ui(size: 11, weight: FontWeight.w700, color: fb.accent))),
           ]),
           const SizedBox(height: 14),
           if (_busy)
@@ -369,6 +390,22 @@ class _ImportSheetState extends State<_ImportSheet> {
                           : Text(_error!, style: fb.ui(size: 12.5, weight: FontWeight.w600, color: const Color(0xFF9C3F29), height: 1.4)),
                     ),
                   ]),
+                ),
+              ),
+            if (_error != null && _nextEngine != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: GestureDetector(
+                  onTap: () => _runEngine(_nextEngine!),
+                  child: Container(
+                    height: 46,
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(13), border: Border.all(color: fb.accent, width: 1.5)),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      FbIcon('refresh', size: 16, color: fb.accent),
+                      const SizedBox(width: 7),
+                      Text('${app.t('import_retry_with')} ${ImportEngine.engineLabel(_nextEngine!, app)}', style: fb.ui(size: 14, weight: FontWeight.w700, color: fb.accent)),
+                    ]),
+                  ),
                 ),
               ),
             const SizedBox(height: 16),

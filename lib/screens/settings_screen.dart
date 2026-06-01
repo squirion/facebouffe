@@ -117,7 +117,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _ActionRow(icon: 'note', label: app.t('export_book_pdf'), onTap: () => _exportBook(app), last: true),
                   ]),
                   SettingsGroup(label: app.lang == 'fr' ? 'Avancé' : 'Advanced', children: [
-                    _NavRow(icon: 'sliders', label: app.t('advanced'), sub: app.t('advanced_sub'), onTap: () => Nav.openAdvanced(context), last: true),
+                    _NavRow(icon: 'sliders', label: app.t('advanced'), sub: app.t('advanced_sub'), onTap: () => Nav.openAdvanced(context)),
+                    _NavRow(icon: 'sparkles', label: app.t('ai_import_title'), sub: app.t('ai_import_sub'), onTap: () => Nav.openAiImport(context), last: true),
                   ]),
                   SettingsGroup(label: app.t('help_section'), children: [
                     _ActionRow(icon: 'download', label: app.t('check_update'), onTap: () => _checkUpdate(app)),
