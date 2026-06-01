@@ -34,9 +34,9 @@ class ImportEngine {
       if (app.onDeviceReady) ai.add('ondevice');
       if (app.onlineAiReady) ai.add('online');
     }
-    // Links: Tier 0 (any-site JSON-LD) first. (Phase 2 will append `ai` so an
-    // unsupported URL can fold to an LLM.)
-    if (method == ImportMethod.link) return ['tier0'];
+    // Links: Tier 0 (any-site JSON-LD) first, then fold to the AI engines so an
+    // unsupported URL can still be read (Phase 2 — fetch + strip + LLM).
+    if (method == ImportMethod.link) return ['tier0', ...ai];
     return ai;
   }
 
@@ -89,14 +89,26 @@ class ImportEngine {
         final provider = app.importProvider;
         final key = app.importKeys[provider] ?? '';
         if (key.trim().isEmpty) throw ImportException('needs_ai');
-        if (method == ImportMethod.link) throw ImportException('url_ai_pending', 'URL import via AI arrives in Phase 2');
-        final raw = await ByokClient.extract(provider: provider, apiKey: key, text: text, imageBytes: imageBytes, mediaType: mediaType);
+        var feed = text;
+        if (method == ImportMethod.link) {
+          final u = (url ?? '').trim();
+          if (u.isEmpty) throw ImportException('empty_input');
+          importLog('online ← fetching page for AI read: $u');
+          feed = await RecipeImport.fetchReadableText(u);
+          importLog('online page text len=${feed.length}');
+        }
+        final raw = await ByokClient.extract(provider: provider, apiKey: key, text: feed, imageBytes: imageBytes, mediaType: mediaType);
         importLog('online raw (first 300): ${raw.length > 300 ? raw.substring(0, 300) : raw}');
         return draftFromModelJson(raw, source: _sourceLabel(method));
       case 'ondevice':
-        if (method == ImportMethod.link) throw ImportException('url_ai_pending', 'URL import via AI arrives in Phase 2');
         var input = text ?? '';
-        if (method == ImportMethod.photo && imageBytes != null) {
+        if (method == ImportMethod.link) {
+          final u = (url ?? '').trim();
+          if (u.isEmpty) throw ImportException('empty_input');
+          importLog('ondevice ← fetching page for AI read: $u');
+          // Smaller cap: Phi's ~4096-token context truncates long pages anyway.
+          input = await RecipeImport.fetchReadableText(u, maxChars: 8000);
+        } else if (method == ImportMethod.photo && imageBytes != null) {
           importLog('ondevice → OCR ${imageBytes.length} bytes');
           input = await Ocr.recognize(imageBytes);
         }

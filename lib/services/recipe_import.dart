@@ -49,6 +49,60 @@ class RecipeImport {
     return _build(url.trim(), recipe);
   }
 
+  /// Fetch a web page and reduce it to whitespace-collapsed plain text, for an
+  /// LLM engine to read when a URL has no parseable schema.org recipe (Phase 2:
+  /// import from an unsupported site). [maxChars] caps the feed (cloud models
+  /// take more; the on-device model's small context wants less).
+  static Future<String> fetchReadableText(String url, {int maxChars = 16000}) async {
+    final html = await _fetch(url.trim());
+    final text = htmlToText(html);
+    if (text.trim().isEmpty) throw ImportException('no_recipe', 'page had no readable text');
+    return text.length > maxChars ? text.substring(0, maxChars) : text;
+  }
+
+  /// Strip HTML to plain readable text (no network — also the unit-test seam).
+  static String htmlToText(String html) {
+    var s = html.replaceAll(RegExp(r'<!--.*?-->', dotAll: true), ' ');
+    // Drop non-content elements (and their contents) entirely.
+    for (final tag in ['script', 'style', 'head', 'noscript', 'svg', 'template', 'iframe']) {
+      s = s.replaceAll(RegExp('<$tag[^>]*>.*?</$tag>', dotAll: true, caseSensitive: false), ' ');
+    }
+    // Block-level boundaries → newlines so ingredients/steps stay on their own lines.
+    s = s.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+    s = s.replaceAll(RegExp(r'</(p|div|li|ul|ol|tr|h[1-6]|section|article|header|footer|table|blockquote)\s*>', caseSensitive: false), '\n');
+    s = s.replaceAll(RegExp(r'<[^>]+>'), ' '); // remaining tags
+    s = _decodeEntities(s);
+    s = s.replaceAll(RegExp(r'[ \t\x0B\f\r]+'), ' ');
+    s = s.replaceAll(RegExp(r' *\n *'), '\n');
+    s = s.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    return s.trim();
+  }
+
+  static const Map<String, String> _namedEntities = {
+    'amp': '&', 'lt': '<', 'gt': '>', 'quot': '"', 'apos': "'", 'nbsp': ' ',
+    'eacute': 'é', 'egrave': 'è', 'ecirc': 'ê', 'euml': 'ë',
+    'agrave': 'à', 'acirc': 'â', 'auml': 'ä', 'ccedil': 'ç',
+    'icirc': 'î', 'iuml': 'ï', 'ocirc': 'ô', 'ouml': 'ö',
+    'ugrave': 'ù', 'ucirc': 'û', 'uuml': 'ü', 'deg': '°',
+    'frac12': '½', 'frac14': '¼', 'frac34': '¾',
+    'hellip': '…', 'rsquo': '’', 'lsquo': '‘', 'ldquo': '“', 'rdquo': '”',
+    'ndash': '–', 'mdash': '—', 'middot': '·', 'times': '×',
+  };
+
+  static String _decodeEntities(String s) {
+    return s.replaceAllMapped(RegExp(r'&(#[xX][0-9a-fA-F]+|#\d+|[a-zA-Z]+);'), (m) {
+      final e = m.group(1)!;
+      if (e.startsWith('#x') || e.startsWith('#X')) {
+        final code = int.tryParse(e.substring(2), radix: 16);
+        return code != null ? String.fromCharCode(code) : m.group(0)!;
+      } else if (e.startsWith('#')) {
+        final code = int.tryParse(e.substring(1));
+        return code != null ? String.fromCharCode(code) : m.group(0)!;
+      }
+      return _namedEntities[e] ?? m.group(0)!;
+    });
+  }
+
   static Future<String> _fetch(String url) async {
     final http.Response res;
     try {
