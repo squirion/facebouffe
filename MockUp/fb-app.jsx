@@ -7,6 +7,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "lang": "fr",
   "fontSize": "medium",
   "homeLayout": "editorial",
+  "stepNumberStyle": "watermark",
   "onDeviceAI": true,
   "tempUnit": "celsius",
   "volUnit": "metric",
@@ -368,6 +369,7 @@ function App() {
           <TweakToggle label={lang === "fr" ? "Thème sombre" : "Dark mode"} value={tw.dark} onChange={(v) => setTweak("dark", v)} />
           <TweakColor label={lang === "fr" ? "Couleur d'accent" : "Accent color"} value={tw.accent} options={["#C0563B", "#C58A2E", "#6BA368", "#9C6B8E", "#4A7BA6"]} onChange={(v) => setTweak("accent", v)} />
           <TweakRadio label={lang === "fr" ? "Accueil" : "Home layout"} value={tw.homeLayout} options={[{ value: "editorial", label: lang === "fr" ? "Éditorial" : "Editorial" }, { value: "grid", label: lang === "fr" ? "Grille" : "Grid" }]} onChange={(v) => setTweak("homeLayout", v)} />
+          <TweakRadio label={lang === "fr" ? "N° d'étape (éditeur)" : "Step number (editor)"} value={tw.stepNumberStyle} options={[{ value: "watermark", label: lang === "fr" ? "Filigrane" : "Watermark" }, { value: "corner", label: lang === "fr" ? "Coin" : "Corner" }, { value: "circle", label: lang === "fr" ? "Cercle" : "Circle" }]} onChange={(v) => setTweak("stepNumberStyle", v)} />
           <TweakToggle label={lang === "fr" ? "Appareil compatible IA sur appareil" : "Device supports on-device AI"} value={tw.onDeviceAI} onChange={(v) => setTweak("onDeviceAI", v)} />
         </TweaksPanel>
       </AppCtx.Provider>

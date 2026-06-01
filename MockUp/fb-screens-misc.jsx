@@ -280,13 +280,41 @@ function move(arr, i, dir) {
   return next;
 }
 
+// Remove the item at `from` and re-insert it at `to` (drag-reorder).
+function moveTo(arr, from, to) {
+  const next = arr.slice();
+  const [it] = next.splice(from, 1);
+  next.splice(to, 0, it);
+  return next;
+}
+
 // Textarea with °C/°F insert pills + a live "recognized temperature" preview.
 // Temperatures are stored as {{temp:v:u}} tokens; the editor shows friendly
 // text and (de)tokenizes on load/save in EditScreen.
-function TempTextarea({ value, onChange, placeholder, rows = 2, textareaStyle, children }) {
+function TempTextarea({ value, onChange, placeholder, rows = 2, maxRows = 5, textareaStyle, children, controls, sidePills = true }) {
   const th = useTheme();
   const app = useApp();
   const ref = React.useRef(null);
+  // Auto-grow: expand with content up to `maxRows` lines, then scroll.
+  const autosize = React.useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const cs = window.getComputedStyle(el);
+    const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5;
+    const padV = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const bordV = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+    const min = line * rows + padV + bordV;
+    const max = line * maxRows + padV + bordV;
+    const next = Math.min(Math.max(el.scrollHeight, min), max);
+    el.style.height = next + "px";
+    el.style.overflowY = el.scrollHeight > max + 1 ? "auto" : "hidden";
+  }, [rows, maxRows]);
+  React.useLayoutEffect(() => { autosize(); }, [value, autosize]);
+  React.useEffect(() => {
+    window.addEventListener("resize", autosize);
+    return () => window.removeEventListener("resize", autosize);
+  }, [autosize]);
   const insert = (s) => {
     const el = ref.current;
     const v = value || "";
@@ -302,12 +330,15 @@ function TempTextarea({ value, onChange, placeholder, rows = 2, textareaStyle, c
   return (
     <div>
       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-        <textarea ref={ref} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{ ...textareaStyle, flex: 1, minWidth: 0 }} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-          <button onClick={() => insert("°C")} style={pill}>°C</button>
-          <button onClick={() => insert("°F")} style={pill}>°F</button>
-        </div>
+        <textarea ref={ref} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{ ...textareaStyle, flex: 1, minWidth: 0, resize: "none", overflowY: "hidden" }} />
+        {sidePills && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+            <button onClick={() => insert("°C")} style={pill}>°C</button>
+            <button onClick={() => insert("°F")} style={pill}>°F</button>
+          </div>
+        )}
       </div>
+      {controls && controls({ insert })}
       {(children || detected.length > 0) && (
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 7, flexWrap: "wrap" }}>
           {children}
@@ -421,6 +452,40 @@ function EditScreen({ route }) {
   const up = (patch) => setForm((f) => ({ ...f, ...patch }));
   const setIng = (i, patch) => setForm((f) => ({ ...f, ingredients: f.ingredients.map((x, j) => j === i ? { ...x, ...patch } : x) }));
   const setStep = (i, patch) => setForm((f) => ({ ...f, steps: f.steps.map((x, j) => j === i ? { ...x, ...patch } : x) }));
+
+  // Drag-to-reorder steps (pointer-based, live feedback). `drag` holds the
+  // grabbed index, the current target index, the live offset and the row pitch.
+  const [drag, setDrag] = React.useState(null);
+  const stepsBoxRef = React.useRef(null);
+  const startStepDrag = (i, e) => {
+    e.preventDefault();
+    const card = e.currentTarget.closest("[data-step-card]");
+    const box = card && card.parentElement;
+    if (!box) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+    const rects = Array.from(box.children).map((r) => r.getBoundingClientRect());
+    const startY = e.clientY;
+    const h = rects[i].height + 12; // row height + flex gap
+    setDrag({ from: i, to: i, dy: 0, h });
+    const onMove = (ev) => {
+      const dy = ev.clientY - startY;
+      const center = rects[i].top + rects[i].height / 2 + dy;
+      let to = i;
+      for (let k = 0; k < rects.length; k++) {
+        const mid = rects[k].top + rects[k].height / 2;
+        if (k < i && center < mid) to = Math.min(to, k);
+        else if (k > i && center > mid) to = Math.max(to, k);
+      }
+      setDrag((d) => (d ? { ...d, to, dy } : d));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setDrag((d) => { if (d && d.from !== d.to) up({ steps: moveTo(form.steps, d.from, d.to) }); return null; });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
 
   const save = () => {
     if (!form.title.trim()) { setError(t("validation_title")); setSection("infos"); return; }
@@ -536,33 +601,97 @@ function EditScreen({ route }) {
         {/* STEPS */}
         {section === "steps" && (
           <>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {form.steps.map((s, i) => (
-                <div key={i} className={app.reduceMotion ? undefined : "fb-row-in"} style={{ background: th.cardSoft, border: `1px solid ${th.line}`, borderRadius: 16, padding: 10 }}>
-                  <div style={{ display: "flex", gap: 9 }}>
-                    <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 999, background: th.accent, color: "#fff", display: "grid", placeItems: "center", fontFamily: th.fontDisplay, fontSize: th.fs(15), fontWeight: 600, marginTop: 2 }}>{i + 1}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <TempTextarea value={s.text} onChange={(v) => setStep(i, { text: v })} placeholder={t("f_step") + " " + (i + 1)} rows={2} textareaStyle={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} />
+            <div ref={stepsBoxRef} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {form.steps.map((s, i) => {
+                const stepStyle = (app.tw && app.tw.stepNumberStyle) || "watermark";
+                const isDragged = drag && drag.from === i;
+                let ty = 0;
+                if (drag && !isDragged) {
+                  if (drag.from < drag.to && i > drag.from && i <= drag.to) ty = -drag.h;
+                  else if (drag.from > drag.to && i < drag.from && i >= drag.to) ty = drag.h;
+                }
+                const cardTransform = isDragged
+                  ? `translateY(${drag.dy}px) scale(1.015)`
+                  : (ty ? `translateY(${ty}px)` : "none");
+                return (
+                  <div key={i} data-step-card="" className={(app.reduceMotion || drag) ? undefined : "fb-row-in"} style={{
+                    background: th.cardSoft, border: `1px solid ${isDragged ? th.accent : th.line}`, borderRadius: 16, padding: 10,
+                    position: "relative", overflow: stepStyle === "watermark" ? "hidden" : "visible",
+                    transform: cardTransform, zIndex: isDragged ? 6 : 1,
+                    boxShadow: isDragged ? "0 14px 30px rgba(0,0,0,0.20)" : "none",
+                    transition: app.reduceMotion ? "none" : (isDragged ? "box-shadow 140ms ease" : "transform 200ms cubic-bezier(0.4,0,0.2,1)"),
+                  }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                      {/* drag handle */}
+                      <button onPointerDown={(e) => startStepDrag(i, e)} aria-label={lang === "fr" ? "R\u00e9ordonner l'\u00e9tape" : "Reorder step"} title={lang === "fr" ? "Glisser pour r\u00e9ordonner" : "Drag to reorder"}
+                        style={{ flexShrink: 0, width: 26, alignSelf: "stretch", minHeight: 44, border: "none", background: "transparent", borderRadius: 8, cursor: isDragged ? "grabbing" : "grab", display: "grid", placeItems: "center", touchAction: "none", color: isDragged ? th.accent : th.inkFaint }}>
+                        <Icon name="grip" size={18} color={isDragged ? th.accent : th.inkFaint} stroke={2.6} />
+                      </button>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", gap: stepStyle === "circle" ? 9 : 0 }}>
+                          {stepStyle === "circle" && (
+                            <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 999, background: th.accent, color: "#fff", display: "grid", placeItems: "center", fontFamily: th.fontDisplay, fontSize: th.fs(15), fontWeight: 600, marginTop: 2 }}>{i + 1}</div>
+                          )}
+                          <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+                            {stepStyle === "watermark" && (
+                              <span aria-hidden="true" style={{ position: "absolute", top: -8, right: 0, fontFamily: th.fontDisplay, fontSize: 66, fontWeight: 800, lineHeight: 1, color: th.accent, opacity: th.dark ? 0.2 : 0.13, pointerEvents: "none", userSelect: "none", zIndex: 0 }}>{i + 1}</span>
+                            )}
+                            {stepStyle === "corner" && (
+                              <div style={{ display: "inline-flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+                                <span style={{ width: 22, height: 22, borderRadius: 7, background: th.accent, color: "#fff", display: "grid", placeItems: "center", fontFamily: th.fontDisplay, fontSize: th.fs(13), fontWeight: 700 }}>{i + 1}</span>
+                                <span style={{ fontFamily: th.fontUI, fontSize: th.fs(11.5), fontWeight: 700, color: th.inkFaint, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("f_step")}</span>
+                              </div>
+                            )}
+                            <div style={{ position: "relative", zIndex: 1 }}>
+                              <TempTextarea value={s.text} onChange={(v) => setStep(i, { text: v })} placeholder={t("f_step") + " " + (i + 1)} rows={2} sidePills={false}
+                                textareaStyle={{ ...inputStyle, lineHeight: 1.5, ...(stepStyle === "watermark" ? { background: "transparent", border: "none", padding: "4px 2px" } : {}) }}
+                                controls={({ insert }) => {
+                                  const tot = s.timerSeconds;
+                                  const updTimer = (field, val) => {
+                                    let m = tot == null ? 0 : Math.floor(tot / 60);
+                                    let sec = tot == null ? 0 : tot % 60;
+                                    const n = val === "" ? 0 : Math.max(0, parseInt(val) || 0);
+                                    if (field === "m") m = n; else sec = Math.min(59, n);
+                                    const total = m * 60 + sec;
+                                    setStep(i, { timerSeconds: total === 0 ? null : total });
+                                  };
+                                  const tBox = { ...inputStyle, width: 46, padding: "8px 6px", fontSize: th.fs(13.5), textAlign: "center" };
+                                  const unit = { fontFamily: th.fontUI, fontSize: th.fs(12.5), fontWeight: 600, color: th.inkFaint };
+                                  const cPill = { height: 34, minWidth: 42, padding: "0 11px", borderRadius: 9, border: `1px solid ${th.line}`, background: th.card, color: th.accent, cursor: "pointer", fontFamily: th.fontUI, fontSize: th.fs(14), fontWeight: 700 };
+                                  return (
+                                    <div style={{ marginTop: 8 }}>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+                                        <button onClick={() => insert("\u00b0C")} style={cPill}>°C</button>
+                                        <button onClick={() => insert("\u00b0F")} style={cPill}>°F</button>
+                                        <button onClick={() => setStep(i, { image: s.image ? null : (existing ? existing.id : "new") + "-step" + i + ".jpg" })} style={{ height: 34, padding: "0 11px", borderRadius: 9, border: `1px solid ${s.image ? th.accent : th.line}`, background: s.image ? th.accentSoft : th.card, color: s.image ? th.accent : th.inkSoft, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5, fontFamily: th.fontUI, fontSize: th.fs(12.5), fontWeight: 600 }}>
+                                          <Icon name="camera" size={15} /> {lang === "fr" ? "Photo" : "Photo"}
+                                        </button>
+                                        <div style={{ flex: 1 }} />
+                                        <MiniBtn icon="trash" onClick={() => up({ steps: form.steps.filter((_, j) => j !== i) })} />
+                                      </div>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                        <Icon name="timer" size={16} color={th.inkFaint} />
+                                        <input type="number" min="0" inputMode="numeric" value={tot == null ? "" : Math.floor(tot / 60)} onChange={(e) => updTimer("m", e.target.value)} placeholder="0" style={tBox} />
+                                        <span style={unit}>min</span>
+                                        <input type="number" min="0" max="59" inputMode="numeric" value={tot == null ? "" : tot % 60} onChange={(e) => updTimer("s", e.target.value)} placeholder="0" style={tBox} />
+                                        <span style={unit}>sec</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }} />
+                            </div>
+                          </div>
+                        </div>
+                        {s.image && (
+                          <div style={{ marginTop: 9, maxWidth: 220 }}>
+                            <image-slot id={"fbeditstep-" + (existing ? existing.id : "new") + "-" + i} shape="rounded" radius="12" placeholder={lang === "fr" ? "Photo de l'étape" : "Step photo"} style={{ display: "block", width: "100%", height: "120px", background: th.canvas2 }}></image-slot>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 8, paddingLeft: 37 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
-                      <Icon name="timer" size={16} color={th.inkFaint} />
-                      <input type="number" min="0" value={s.timerSeconds == null ? "" : Math.round(s.timerSeconds / 60)} onChange={(e) => setStep(i, { timerSeconds: e.target.value === "" ? null : (parseInt(e.target.value) || 0) * 60 })} placeholder={t("f_timer")} style={{ ...inputStyle, width: 92, padding: "8px 10px", fontSize: th.fs(13.5) }} />
-                    </div>
-                    <button onClick={() => setStep(i, { image: s.image ? null : (existing ? existing.id : "new") + "-step" + i + ".jpg" })} style={{ height: 34, padding: "0 11px", borderRadius: 9, border: `1px solid ${s.image ? th.accent : th.line}`, background: s.image ? th.accentSoft : th.card, color: s.image ? th.accent : th.inkSoft, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5, fontFamily: th.fontUI, fontSize: th.fs(12.5), fontWeight: 600 }}>
-                      <Icon name="camera" size={15} /> {lang === "fr" ? "Photo" : "Photo"}
-                    </button>
-                    <MiniBtn icon="chevD" onClick={() => up({ steps: move(form.steps, i, 1) })} disabled={i === form.steps.length - 1} />
-                    <MiniBtn icon="trash" onClick={() => up({ steps: form.steps.filter((_, j) => j !== i) })} />
-                  </div>
-                  {s.image && (
-                    <div style={{ marginTop: 9, paddingLeft: 37, maxWidth: 220 }}>
-                      <image-slot id={"fbeditstep-" + (existing ? existing.id : "new") + "-" + i} shape="rounded" radius="12" placeholder={lang === "fr" ? "Photo de l'étape" : "Step photo"} style={{ display: "block", width: "100%", height: "120px", background: th.canvas2 }}></image-slot>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
             <AddRowBtn label={t("f_add_step")} onClick={() => up({ steps: [...form.steps, { text: "", image: null, timerSeconds: null }] })} />
           </>

@@ -568,7 +568,12 @@ class _StepRow extends StatelessWidget {
                 if (step.image != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
-                    child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 240), child: _PhotoPlaceholder(label: step.image!, size: 150, height: 150)),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 240),
+                      child: step.image!.contains('/')
+                          ? ClipRRect(borderRadius: BorderRadius.circular(16), child: SizedBox(height: 150, width: double.infinity, child: fileImage(step.image!)))
+                          : _PhotoPlaceholder(label: step.image!, size: 150, height: 150),
+                    ),
                   ),
                 if (step.timerSeconds != null)
                   Padding(

@@ -317,63 +317,157 @@ class _EditScreenState extends State<EditScreen> {
             Padding(
               key: ObjectKey(form.steps[i]),
               padding: const EdgeInsets.only(bottom: 12),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: fb.cardSoft, borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.line)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(padding: const EdgeInsets.only(top: 5), child: _dragHandle(i)),
-                        const SizedBox(width: 2),
-                        Container(width: 28, height: 28, margin: const EdgeInsets.only(top: 2), decoration: BoxDecoration(color: fb.accent, shape: BoxShape.circle), alignment: Alignment.center, child: Text('${i + 1}', style: fb.display(size: 15, weight: FontWeight.w600, color: Colors.white))),
-                        const SizedBox(width: 9),
-                        Expanded(child: TempTextarea(value: form.steps[i].text, onChange: (v) => setState(() => form.steps[i].text = v), placeholder: '${app.t('f_step')} ${i + 1}', rows: 2)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 37),
-                      child: Row(
-                        children: [
-                          const FbIcon('timer', size: 16, color: Color(0xFFA89E90)),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 46,
-                            child: _input(fb, _minStr(form.steps[i].timerSeconds), 'min', (v) {
-                              final sec = (form.steps[i].timerSeconds ?? 0) % 60;
-                              final mn = v.isEmpty ? 0 : (int.tryParse(v) ?? 0);
-                              final total = mn * 60 + sec;
-                              setState(() => form.steps[i].timerSeconds = total == 0 ? null : total);
-                            }, number: true, small: true, center: true),
-                          ),
-                          Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text('min', style: fb.ui(size: 12.5, color: fb.inkFaint))),
-                          SizedBox(
-                            width: 46,
-                            child: _input(fb, _secStr(form.steps[i].timerSeconds), 'sec', (v) {
-                              final mn = (form.steps[i].timerSeconds ?? 0) ~/ 60;
-                              var sc = v.isEmpty ? 0 : (int.tryParse(v) ?? 0);
-                              if (sc > 59) sc = 59;
-                              final total = mn * 60 + sc;
-                              setState(() => form.steps[i].timerSeconds = total == 0 ? null : total);
-                            }, number: true, small: true, center: true),
-                          ),
-                          Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text('sec', style: fb.ui(size: 12.5, color: fb.inkFaint))),
-                          const Spacer(),
-                          _miniBtn(fb, 'trash', false, () => setState(() => form.steps.removeAt(i))),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              child: _stepCard(app, fb, i),
             ),
         ],
       ),
       _addRowBtn(fb, app.t('f_add_step'), () => setState(() => form.steps.add(Step(text: '')))),
     ];
+  }
+
+  Widget _stepCard(AppState app, FbTheme fb, int i) {
+    final step = form.steps[i];
+    final watermark = fb.accent.withValues(alpha: fb.dark ? 0.20 : 0.12);
+    return Container(
+      clipBehavior: Clip.hardEdge,
+      decoration: BoxDecoration(color: fb.cardSoft, borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.line)),
+      child: Stack(
+        children: [
+          // step number, filigrane top-right
+          Positioned(
+            top: -12,
+            right: 8,
+            child: IgnorePointer(child: Text('${i + 1}', style: fb.display(size: 66, weight: FontWeight.w800, color: watermark, height: 1))),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(padding: const EdgeInsets.only(top: 4), child: _dragHandle(i)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TempTextarea(
+                        value: step.text,
+                        onChange: (v) => setState(() => step.text = v),
+                        placeholder: '${app.t('f_step')} ${i + 1}',
+                        rows: 2,
+                        maxRows: 5,
+                        bare: true,
+                        sidePills: false,
+                        controlsBuilder: (insert) => _stepControls(app, fb, i, insert),
+                      ),
+                      if (step.image != null) Padding(padding: const EdgeInsets.only(top: 9), child: _stepPhoto(fb, i)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepControls(AppState app, FbTheme fb, int i, void Function(String) insert) {
+    final step = form.steps[i];
+    final hasImg = step.image != null;
+    Widget cf(String label) => GestureDetector(
+          onTap: () => insert(label),
+          child: Container(height: 34, padding: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(9), border: Border.all(color: fb.line)), alignment: Alignment.center, child: Text(label, style: fb.ui(size: 14, weight: FontWeight.w700, color: fb.accent))),
+        );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        children: [
+          Row(children: [
+            cf('°C'),
+            const SizedBox(width: 8),
+            cf('°F'),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => _pickStepPhoto(i),
+              child: Container(
+                height: 34,
+                padding: const EdgeInsets.symmetric(horizontal: 11),
+                decoration: BoxDecoration(color: hasImg ? fb.accentSoft : fb.card, borderRadius: BorderRadius.circular(9), border: Border.all(color: hasImg ? fb.accent : fb.line)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  FbIcon('camera', size: 15, color: hasImg ? fb.accent : fb.inkSoft),
+                  const SizedBox(width: 5),
+                  Text(app.lang == 'fr' ? 'Photo' : 'Photo', style: fb.ui(size: 12.5, weight: FontWeight.w600, color: hasImg ? fb.accent : fb.inkSoft)),
+                ]),
+              ),
+            ),
+            const Spacer(),
+            _miniBtn(fb, 'trash', false, () => setState(() => form.steps.removeAt(i))),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            const FbIcon('timer', size: 16, color: Color(0xFFA89E90)),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 46,
+              child: _input(fb, _minStr(step.timerSeconds), 'min', (v) {
+                final sec = (step.timerSeconds ?? 0) % 60;
+                final mn = v.isEmpty ? 0 : (int.tryParse(v) ?? 0);
+                final total = mn * 60 + sec;
+                setState(() => step.timerSeconds = total == 0 ? null : total);
+              }, number: true, small: true, center: true),
+            ),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text('min', style: fb.ui(size: 12.5, color: fb.inkFaint))),
+            SizedBox(
+              width: 46,
+              child: _input(fb, _secStr(step.timerSeconds), 'sec', (v) {
+                final mn = (step.timerSeconds ?? 0) ~/ 60;
+                var sc = v.isEmpty ? 0 : (int.tryParse(v) ?? 0);
+                if (sc > 59) sc = 59;
+                final total = mn * 60 + sc;
+                setState(() => step.timerSeconds = total == 0 ? null : total);
+              }, number: true, small: true, center: true),
+            ),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text('sec', style: fb.ui(size: 12.5, color: fb.inkFaint))),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepPhoto(FbTheme fb, int i) {
+    final image = form.steps[i].image!;
+    final isFile = image.contains('/');
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 220),
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: double.infinity,
+              height: 120,
+              child: isFile
+                  ? fileImage(image)
+                  : Container(color: fb.canvas2, alignment: Alignment.center, child: FbIcon('camera', size: 22, color: fb.inkFaint)),
+            ),
+          ),
+          Positioned(
+            top: 6,
+            right: 6,
+            child: GestureDetector(
+              onTap: () => setState(() => form.steps[i].image = null),
+              child: Container(width: 26, height: 26, decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: const Center(child: FbIcon('x', size: 14, color: Colors.white))),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickStepPhoto(int i) async {
+    final path = await ImagePick.pick(context);
+    if (path != null && mounted) setState(() => form.steps[i].image = path);
   }
 
   // ── DESCRIPTION ──
@@ -632,8 +726,12 @@ class TempTextarea extends StatefulWidget {
   final ValueChanged<String> onChange;
   final String placeholder;
   final int rows;
+  final int? maxRows; // auto-grows from [rows] up to this, then scrolls
+  final bool sidePills; // °C/°F pills to the right of the field
+  final bool bare; // transparent/borderless (blends into a card, e.g. step watermark)
+  final Widget Function(void Function(String) insert)? controlsBuilder; // controls rendered below the field
   final Widget? extra;
-  const TempTextarea({super.key, required this.value, required this.onChange, required this.placeholder, this.rows = 2, this.extra});
+  const TempTextarea({super.key, required this.value, required this.onChange, required this.placeholder, this.rows = 2, this.maxRows, this.sidePills = true, this.bare = false, this.controlsBuilder, this.extra});
 
   @override
   State<TempTextarea> createState() => _TempTextareaState();
@@ -676,6 +774,28 @@ class _TempTextareaState extends State<TempTextarea> {
     final detected = findTemps(widget.value);
     final pref = prefTempUnit(app.prefs);
     final pill = BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(9), border: Border.all(color: fb.line));
+    final InputDecoration decoration = widget.bare
+        ? InputDecoration(
+            hintText: widget.placeholder,
+            hintStyle: fb.ui(size: 15.5, color: fb.inkFaint),
+            isDense: true,
+            filled: false,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+          )
+        : InputDecoration(
+            hintText: widget.placeholder,
+            hintStyle: fb.ui(size: 15.5, color: fb.inkFaint),
+            isDense: true,
+            filled: true,
+            fillColor: fb.card,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: fb.line)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: fb.line)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: fb.accent)),
+          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -686,33 +806,26 @@ class _TempTextareaState extends State<TempTextarea> {
               child: TextField(
                 controller: _c,
                 onChanged: widget.onChange,
-                maxLines: widget.rows,
+                maxLines: widget.maxRows ?? widget.rows,
                 minLines: widget.rows,
                 keyboardType: TextInputType.multiline,
                 style: fb.ui(size: 15.5, height: 1.5),
-                decoration: InputDecoration(
-                  hintText: widget.placeholder,
-                  hintStyle: fb.ui(size: 15.5, color: fb.inkFaint),
-                  isDense: true,
-                  filled: true,
-                  fillColor: fb.card,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: fb.line)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: fb.line)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: fb.accent)),
-                ),
+                decoration: decoration,
               ),
             ),
-            const SizedBox(width: 8),
-            Column(
-              children: [
-                GestureDetector(onTap: () => _insert('°C'), child: Container(width: 48, height: 34, decoration: pill, alignment: Alignment.center, child: Text('°C', style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent)))),
-                const SizedBox(height: 6),
-                GestureDetector(onTap: () => _insert('°F'), child: Container(width: 48, height: 34, decoration: pill, alignment: Alignment.center, child: Text('°F', style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent)))),
-              ],
-            ),
+            if (widget.sidePills) ...[
+              const SizedBox(width: 8),
+              Column(
+                children: [
+                  GestureDetector(onTap: () => _insert('°C'), child: Container(width: 48, height: 34, decoration: pill, alignment: Alignment.center, child: Text('°C', style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent)))),
+                  const SizedBox(height: 6),
+                  GestureDetector(onTap: () => _insert('°F'), child: Container(width: 48, height: 34, decoration: pill, alignment: Alignment.center, child: Text('°F', style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent)))),
+                ],
+              ),
+            ],
           ],
         ),
+        if (widget.controlsBuilder != null) widget.controlsBuilder!(_insert),
         if (widget.extra != null || detected.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 7),
