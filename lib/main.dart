@@ -47,7 +47,17 @@ class FacebouffeApp extends StatelessWidget {
         // honor OS reduce-motion; keep AppState in sync for motion gating
         final reduce = MediaQuery.of(context).disableAnimations;
         WidgetsBinding.instance.addPostFrameCallback((_) => app.setReduceMotion(reduce));
-        return FbThemeScope(theme: theme, child: child!);
+        // Tap anywhere outside a field drops focus (removes the cursor +
+        // dismisses the keyboard). Taps on buttons/fields win the gesture arena,
+        // so this only fires on empty space; scrolling is unaffected.
+        return FbThemeScope(
+          theme: theme,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            child: child!,
+          ),
+        );
       },
       home: app.ready ? const RootShell() : _Splash(theme: theme),
     );
