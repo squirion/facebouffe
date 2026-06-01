@@ -33,6 +33,7 @@ class AppState extends ChangeNotifier {
   Map<String, String> importKeys = {}; // provider -> API key, cached from secure storage
   bool onDeviceAI = false; // whether Tier 1 (on-device model) is usable on this device
   String onDeviceTemplate = 'gemma'; // chat template for the loaded model: gemma | qwen | generic
+  int onDeviceMaxTokens = 1280; // model's compiled context (from its filename's ekvNNNN), input+output
   static const _secure = FlutterSecureStorage();
 
   // App-only settings (not part of the recipe schema)
@@ -121,6 +122,7 @@ class AppState extends ChangeNotifier {
     importBackend = _prefs!.getString('fb_import_backend') ?? importBackend;
     importProvider = _prefs!.getString('fb_import_provider') ?? importProvider;
     onDeviceTemplate = _prefs!.getString('fb_ondevice_tpl') ?? onDeviceTemplate;
+    onDeviceMaxTokens = _prefs!.getInt('fb_ondevice_maxtok') ?? onDeviceMaxTokens;
     try {
       for (final p in const ['claude', 'openai', 'gemini']) {
         final k = await _secure.read(key: 'fb_key_$p');
@@ -549,12 +551,26 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setOnDeviceMaxTokens(int n) {
+    onDeviceMaxTokens = n;
+    _prefs?.setInt('fb_ondevice_maxtok', n);
+    notifyListeners();
+  }
+
   /// Guess the chat template from a model's filename/URL (set on import).
   static String detectTemplate(String name) {
     final n = name.toLowerCase();
     if (n.contains('qwen')) return 'qwen';
     if (n.contains('gemma')) return 'gemma';
     return 'gemma';
+  }
+
+  /// Read the model's compiled context from its filename (litert bundles encode
+  /// it as e.g. "…ekv1280…"). Falls back to a conservative 1280.
+  static int detectMaxTokens(String name) {
+    final m = RegExp(r'ekv(\d+)', caseSensitive: false).firstMatch(name);
+    final v = m != null ? int.tryParse(m.group(1)!) : null;
+    return (v != null && v >= 256 && v <= 32768) ? v : 1280;
   }
 
   /// Called when an on-device import attempt proves the model isn't actually

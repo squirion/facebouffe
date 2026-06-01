@@ -67,7 +67,8 @@ class MainActivity : FlutterActivity() {
                     val modelPath = call.argument<String>("modelPath")
                     val text = call.argument<String>("text") ?: ""
                     val prompt = call.argument<String>("prompt") ?: ""
-                    Log.i(NANO_TAG, "generate(): model=$modelPath textLen=${text.length} promptLen=${prompt.length}")
+                    val maxTokens = call.argument<Int>("maxTokens") ?: 1280
+                    Log.i(NANO_TAG, "generate(): model=$modelPath maxTokens=$maxTokens textLen=${text.length} promptLen=${prompt.length}")
                     if (modelPath.isNullOrEmpty() || !File(modelPath).exists()) {
                         result.error("no_model", "model file missing: $modelPath", null)
                         return@setMethodCallHandler
@@ -76,7 +77,7 @@ class MainActivity : FlutterActivity() {
                     val full = if (text.isBlank()) prompt else "$prompt\n\n$text"
                     lifecycleScope.launch {
                         try {
-                            val out = runLlm(modelPath, full)
+                            val out = runLlm(modelPath, full, maxTokens)
                             Log.i(NANO_TAG, "generate() OK: responseLen=${out.length}")
                             result.success(out)
                         } catch (t: Throwable) {
@@ -108,26 +109,26 @@ class MainActivity : FlutterActivity() {
         return sb.toString()
     }
 
-    // Cache one LlmInference per model path — construction loads the whole model
-    // into memory (seconds + lots of RAM), so we keep it alive across calls.
+    // Cache one LlmInference per (model path, maxTokens) — construction loads the
+    // whole model into memory (seconds + lots of RAM), so we keep it alive.
     private var llm: LlmInference? = null
     private var llmPath: String? = null
+    private var llmMaxTokens: Int = 0
 
-    private suspend fun runLlm(modelPath: String, fullPrompt: String): String = withContext(Dispatchers.IO) {
-        if (llm == null || llmPath != modelPath) {
-            Log.i(NANO_TAG, "loading LlmInference from $modelPath")
+    private suspend fun runLlm(modelPath: String, fullPrompt: String, maxTokens: Int): String = withContext(Dispatchers.IO) {
+        if (llm == null || llmPath != modelPath || llmMaxTokens != maxTokens) {
+            Log.i(NANO_TAG, "loading LlmInference from $modelPath (maxTokens=$maxTokens)")
             llm?.close()
+            llm = null
+            // maxTokens MUST match the model's compiled context (its ekvNNNN);
+            // over-allocating lets generation run past the KV cache → native crash.
             val options = LlmInference.LlmInferenceOptions.builder()
                 .setModelPath(modelPath)
-                // Must not exceed the model's compiled context (e.g. ekv1280):
-                // over-allocating lets generation run past the KV cache and
-                // crash natively. 1280 is the safe floor for the litert-community
-                // *_ekv1280 bundles; input is clamped on the Dart side to leave
-                // room for the output.
-                .setMaxTokens(1280)
+                .setMaxTokens(maxTokens)
                 .build()
             llm = LlmInference.createFromOptions(applicationContext, options)
             llmPath = modelPath
+            llmMaxTokens = maxTokens
             Log.i(NANO_TAG, "model loaded")
         }
         Log.i(NANO_TAG, "generateResponse()")

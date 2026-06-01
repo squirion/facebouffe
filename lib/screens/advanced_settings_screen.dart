@@ -398,6 +398,7 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
     final stream = picked?.readStream;
     if (stream == null) return;
     final detected = AppState.detectTemplate(picked!.name);
+    final maxTok = AppState.detectMaxTokens(picked.name);
     setState(() { _busy = true; _busyLabel = context.read<AppState>().t('ondevice_importing'); _progress = picked.size > 0 ? 0 : null; _error = null; });
     try {
       await OnDeviceAi.importModelFromStream(stream, total: picked.size, onProgress: (p) {
@@ -405,6 +406,7 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
       });
       if (mounted) {
         context.read<AppState>().setOnDeviceTemplate(detected);
+        context.read<AppState>().setOnDeviceMaxTokens(maxTok);
         await context.read<AppState>().refreshOnDevice();
       }
       await _refreshSize();
@@ -420,6 +422,7 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
     if (url.isEmpty) return;
     final app = context.read<AppState>();
     final detected = AppState.detectTemplate(url);
+    final maxTok = AppState.detectMaxTokens(url);
     setState(() { _busy = true; _busyLabel = app.t('ondevice_downloading'); _progress = 0; _error = null; });
     try {
       await OnDeviceAi.downloadModel(url, onProgress: (p) {
@@ -427,6 +430,7 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
       });
       if (mounted) {
         context.read<AppState>().setOnDeviceTemplate(detected);
+        context.read<AppState>().setOnDeviceMaxTokens(maxTok);
         await context.read<AppState>().refreshOnDevice();
       }
       await _refreshSize();
@@ -458,7 +462,7 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
           Row(children: [
             Container(width: 30, height: 30, decoration: BoxDecoration(color: loaded ? const Color(0x1F6BA368) : fb.line, borderRadius: BorderRadius.circular(9)), child: Center(child: FbIcon(loaded ? 'check' : 'note', size: 16, color: loaded ? const Color(0xFF4F7D4C) : fb.inkFaint))),
             const SizedBox(width: 11),
-            Expanded(child: Text(loaded ? '${app.t('ondevice_model_loaded')} · ${_fmtSize(_sizeBytes)}' : app.t('ondevice_model_none'), style: fb.ui(size: 14.5, weight: FontWeight.w600))),
+            Expanded(child: Text(loaded ? '${app.t('ondevice_model_loaded')} · ${_fmtSize(_sizeBytes)} · ctx ${app.onDeviceMaxTokens}' : app.t('ondevice_model_none'), style: fb.ui(size: 14.5, weight: FontWeight.w600))),
           ]),
           const SizedBox(height: 8),
           Text(app.t('ondevice_model_hint'), style: fb.ui(size: 12, color: fb.inkFaint, height: 1.45)),

@@ -265,12 +265,14 @@ class OnDeviceAi {
   }
 
   /// Run the local model on [text], guided by [schemaPrompt], formatted with the
-  /// [template] matching the loaded model family. Returns raw JSON.
-  static Future<String> generate(String text, String schemaPrompt, {String template = 'gemma'}) async {
+  /// [template] matching the loaded model family. [maxTokens] is the model's
+  /// compiled context (input+output) — must not be exceeded or the engine
+  /// crashes natively. Returns raw JSON.
+  static Future<String> generate(String text, String schemaPrompt, {String template = 'gemma', int maxTokens = 1280}) async {
     final mp = await modelPath();
     if (mp == null) throw ImportException('ondevice_unavailable', 'no on-device model loaded');
     final clipped = text.length > _maxInputChars ? text.substring(0, _maxInputChars) : text;
-    importLog('on-device generate: model=$mp template=$template textLen=${clipped.length}/${text.length} promptLen=${schemaPrompt.length}');
+    importLog('on-device generate: model=$mp template=$template maxTokens=$maxTokens textLen=${clipped.length}/${text.length} promptLen=${schemaPrompt.length}');
     final full = _wrapPrompt(template, '$schemaPrompt\n\nRecipe input:\n$clipped');
     final String? out;
     try {
@@ -278,6 +280,7 @@ class OnDeviceAi {
         'modelPath': mp,
         'text': '',
         'prompt': full,
+        'maxTokens': maxTokens,
       });
     } on PlatformException catch (e) {
       final detail = '${e.code}: ${e.message}${e.details != null ? '\n${e.details}' : ''}';
