@@ -148,10 +148,12 @@ class MainActivity : FlutterActivity() {
         m["downloaded"] = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
         m["total"] = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
         val reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+        val localUri = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
         c.close()
+        Log.i(NANO_TAG, "dl status=$status downloaded=${m["downloaded"]} total=${m["total"]} reason=$reason localUri=$localUri")
         when (status) {
             DownloadManager.STATUS_SUCCESSFUL -> {
-                if (finalizeDownload()) {
+                if (finalizeDownload(localUri)) {
                     m["state"] = "done"; m["downloaded"] = modelFile().length(); m["total"] = modelFile().length()
                 } else {
                     m["state"] = "failed"; m["reason"] = "downloaded file is not a valid .task model"
@@ -163,19 +165,39 @@ class MainActivity : FlutterActivity() {
         return m
     }
 
-    // Validate (ZIP magic) and promote the .part to the final model path.
-    private fun finalizeDownload(): Boolean {
-        val part = partFile(); val dest = modelFile()
-        if (!part.exists()) return dest.exists()
+    // Validate (ZIP magic) and promote the completed download to the model path,
+    // using the actual location DownloadManager reports (COLUMN_LOCAL_URI).
+    private fun finalizeDownload(localUri: String?): Boolean {
+        val dest = modelFile()
+        if (dest.exists()) return true
+        val src: File = localUri?.let { Uri.parse(it) }?.let { u ->
+            if (u.scheme == "file" && u.path != null) File(u.path!!) else null
+        } ?: partFile()
+        Log.i(NANO_TAG, "finalize: src=${src.absolutePath} exists=${src.exists()} size=${if (src.exists()) src.length() else -1L}")
+        if (!src.exists()) return false
         val head = ByteArray(4)
-        try { part.inputStream().use { it.read(head) } } catch (_: Throwable) {}
+        try { src.inputStream().use { it.read(head) } } catch (_: Throwable) {}
         val isZip = head.size >= 4 && head[0] == 0x50.toByte() && head[1] == 0x4B.toByte() && head[2] == 0x03.toByte() && head[3] == 0x04.toByte()
+        Log.i(NANO_TAG, "finalize: isZip=$isZip head=${head.joinToString(" ") { (it.toInt() and 0xff).toString(16) }}")
         if (!isZip) {
-            part.delete(); dlPrefs.edit().remove("phi_dl_id").apply()
+            src.delete(); dlPrefs.edit().remove("phi_dl_id").apply()
             return false
         }
         if (dest.exists()) dest.delete()
-        return part.renameTo(dest)
+        if (src.renameTo(dest)) {
+            Log.i(NANO_TAG, "finalize: renamed OK")
+            return true
+        }
+        // rename can fail across storage volumes — fall back to a copy.
+        return try {
+            src.copyTo(dest, overwrite = true)
+            src.delete()
+            Log.i(NANO_TAG, "finalize: copied OK")
+            true
+        } catch (t: Throwable) {
+            Log.e(NANO_TAG, "finalize: copy failed", t)
+            false
+        }
     }
 
     private fun cancelDownload() {
