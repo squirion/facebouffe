@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart' hide Step;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -101,12 +102,18 @@ class _ImportSheetState extends State<_ImportSheet> {
 
   bool get _ready => method == ImportMethod.photo ? _photo != null : _controller.text.trim().isNotEmpty;
 
+  // On-device inference runs in-app; keep the screen awake so the OS doesn't
+  // background/throttle/kill it mid-run. (The download itself is handled by
+  // DownloadManager and needs no wake-lock.)
+  bool get _keepAwake => method != ImportMethod.link && app.effectiveBackend == 'ondevice';
+
   Future<void> _run() async {
     if (!_ready || _busy) return;
     setState(() {
       _busy = true;
       _error = null;
     });
+    if (_keepAwake) WakelockPlus.enable();
     try {
       final res = await ImportEngine.run(
         method: method!,
@@ -125,6 +132,8 @@ class _ImportSheetState extends State<_ImportSheet> {
     } catch (e, st) {
       importLog('import crashed: $e\n$st');
       if (mounted) setState(() { _busy = false; _error = kImportDebug ? e.toString() : app.t('import_err_generic'); });
+    } finally {
+      WakelockPlus.disable();
     }
   }
 
@@ -152,6 +161,7 @@ class _ImportSheetState extends State<_ImportSheet> {
       return;
     }
     setState(() { _busy = true; _error = null; });
+    if (app.effectiveBackend == 'ondevice') WakelockPlus.enable();
     try {
       final res = await ImportEngine.extractFromRegions(app: app, imageBytes: _photo!, ingredientBoxes: ing, stepBoxes: steps);
       if (!mounted) return;
@@ -163,6 +173,8 @@ class _ImportSheetState extends State<_ImportSheet> {
     } catch (e, st) {
       importLog('region import crashed: $e\n$st');
       if (mounted) setState(() { _busy = false; _error = kImportDebug ? e.toString() : app.t('import_err_generic'); });
+    } finally {
+      WakelockPlus.disable();
     }
   }
 
@@ -455,7 +467,7 @@ class _ImportSheetState extends State<_ImportSheet> {
           const SizedBox(height: 18),
           Text(label, style: fb.ui(size: 15.5, weight: FontWeight.w700)),
           const SizedBox(height: 6),
-          Text(app.t('import_validating'), textAlign: TextAlign.center, style: fb.ui(size: 12.5, color: fb.inkFaint, height: 1.45)),
+          Text(_keepAwake ? app.t('import_ondevice_slow') : app.t('import_validating'), textAlign: TextAlign.center, style: fb.ui(size: 12.5, color: fb.inkFaint, height: 1.45)),
         ]),
       );
 }
