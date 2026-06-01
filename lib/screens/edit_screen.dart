@@ -239,7 +239,6 @@ class _EditScreenState extends State<EditScreen> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         buildDefaultDragHandles: false,
-        onReorderStart: (_) => HapticFeedback.mediumImpact(),
         proxyDecorator: _liftedCard,
         onReorder: (oldIndex, newIndex) => setState(() => _reorder(form.ingredients, oldIndex, newIndex)),
         children: [
@@ -292,12 +291,17 @@ class _EditScreenState extends State<EditScreen> {
     ];
   }
 
-  // Drag handle that initiates a reorder for the row at [index].
+  // Drag handle that initiates a reorder for the row at [index]. The haptic
+  // fires on grab (pointer-down on the handle) so the user knows drag mode is
+  // armed — not later when the card actually starts moving.
   Widget _dragHandle(int index) => ReorderableDragStartListener(
         index: index,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-          child: FbIcon('drag', size: 22, color: const Color(0xFFA89E90)),
+        child: Listener(
+          onPointerDown: (_) => HapticFeedback.mediumImpact(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            child: FbIcon('drag', size: 22, color: const Color(0xFFA89E90)),
+          ),
         ),
       );
 
@@ -338,7 +342,6 @@ class _EditScreenState extends State<EditScreen> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         buildDefaultDragHandles: false,
-        onReorderStart: (_) => HapticFeedback.mediumImpact(),
         proxyDecorator: _liftedCard,
         onReorder: (oldIndex, newIndex) => setState(() => _reorder(form.steps, oldIndex, newIndex)),
         children: [
