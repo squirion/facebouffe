@@ -173,13 +173,13 @@ class MainActivity : FlutterActivity() {
         val src: File = localUri?.let { Uri.parse(it) }?.let { u ->
             if (u.scheme == "file" && u.path != null) File(u.path!!) else null
         } ?: partFile()
-        Log.i(NANO_TAG, "finalize: src=${src.absolutePath} exists=${src.exists()} size=${if (src.exists()) src.length() else -1L}")
+        val size = if (src.exists()) src.length() else -1L
+        Log.i(NANO_TAG, "finalize: src=${src.absolutePath} exists=${src.exists()} size=$size")
         if (!src.exists()) return false
-        val head = ByteArray(4)
-        try { src.inputStream().use { it.read(head) } } catch (_: Throwable) {}
-        val isZip = head.size >= 4 && head[0] == 0x50.toByte() && head[1] == 0x4B.toByte() && head[2] == 0x03.toByte() && head[3] == 0x04.toByte()
-        Log.i(NANO_TAG, "finalize: isZip=$isZip head=${head.joinToString(" ") { (it.toInt() and 0xff).toString(16) }}")
-        if (!isZip) {
+        // Validate by SIZE, not magic bytes: a LiteRT .task isn't a plain PK zip
+        // (its directory is at the end; leading bytes vary) but the real model is
+        // gigabytes — a tiny file means an HTML error page / aborted transfer.
+        if (size < 50L * 1024 * 1024) {
             src.delete(); dlPrefs.edit().remove("phi_dl_id").apply()
             return false
         }
