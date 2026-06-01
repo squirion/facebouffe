@@ -53,11 +53,48 @@ class RecipeImport {
   /// LLM engine to read when a URL has no parseable schema.org recipe (Phase 2:
   /// import from an unsupported site). [maxChars] caps the feed (cloud models
   /// take more; the on-device model's small context wants less).
-  static Future<String> fetchReadableText(String url, {int maxChars = 16000}) async {
-    final html = await _fetch(url.trim());
-    final text = htmlToText(html);
+  ///
+  /// Tries a direct fetch first (fast, and the content stays between the device
+  /// and the recipe site). If the site bot-blocks us (Akamai/Cloudflare → 403)
+  /// or returns nothing usable, it falls back to the Jina reader, which renders
+  /// the page with a real browser — this sends the URL to a third-party service
+  /// (r.jina.ai). Used only by the AI engines, never by Tier 0.
+  ///
+  /// When [allowReader] is false (the on-device path, which is meant to stay
+  /// fully local), a needed reader fallback instead throws `reader_consent` so
+  /// the UI can ask the user before anything leaves the device.
+  static Future<String> fetchReadableText(String url, {int maxChars = 16000, bool allowReader = true}) async {
+    final u = url.trim();
+    String text = '';
+    try {
+      text = htmlToText(await _fetch(u));
+    } catch (_) {
+      // fall through to the reader proxy
+    }
+    if (text.trim().length < 200) {
+      if (!allowReader) throw ImportException('reader_consent');
+      text = await _fetchViaReader(u);
+    }
     if (text.trim().isEmpty) throw ImportException('no_recipe', 'page had no readable text');
     return text.length > maxChars ? text.substring(0, maxChars) : text;
+  }
+
+  /// Jina AI Reader fallback — renders [url] in a real browser (defeating most
+  /// bot walls) and returns clean text. Third-party; only a fallback for AI
+  /// URL import. Already plain text, so no htmlToText pass.
+  static Future<String> _fetchViaReader(String url) async {
+    final withScheme = url.startsWith(RegExp(r'https?://', caseSensitive: false)) ? url : 'https://$url';
+    final http.Response res;
+    try {
+      res = await http.get(
+        Uri.parse('https://r.jina.ai/$withScheme'),
+        headers: {'Accept': 'text/plain', 'X-Return-Format': 'text'},
+      ).timeout(const Duration(seconds: 45));
+    } catch (_) {
+      throw ImportException('network');
+    }
+    if (res.statusCode != 200) throw ImportException('http_${res.statusCode}');
+    return utf8.decode(res.bodyBytes, allowMalformed: true);
   }
 
   /// Strip HTML to plain readable text (no network — also the unit-test seam).
@@ -103,21 +140,35 @@ class RecipeImport {
     });
   }
 
+  // A current desktop-Chrome UA + a Googlebot fallback. Many sites bot-block an
+  // unfamiliar client (→ 403) but serve crawlers the full page, JSON-LD and all,
+  // for SEO — so retrying as Googlebot recovers a lot of otherwise-blocked sites.
+  static const _uaDesktop = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  static const _uaBot = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+
   static Future<String> _fetch(String url) async {
-    final http.Response res;
-    try {
-      res = await http.get(Uri.parse(url), headers: {
-        // A realistic browser UA gives the best chance past bot protection.
-        // (On web the browser sets its own UA and CORS may block the read.)
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; SM-S926) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'fr-CA,fr;q=0.9,en;q=0.8',
-      }).timeout(const Duration(seconds: 20));
-    } catch (_) {
-      throw ImportException('network');
+    final uri = Uri.parse(url);
+    http.Response? res;
+    for (final ua in [_uaDesktop, _uaBot]) {
+      try {
+        res = await http.get(uri, headers: {
+          'User-Agent': ua,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'fr-CA,fr;q=0.9,en;q=0.8',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+        }).timeout(const Duration(seconds: 20));
+      } catch (_) {
+        throw ImportException('network');
+      }
+      if (res.statusCode == 200) return res.body;
+      // Only the bot-block family is worth a second UA; bail on 404/500/etc.
+      if (![401, 403, 406, 429].contains(res.statusCode)) break;
     }
-    if (res.statusCode != 200) throw ImportException('http_${res.statusCode}');
-    return res.body;
+    throw ImportException('http_${res!.statusCode}');
   }
 
   // ── JSON-LD extraction ──

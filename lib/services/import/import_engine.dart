@@ -71,6 +71,7 @@ class ImportEngine {
     String? text,
     Uint8List? imageBytes,
     String mediaType = 'image/jpeg',
+    bool allowReader = false, // on-device URL import asks before using the reader proxy
   }) async {
     importLog('runWith engine=$engine method=$method online=${app.online}');
     switch (engine) {
@@ -94,7 +95,8 @@ class ImportEngine {
           final u = (url ?? '').trim();
           if (u.isEmpty) throw ImportException('empty_input');
           importLog('online ← fetching page for AI read: $u');
-          feed = await RecipeImport.fetchReadableText(u);
+          // Cloud is external by definition, so the reader fallback is silent here.
+          feed = await RecipeImport.fetchReadableText(u, allowReader: true);
           importLog('online page text len=${feed.length}');
         }
         final raw = await ByokClient.extract(provider: provider, apiKey: key, text: feed, imageBytes: imageBytes, mediaType: mediaType);
@@ -107,7 +109,8 @@ class ImportEngine {
           if (u.isEmpty) throw ImportException('empty_input');
           importLog('ondevice ← fetching page for AI read: $u');
           // Smaller cap: Phi's ~4096-token context truncates long pages anyway.
-          input = await RecipeImport.fetchReadableText(u, maxChars: 8000);
+          // allowReader is gated so the UI can confirm before the URL leaves the device.
+          input = await RecipeImport.fetchReadableText(u, maxChars: 8000, allowReader: allowReader);
         } else if (method == ImportMethod.photo && imageBytes != null) {
           importLog('ondevice → OCR ${imageBytes.length} bytes');
           input = await Ocr.recognize(imageBytes);

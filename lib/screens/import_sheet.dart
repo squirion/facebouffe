@@ -156,41 +156,71 @@ class _ImportSheetState extends State<_ImportSheet> {
     _runEngine(aiChain.first);
   }
 
-  Future<void> _runEngine(String engine) async {
+  Future<void> _runEngine(String engine, {bool allowReader = false}) async {
     setState(() {
       _busy = true;
       _error = null;
       _engine = engine;
       _nextEngine = null;
     });
-    if (_keepAwake) WakelockPlus.enable();
     try {
       final ImportResult res;
-      final regions = _pendingRegions;
-      if (regions != null) {
-        res = await ImportEngine.extractFromRegions(app: app, imageBytes: _photo!, ingredientBoxes: regions.$1, stepBoxes: regions.$2, engineOverride: engine);
-      } else {
-        res = await ImportEngine.runWith(
-          engine: engine,
-          method: method!,
-          app: app,
-          url: method == ImportMethod.link ? _controller.text : null,
-          text: method == ImportMethod.text ? _controller.text : null,
-          imageBytes: method == ImportMethod.photo ? _photo : null,
-          mediaType: _mediaType,
-        );
+      // Keep the screen awake only for the inference itself; disabled before any
+      // consent prompt / re-dispatch so the wakelock can't outlive this attempt.
+      if (_keepAwake) WakelockPlus.enable();
+      try {
+        final regions = _pendingRegions;
+        if (regions != null) {
+          res = await ImportEngine.extractFromRegions(app: app, imageBytes: _photo!, ingredientBoxes: regions.$1, stepBoxes: regions.$2, engineOverride: engine);
+        } else {
+          res = await ImportEngine.runWith(
+            engine: engine,
+            method: method!,
+            app: app,
+            url: method == ImportMethod.link ? _controller.text : null,
+            text: method == ImportMethod.text ? _controller.text : null,
+            imageBytes: method == ImportMethod.photo ? _photo : null,
+            mediaType: _mediaType,
+            allowReader: allowReader,
+          );
+        }
+      } finally {
+        WakelockPlus.disable();
       }
       if (!mounted) return;
       await _finish(res);
     } on ImportException catch (e) {
+      // On-device URL fetch was blocked and would need the external reader —
+      // ask first (it sends the URL off-device, breaking the local promise).
+      if (e.code == 'reader_consent') {
+        if (mounted) setState(() => _busy = false);
+        if (await _confirmReader() && mounted) _runEngine(engine, allowReader: true);
+        return;
+      }
       importLog('import failed (${e.code}) on $engine | ${e.detail ?? ''}');
       _failed(engine, e.code, kImportDebug ? '[${e.code}]\n${e.detail ?? '(no detail)'}' : _msg(e.code));
     } catch (e, st) {
       importLog('import crashed on $engine: $e\n$st');
       _failed(engine, 'generic', kImportDebug ? e.toString() : app.t('import_err_generic'));
-    } finally {
-      WakelockPlus.disable();
     }
+  }
+
+  /// Confirm sending a bot-blocked URL through the third-party Jina reader on
+  /// the otherwise-local on-device path.
+  Future<bool> _confirmReader() async {
+    if (!mounted) return false;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(app.t('reader_consent_title')),
+        content: Text(app.t('reader_consent_body')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(app.t('cancel'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('reader_consent_confirm'))),
+        ],
+      ),
+    );
+    return ok ?? false;
   }
 
   void _failed(String engine, String code, String message) {
