@@ -306,6 +306,8 @@ class OnDeviceAi {
     switch (template) {
       case 'qwen': // ChatML
         return '<|im_start|>user\n$body<|im_end|>\n<|im_start|>assistant\n';
+      case 'phi': // Phi-3 / Phi-4-mini
+        return '<|user|>\n$body<|end|>\n<|assistant|>\n';
       case 'generic':
         return body;
       case 'gemma':

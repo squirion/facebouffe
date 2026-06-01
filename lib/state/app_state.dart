@@ -561,6 +561,7 @@ class AppState extends ChangeNotifier {
   static String detectTemplate(String name) {
     final n = name.toLowerCase();
     if (n.contains('qwen')) return 'qwen';
+    if (n.contains('phi')) return 'phi';
     if (n.contains('gemma')) return 'gemma';
     return 'gemma';
   }

@@ -35,6 +35,8 @@ String _stripFences(String raw) => raw
     .replaceAll('<eos>', '')
     .replaceAll('<|im_end|>', '') // Qwen / ChatML
     .replaceAll('<|endoftext|>', '')
+    .replaceAll('<|end|>', '') // Phi
+    .replaceAll('<|assistant|>', '')
     .trim();
 
 Map<String, dynamic>? _tryDecode(String s) {

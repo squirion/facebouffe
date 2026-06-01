@@ -481,7 +481,7 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(color: fb.dark ? Colors.white.withValues(alpha: 0.06) : fb.canvas2, borderRadius: BorderRadius.circular(11)),
               child: Row(children: [
-                for (final t in const [('gemma', 'Gemma'), ('qwen', 'Qwen'), ('generic', 'Autre')])
+                for (final t in const [('gemma', 'Gemma'), ('qwen', 'Qwen'), ('phi', 'Phi'), ('generic', 'Autre')])
                   Expanded(
                     child: GestureDetector(
                       onTap: () => context.read<AppState>().setOnDeviceTemplate(t.$1),
