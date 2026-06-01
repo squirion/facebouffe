@@ -38,15 +38,17 @@ class Ingredient {
   String? unit; // g,kg,ml,l,tsp,tbsp,cup,oz,lb,pinch... null = countable
   String name;
   String? note;
+  String? group; // optional section heading (e.g. "Pâte"); null/empty = ungrouped
   NutritionRef? nutritionRef; // Phase 1.5 CNF match
 
-  Ingredient({this.quantity, this.unit, required this.name, this.note, this.nutritionRef});
+  Ingredient({this.quantity, this.unit, required this.name, this.note, this.group, this.nutritionRef});
 
   factory Ingredient.fromJson(Map<String, dynamic> j) => Ingredient(
         quantity: j['quantity'] as num?,
         unit: j['unit'] as String?,
         name: j['name'] as String? ?? '',
         note: j['note'] as String?,
+        group: j['group'] as String?,
         nutritionRef: j['nutritionRef'] != null ? NutritionRef.fromJson(j['nutritionRef'] as Map<String, dynamic>) : null,
       );
 
@@ -55,10 +57,11 @@ class Ingredient {
         'unit': unit,
         'name': name,
         if (note != null && note!.isNotEmpty) 'note': note,
+        if (group != null && group!.isNotEmpty) 'group': group,
         if (nutritionRef != null) 'nutritionRef': nutritionRef!.toJson(),
       };
 
-  Ingredient copy() => Ingredient(quantity: quantity, unit: unit, name: name, note: note, nutritionRef: nutritionRef?.copy());
+  Ingredient copy() => Ingredient(quantity: quantity, unit: unit, name: name, note: note, group: group, nutritionRef: nutritionRef?.copy());
 }
 
 /// Phase 1.5 — computed nutrition label, stored on the recipe. Always an estimate.
@@ -107,22 +110,57 @@ class Step {
   String text;
   String? image; // shown on recipe page step list only; hidden in Sous-chef
   int? timerSeconds;
+  String? group; // optional section heading (e.g. "Glaçage"); null/empty = ungrouped
 
-  Step({required this.text, this.image, this.timerSeconds});
+  Step({required this.text, this.image, this.timerSeconds, this.group});
 
   factory Step.fromJson(Map<String, dynamic> j) => Step(
         text: j['text'] as String? ?? '',
         image: j['image'] as String?,
         timerSeconds: (j['timerSeconds'] as num?)?.toInt(),
+        group: j['group'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
         'text': text,
         'image': image,
         'timerSeconds': timerSeconds,
+        if (group != null && group!.isNotEmpty) 'group': group,
       };
 
-  Step copy() => Step(text: text, image: image, timerSeconds: timerSeconds);
+  Step copy() => Step(text: text, image: image, timerSeconds: timerSeconds, group: group);
+}
+
+/// A contiguous run of list items sharing the same group label. Lets the UI and
+/// export render group headers over the flat ingredient/step lists without
+/// changing them. [name] null/empty means an ungrouped run (no header drawn).
+class GroupSection<T> {
+  final String? name;
+  final List<T> items;
+  final List<int> indices; // original positions in the source list
+  GroupSection(this.name, this.items, this.indices);
+
+  bool get hasHeader => name != null && name!.trim().isNotEmpty;
+}
+
+/// Split [items] into contiguous sections by [groupOf]; order is preserved and a
+/// new section starts whenever the trimmed group label changes. Group names are
+/// trimmed; null/blank collapse to a single ungrouped run.
+List<GroupSection<T>> groupedSections<T>(List<T> items, String? Function(T) groupOf) {
+  final out = <GroupSection<T>>[];
+  String? curKey;
+  for (var i = 0; i < items.length; i++) {
+    final raw = groupOf(items[i]);
+    final key = (raw == null || raw.trim().isEmpty) ? null : raw.trim();
+    if (out.isEmpty || key != curKey) {
+      out.add(GroupSection<T>(key, [items[i]], [i]));
+      curKey = key;
+    } else {
+      out.last.items.add(items[i]);
+      out.last.indices.add(i);
+    }
+  }
+  return out;
 }
 
 class Personal {
