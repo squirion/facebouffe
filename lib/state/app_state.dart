@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show File;
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -26,6 +27,11 @@ class AppState extends ChangeNotifier {
   TipsSeen tipsSeen = TipsSeen();
   Map<String, String> recipePhotos = {}; // recipe id (or "__draft") -> hero photo path
   Map<String, List<String>> recipeGallery = {}; // recipe id (or "__draft") -> gallery photo paths
+  // Soft-delete buffer (newest first). Each entry: {recipe, photo, gallery, deletedAt}.
+  // Photo files are kept on disk while buffered and only erased when an entry is
+  // evicted past [maxTrash] or purged, so a delete is recoverable.
+  List<Map<String, dynamic>> recentlyDeleted = [];
+  static const int maxTrash = 25;
   Map<String, String> aliases = {}; // normalized ingredient name -> CNF food code (learned defaults, §2e)
 
   // ── import engine config (§2f) ──
@@ -112,6 +118,12 @@ class AppState extends ChangeNotifier {
     if (gallery != null) {
       try {
         recipeGallery = (jsonDecode(gallery) as Map).map((k, v) => MapEntry(k as String, (v as List).map((e) => e as String).toList()));
+      } catch (_) {}
+    }
+    final trash = _prefs!.getString('fb_trash');
+    if (trash != null) {
+      try {
+        recentlyDeleted = (jsonDecode(trash) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
       } catch (_) {}
     }
     final al = _prefs!.getString('fb_aliases');
@@ -301,12 +313,80 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Soft-delete: removes the recipe from the active set but keeps a snapshot
+  /// (and its photo files) in [recentlyDeleted] so it can be restored. Files are
+  /// only erased when the entry is evicted past [maxTrash] or purged.
   void deleteRecipe(String id) {
-    recipes.removeWhere((r) => r.id == id);
-    if (recipePhotos.remove(id) != null) _persistPhotos();
-    if (recipeGallery.remove(id) != null) _persistGallery();
+    final r = getRecipe(id);
+    recipes.removeWhere((x) => x.id == id);
+    final photo = recipePhotos.remove(id);
+    final gallery = recipeGallery.remove(id);
+    if (r != null) {
+      recentlyDeleted.insert(0, {
+        'recipe': r.toJson(),
+        'photo': photo,
+        'gallery': gallery ?? const <String>[],
+        'deletedAt': DateTime.now().toIso8601String(),
+      });
+      while (recentlyDeleted.length > maxTrash) {
+        _deleteEntryFiles(recentlyDeleted.removeLast());
+      }
+      _persistTrash();
+    }
+    if (photo != null) _persistPhotos();
+    if (gallery != null) _persistGallery();
     _persistDb();
     notifyListeners();
+  }
+
+  void _persistTrash() => _prefs?.setString('fb_trash', jsonEncode(recentlyDeleted));
+
+  /// Restore a buffered recipe (by index in [recentlyDeleted]) to the active set.
+  void restoreDeleted(int index) {
+    if (index < 0 || index >= recentlyDeleted.length) return;
+    final entry = recentlyDeleted.removeAt(index);
+    final recipe = Recipe.fromJson(Map<String, dynamic>.from(entry['recipe'] as Map));
+    recipes.removeWhere((x) => x.id == recipe.id); // guard against a reused id
+    recipes.insert(0, recipe);
+    final photo = entry['photo'];
+    if (photo is String && photo.isNotEmpty) recipePhotos[recipe.id] = photo;
+    final gallery = (entry['gallery'] as List?)?.map((e) => e.toString()).toList() ?? const [];
+    if (gallery.isNotEmpty) recipeGallery[recipe.id] = List<String>.from(gallery);
+    _persistTrash();
+    _persistPhotos();
+    _persistGallery();
+    _persistDb();
+    notifyListeners();
+  }
+
+  /// Permanently remove a buffered entry (deletes its photo files).
+  void purgeDeleted(int index) {
+    if (index < 0 || index >= recentlyDeleted.length) return;
+    _deleteEntryFiles(recentlyDeleted.removeAt(index));
+    _persistTrash();
+    notifyListeners();
+  }
+
+  // Erase the on-disk photo files referenced by a buffered entry (hero, gallery,
+  // step images). Skips web data-URLs and non-path placeholder labels.
+  void _deleteEntryFiles(Map<String, dynamic> entry) {
+    if (kIsWeb) return;
+    final paths = <String?>[entry['photo'] as String?];
+    for (final g in (entry['gallery'] as List? ?? const [])) {
+      paths.add(g?.toString());
+    }
+    final rj = entry['recipe'];
+    if (rj is Map) {
+      for (final s in (rj['steps'] as List? ?? const [])) {
+        if (s is Map) paths.add(s['image'] as String?);
+      }
+    }
+    for (final p in paths) {
+      if (p == null || p.isEmpty || p.startsWith('data:') || !p.contains('/')) continue;
+      try {
+        File(p).deleteSync();
+      } catch (_) {}
+    }
   }
 
   /// Save (create or replace). Returns the recipe id.
