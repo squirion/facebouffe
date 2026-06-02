@@ -515,6 +515,9 @@ class AppState extends ChangeNotifier {
       case 'variantChips':
         tipsSeen.variantChips = true;
         break;
+      case 'cookStack':
+        tipsSeen.cookStack = true;
+        break;
     }
     _prefs?.setString('fb_tips', jsonEncode(tipsSeen.toMap()));
     notifyListeners();

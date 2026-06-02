@@ -404,8 +404,8 @@ class ShoppingItem {
 }
 
 class TipsSeen {
-  bool sousChef, variants, shoppingAdd, pdfExport, variantChips;
-  TipsSeen({this.sousChef = false, this.variants = false, this.shoppingAdd = false, this.pdfExport = false, this.variantChips = false});
+  bool sousChef, variants, shoppingAdd, pdfExport, variantChips, cookStack;
+  TipsSeen({this.sousChef = false, this.variants = false, this.shoppingAdd = false, this.pdfExport = false, this.variantChips = false, this.cookStack = false});
 
   bool seen(String key) => toMap()[key] ?? false;
 
@@ -415,6 +415,7 @@ class TipsSeen {
         'shoppingAdd': shoppingAdd,
         'pdfExport': pdfExport,
         'variantChips': variantChips,
+        'cookStack': cookStack,
       };
 
   factory TipsSeen.fromMap(Map<String, dynamic> m) => TipsSeen(
@@ -423,5 +424,6 @@ class TipsSeen {
         shoppingAdd: m['shoppingAdd'] == true,
         pdfExport: m['pdfExport'] == true,
         variantChips: m['variantChips'] == true,
+        cookStack: m['cookStack'] == true,
       );
 }

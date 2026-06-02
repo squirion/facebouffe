@@ -64,7 +64,6 @@ class SousChefScreen extends StatefulWidget {
 class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObserver {
   final _pager = PageController();
   final List<_CookSession> _sessions = [];
-  // ignore: prefer_final_fields — becomes mutable when tab-switching lands (Commit B)
   int _active = 0;
   final List<_Timer> _timers = [];
   int _notifSeq = 1000; // monotonic, globally-unique notification ids across recipes
@@ -79,6 +78,15 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
     WidgetsBinding.instance.addObserver(this);
     WakelockPlus.enable(); // keep the screen awake while cooking (web + Android)
     if (!kIsWeb) TimerNotifications.instance.requestPermissions();
+    // One-time hint pointing at the new "cook several recipes" affordance.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final app = context.read<AppState>();
+      if (!app.tipsSeen.seen('cookStack')) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(app.t('sc_add_hint')), duration: const Duration(seconds: 4)));
+        app.markTipSeen('cookStack');
+      }
+    });
   }
 
   @override
@@ -182,6 +190,250 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
     _pager.animateToPage(i, duration: Duration(milliseconds: context.read<AppState>().reduceMotion ? 120 : 340), curve: Curves.easeInOut);
   }
 
+  // ── stack management ──
+  static const int _maxStack = 4;
+
+  String _letter(String title) {
+    final t = title.trim();
+    return t.isEmpty ? '?' : String.fromCharCode(t.runes.first).toUpperCase();
+  }
+
+  void _switchTo(int i) {
+    if (i < 0 || i >= _sessions.length || i == _active) return;
+    setState(() => _active = i);
+    _pager.jumpToPage(_s.pane);
+  }
+
+  // Jump to the recipe + step that owns [tm] (from the running-timers tray).
+  void _jumpToTimer(_Timer tm) {
+    final si = _sessions.indexWhere((s) => s.recipeId == tm.recipeId);
+    if (si < 0) return;
+    setState(() {
+      _active = si;
+      _s.stepIdx = tm.stepIdx;
+      _s.pane = 1;
+    });
+    _pager.jumpToPage(1);
+  }
+
+  Future<void> _openPicker() async {
+    final app = context.read<AppState>();
+    if (_sessions.length >= _maxStack) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(app.t('sc_full'))));
+      return;
+    }
+    final openIds = _sessions.map((e) => e.recipeId).toSet();
+    final id = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CookPicker(currentId: _s.recipeId, openIds: openIds),
+    );
+    if (id == null || !mounted) return;
+    await _addById(id);
+  }
+
+  Future<void> _addById(String id) async {
+    final app = context.read<AppState>();
+    final recipe = app.getRecipe(id);
+    if (recipe == null) return;
+    final servings = await _askServings(recipe);
+    if (servings == null || !mounted) return;
+    setState(() {
+      _sessions.add(_CookSession(id, servings));
+      _active = _sessions.length - 1;
+    });
+    _pager.jumpToPage(_s.pane);
+  }
+
+  Future<int?> _askServings(Recipe recipe) {
+    int val = recipe.servings < 1 ? 1 : recipe.servings;
+    return showDialog<int>(
+      context: context,
+      builder: (ctx) {
+        final fb = ctx.fb;
+        final app = ctx.read<AppState>();
+        return StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: Text(app.t('sc_servings_q')),
+            content: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _stepBtn(fb, 'minus', () => setLocal(() => val = (val - 1).clamp(1, 999))),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  child: Text('$val', style: fb.display(size: 26, weight: FontWeight.w700)),
+                ),
+                _stepBtn(fb, 'plus', () => setLocal(() => val = (val + 1).clamp(1, 999))),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(app.t('cancel'))),
+              TextButton(onPressed: () => Navigator.pop(ctx, val), child: Text(app.t('sc_add'), style: TextStyle(color: fb.accent, fontWeight: FontWeight.w700))),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _stepBtn(FbTheme fb, String icon, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        child: Container(width: 44, height: 44, decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(12)), child: Center(child: FbIcon(icon, size: 20, color: fb.accent))),
+      );
+
+  // Remove the session at [i] (cancel its timers, fix the active index); pops
+  // the screen when the last recipe goes.
+  void _removeSession(int i) {
+    final gone = _sessions[i];
+    for (final t in _timers.where((t) => t.recipeId == gone.recipeId).toList()) {
+      TimerNotifications.instance.cancel(t.notifId);
+    }
+    setState(() {
+      _timers.removeWhere((t) => t.recipeId == gone.recipeId);
+      _sessions.removeAt(i);
+      if (i < _active) {
+        _active -= 1;
+      } else if (i == _active && _active >= _sessions.length) {
+        _active = _sessions.length - 1;
+      }
+    });
+    if (_sessions.isEmpty) {
+      Navigator.pop(context);
+      return;
+    }
+    _pager.jumpToPage(_s.pane);
+  }
+
+  Future<void> _closeSession(int i) async {
+    final s = _sessions[i];
+    final hasTimers = _timers.any((t) => t.recipeId == s.recipeId && t.running && t.left > 0);
+    if (hasTimers) {
+      final app = context.read<AppState>();
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(app.t('sc_close_q')),
+          content: Text(app.t('sc_close_body')),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(app.t('cancel'))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('sc_close_recipe'), style: const TextStyle(color: Color(0xFFC0563B), fontWeight: FontWeight.w700))),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    _removeSession(i);
+  }
+
+  void _finishActive(Recipe recipe) {
+    context.read<AppState>().markCooked(recipe.id);
+    _removeSession(_active);
+  }
+
+  // In-step {{link}} tap: offer to view the recipe or add it to the cooking stack.
+  Future<void> _onStepLink(String id) async {
+    final app = context.read<AppState>();
+    final target = app.getRecipe(id);
+    if (target == null) return;
+    final already = _sessions.any((s) => s.recipeId == id);
+    final canAdd = !already && _sessions.length < _maxStack;
+    final fb = context.fb;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: fb.canvas,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
+            child: Row(children: [
+              Container(width: 12, height: 12, decoration: BoxDecoration(color: fallbackColorFor(target.id).bg, shape: BoxShape.circle)),
+              const SizedBox(width: 10),
+              Expanded(child: Text(target.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 16, weight: FontWeight.w700))),
+            ]),
+          ),
+          ListTile(leading: const FbIcon('note'), title: Text(app.t('sc_link_view')), onTap: () => Navigator.pop(ctx, 'view')),
+          if (canAdd) ListTile(leading: FbIcon('plus', color: fb.accent), title: Text(app.t('sc_link_add'), style: TextStyle(color: fb.accent, fontWeight: FontWeight.w700)), onTap: () => Navigator.pop(ctx, 'add')),
+          const SizedBox(height: 6),
+        ]),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'view') {
+      Nav.openRecipe(context, id);
+    } else if (choice == 'add') {
+      await _addById(id);
+    }
+  }
+
+  // ── bottom tab bar (shown when ≥2 recipes are stacked) ──
+  Widget _tabBar(AppState app, FbTheme fb, Color surface, Color line, double bottomInset) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(10, 8, 10, 8 + bottomInset),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: line))),
+      child: SizedBox(
+        height: 46,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            for (int i = 0; i < _sessions.length; i++) _tabTile(app, fb, i),
+            if (_sessions.length < _maxStack) _addTile(fb, surface),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tabTile(AppState app, FbTheme fb, int i) {
+    final s = _sessions[i];
+    final pal = fallbackColorFor(s.recipeId);
+    final active = i == _active;
+    final title = app.getRecipe(s.recipeId)?.title ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () => _switchTo(i),
+        onLongPress: () => _closeSession(i), // long-press any tab to close it
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            color: active ? Colors.white.withValues(alpha: 0.14) : Colors.transparent,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: Colors.white.withValues(alpha: active ? 0.5 : 0.16)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 30, height: 30, decoration: BoxDecoration(color: pal.bg, borderRadius: BorderRadius.circular(9)), alignment: Alignment.center, child: Text(_letter(title), style: fb.ui(size: 15, weight: FontWeight.w800, color: pal.ink))),
+            if (active) ...[
+              const SizedBox(width: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 120),
+                child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 13.5, weight: FontWeight.w700, color: Colors.white)),
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: () => _closeSession(i),
+                child: Container(width: 24, height: 24, alignment: Alignment.center, child: FbIcon('x', size: 14, color: Colors.white.withValues(alpha: 0.7))),
+              ),
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _addTile(FbTheme fb, Color surface) => GestureDetector(
+        onTap: _openPicker,
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(13), border: Border.all(color: Colors.white.withValues(alpha: 0.16))),
+          child: const Center(child: FbIcon('plus', size: 22, color: Colors.white)),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
@@ -194,6 +446,8 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
     final pal = fallbackColorFor(recipe.id);
     final topInset = MediaQuery.of(context).padding.top;
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final barShown = _sessions.length >= 2; // tab bar carries the safe-area inset when present
+    final navInset = barShown ? 0.0 : bottomInset;
 
     final surface = Colors.white.withValues(alpha: 0.10);
     final faint = Colors.white.withValues(alpha: 0.42);
@@ -241,6 +495,13 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                         ],
                       ),
                     ),
+                    if (_sessions.length == 1) ...[
+                      GestureDetector(
+                        onTap: _openPicker,
+                        child: Container(width: 40, height: 40, decoration: BoxDecoration(color: surface, shape: BoxShape.circle), child: const Center(child: FbIcon('plus', size: 22, color: Colors.white))),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(999)),
@@ -288,21 +549,25 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                                 border: Border.all(color: done ? good : line),
                               ),
                               child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                if (_sessions.length > 1) ...[
+                                  Container(width: 9, height: 9, decoration: BoxDecoration(color: fallbackColorFor(tm.recipeId).bg, shape: BoxShape.circle)),
+                                  const SizedBox(width: 8),
+                                ],
                                 GestureDetector(
                                   onTap: () => _toggleTimer(tm),
                                   child: FbIcon(done ? 'check' : (tm.running ? 'timer' : 'play'), size: fb.fs(16), fill: done, color: done ? good : Colors.white),
                                 ),
                                 const SizedBox(width: 8),
-                                Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(done ? app.t('sc_timer_done') : fmtTimer(tm.left), style: fb.ui(size: 15, weight: FontWeight.w700, color: done ? good : Colors.white, height: 1)),
-                                    GestureDetector(
-                                      onTap: () { setState(() => _s.stepIdx = tm.stepIdx); _setPane(1); },
-                                      child: Text('${app.t('sc_step')} ${tm.stepIdx + 1}', style: fb.ui(size: 10.5, color: dimC)),
-                                    ),
-                                  ],
+                                GestureDetector(
+                                  onTap: () => _jumpToTimer(tm),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(done ? app.t('sc_timer_done') : fmtTimer(tm.left), style: fb.ui(size: 15, weight: FontWeight.w700, color: done ? good : Colors.white, height: 1)),
+                                      Text('${app.t('sc_step')} ${tm.stepIdx + 1}', style: fb.ui(size: 10.5, color: dimC)),
+                                    ],
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
                                 GestureDetector(
@@ -367,11 +632,12 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                   controller: _pager,
                   onPageChanged: (i) => setState(() => _s.pane = i),
                   children: [
-                    _ingredientsPane(context, recipe, ratio, app, fb, line, faint, good),
-                    _stepsPane(context, recipe, steps, app, fb, surface, line, dimC, good, bottomInset),
+                    _ingredientsPane(context, recipe, ratio, app, fb, line, faint, good, navInset),
+                    _stepsPane(context, recipe, steps, app, fb, surface, line, dimC, good, navInset),
                   ],
                 ),
               ),
+              if (barShown) _tabBar(app, fb, surface, line, bottomInset),
             ],
           ),
         ],
@@ -379,8 +645,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
     );
   }
 
-  Widget _ingredientsPane(BuildContext context, Recipe recipe, double ratio, AppState app, FbTheme fb, Color line, Color faint, Color accentGood) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+  Widget _ingredientsPane(BuildContext context, Recipe recipe, double ratio, AppState app, FbTheme fb, Color line, Color faint, Color accentGood, double bottomInset) {
     return ListView(
       padding: EdgeInsets.fromLTRB(22, 8, 22, 30 + bottomInset),
       children: [
@@ -458,7 +723,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
               Text(app.t('sc_all_done_sub'), style: fb.ui(size: 16, color: dimC)),
               const SizedBox(height: 28),
               GestureDetector(
-                onTap: () { app.markCooked(recipe.id); Navigator.pop(context); },
+                onTap: () => _finishActive(recipe),
                 child: Container(
                   height: 52,
                   padding: const EdgeInsets.symmetric(horizontal: 30),
@@ -504,7 +769,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                 ],
               ),
               const SizedBox(height: 24),
-              RichRecipeText(text: step.text, dark: true, onLink: (id) => Nav.openRecipe(context, id), fontSize: 22, height: 1.4, color: Colors.white),
+              RichRecipeText(text: step.text, dark: true, onLink: _onStepLink, fontSize: 22, height: 1.4, color: Colors.white),
               if (step.timerSeconds != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 22),
@@ -566,6 +831,123 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
       ],
     );
   }
+}
+
+/// "Open another recipe" sheet: searchable, text-only. Linked + inline-mentioned
+/// recipes pinned on top, then everything else by recency. Returns the chosen
+/// recipe id (or null). Current + already-open recipes are excluded.
+class _CookPicker extends StatefulWidget {
+  final String currentId;
+  final Set<String> openIds;
+  const _CookPicker({required this.currentId, required this.openIds});
+
+  @override
+  State<_CookPicker> createState() => _CookPickerState();
+}
+
+class _CookPickerState extends State<_CookPicker> {
+  String _q = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final fb = context.fb;
+    final media = MediaQuery.of(context);
+
+    bool excluded(String id) => id == widget.currentId || widget.openIds.contains(id);
+
+    final cur = app.getRecipe(widget.currentId);
+    final linkedIds = <String>{};
+    if (cur != null) {
+      linkedIds.addAll(cur.links);
+      final re = RegExp(r'\{\{link:([^}]+)\}\}');
+      void scan(String t) {
+        for (final m in re.allMatches(t)) {
+          linkedIds.add(m.group(1)!.trim());
+        }
+      }
+      scan(cur.description);
+      for (final st in cur.steps) {
+        scan(st.text);
+      }
+    }
+    final linked = linkedIds.where((id) => !excluded(id)).map(app.getRecipe).whereType<Recipe>().toList();
+    final linkedSet = linked.map((r) => r.id).toSet();
+    final recent = app.baseRecipes.where((r) => !excluded(r.id) && !linkedSet.contains(r.id)).toList()
+      ..sort((a, b) => b.dateModified.compareTo(a.dateModified));
+
+    final qq = _q.trim().toLowerCase();
+    List<Recipe> filter(List<Recipe> xs) => qq.isEmpty ? xs : xs.where((r) => r.title.toLowerCase().contains(qq)).toList();
+    final fLinked = filter(linked);
+    final fRecent = filter(recent);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: media.size.height * 0.85),
+        decoration: BoxDecoration(color: fb.canvas, borderRadius: const BorderRadius.vertical(top: Radius.circular(26))),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(margin: const EdgeInsets.only(top: 10, bottom: 6), width: 40, height: 5, decoration: BoxDecoration(color: fb.lineStrong, borderRadius: BorderRadius.circular(99))),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 6, 18, 10),
+                child: Text(app.t('sc_add_recipe'), style: fb.display(size: 21, weight: FontWeight.w600)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                child: Container(
+                  height: 46,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(13), border: Border.all(color: fb.line)),
+                  child: Row(children: [
+                    FbIcon('search', size: 18, color: fb.inkFaint),
+                    const SizedBox(width: 9),
+                    Expanded(child: TextField(autofocus: false, onChanged: (v) => setState(() => _q = v), style: fb.ui(size: 15), decoration: InputDecoration.collapsed(hintText: app.t('sc_search'), hintStyle: fb.ui(size: 15, color: fb.inkFaint)))),
+                  ]),
+                ),
+              ),
+              Flexible(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(18, 4, 18, 16),
+                  children: [
+                    if (fLinked.isNotEmpty) _section(fb, app.t('sc_linked')),
+                    for (final r in fLinked) _row(fb, r),
+                    if (fRecent.isNotEmpty) _section(fb, app.t('sc_recent')),
+                    for (final r in fRecent) _row(fb, r),
+                    if (fLinked.isEmpty && fRecent.isEmpty)
+                      Padding(padding: const EdgeInsets.fromLTRB(2, 20, 2, 20), child: Text(app.t('no_results'), style: fb.ui(size: 14, color: fb.inkFaint))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _section(FbTheme fb, String label) => Padding(
+        padding: const EdgeInsets.fromLTRB(2, 14, 2, 6),
+        child: Text(label.toUpperCase(), style: fb.ui(size: 11.5, weight: FontWeight.w800, color: fb.inkFaint, letterSpacing: 0.5)),
+      );
+
+  Widget _row(FbTheme fb, Recipe r) => GestureDetector(
+        onTap: () => Navigator.pop(context, r.id),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: fb.line))),
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          child: Row(children: [
+            Container(width: 12, height: 12, decoration: BoxDecoration(color: fallbackColorFor(r.id).bg, shape: BoxShape.circle)),
+            const SizedBox(width: 12),
+            Expanded(child: Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 15.5, weight: FontWeight.w600))),
+            FbIcon('plus', size: 16, color: fb.accent),
+          ]),
+        ),
+      );
 }
 
 class _BgDots extends CustomPainter {
