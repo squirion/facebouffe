@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../recipe_import.dart' show ImportException;
+import 'gemini_fallback.dart';
 import 'recipe_schema.dart';
 
 /// Tier 2 — "bring your own key" cloud LLM extraction. Sends recipe input
@@ -15,10 +16,11 @@ import 'recipe_schema.dart';
 class ByokClient {
   // Cheap, fast, multimodal models per provider. Centralized so they're easy
   // to bump as providers rev their lineups.
+  // Claude/OpenAI use a single model each; Gemini's model chain + rate-limit
+  // fallback lives in gemini_fallback.dart.
   static const _models = {
     'claude': 'claude-haiku-4-5-20251001',
     'openai': 'gpt-4o-mini',
-    'gemini': 'gemini-2.5-flash',
   };
 
   static const _maxTokens = 4096;
@@ -140,42 +142,9 @@ class ByokClient {
     return (choices.first as Map)['message']?['content']?.toString() ?? '';
   }
 
-  // ── Google Gemini generateContent ──
-  static Future<String> _gemini(String key, String system, String userText, Uint8List? img, String mediaType) async {
-    final parts = <Map<String, dynamic>>[
-      {'text': userText},
-      if (img != null)
-        {
-          'inline_data': {'mime_type': mediaType, 'data': base64Encode(img)},
-        },
-    ];
-    final model = _models['gemini'];
-    final res = await http.post(
-      Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$key'),
-      headers: {'content-type': 'application/json'},
-      body: jsonEncode({
-        'system_instruction': {
-          'parts': [
-            {'text': system},
-          ],
-        },
-        'contents': [
-          {'role': 'user', 'parts': parts},
-        ],
-        'generationConfig': {'responseMimeType': 'application/json'},
-      }),
-    );
-    if (res.statusCode != 200) _fail(res);
-    final j = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
-    final cands = (j['candidates'] as List?) ?? const [];
-    if (cands.isEmpty) throw ImportException('provider_error');
-    final partsOut = ((cands.first as Map)['content'] as Map?)?['parts'] as List? ?? const [];
-    final buf = StringBuffer();
-    for (final p in partsOut) {
-      if (p is Map && p['text'] != null) buf.write(p['text']);
-    }
-    return buf.toString();
-  }
+  // ── Google Gemini — delegates to the multi-model fallback (gemini_fallback.dart) ──
+  static Future<String> _gemini(String key, String system, String userText, Uint8List? img, String mediaType) =>
+      GeminiFallback.generate(apiKey: key, system: system, userText: userText, img: img, mediaType: mediaType);
 
   /// Lightweight key check used by the "Test key" button — a tiny request that
   /// only needs to authenticate, not produce a recipe.
