@@ -154,6 +154,9 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
     _ensureTicker();
   }
 
+  // Normalized group label (null/blank → null) for headers & boundary checks.
+  String? _g(String? s) => (s == null || s.trim().isEmpty) ? null : s.trim();
+
   void _setPane(int i) {
     setState(() => _pane = i);
     _pager.animateToPage(i, duration: Duration(milliseconds: context.read<AppState>().reduceMotion ? 120 : 340), curve: Curves.easeInOut);
@@ -360,47 +363,61 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
     return ListView(
       padding: EdgeInsets.fromLTRB(22, 8, 22, 30 + bottomInset),
       children: [
-        for (int i = 0; i < recipe.ingredients.length; i++)
-          () {
-            final ing = recipe.ingredients[i];
-            final d = displayIngredient(ing.quantity, ing.unit, ing.name, ing.note, ratio, app.prefs, app.lang);
-            final on = _checked.contains(i);
-            return GestureDetector(
-              onTap: () => setState(() => on ? _checked.remove(i) : _checked.add(i)),
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: line))),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 26,
-                      height: 26,
-                      decoration: BoxDecoration(
-                        color: on ? fb.accent : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: on ? fb.accent : Colors.white.withValues(alpha: 0.4), width: 2),
-                      ),
-                      child: on ? const Center(child: FbIcon('check', size: 16, color: Colors.white)) : null,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text.rich(
-                        TextSpan(children: [
-                          TextSpan(text: '${d.qtyText}${d.unitText.isNotEmpty ? ' ${d.unitText}' : ''} ', style: fb.ui(size: 18, weight: FontWeight.w700, color: on ? faint : fb.accent)),
-                          TextSpan(text: d.name, style: fb.ui(size: 18, color: on ? faint : Colors.white, decoration: on ? TextDecoration.lineThrough : null)),
-                          if (d.note != null) TextSpan(text: ' · ${d.note}', style: fb.ui(size: 18, color: faint, fontStyle: FontStyle.italic)),
-                        ]),
-                        style: const TextStyle(height: 1.35),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }(),
+        for (final (s, sec) in groupedSections(recipe.ingredients, (i) => i.group).indexed) ...[
+          if (sec.hasHeader) _scSectionHeader(fb, sec.name!, first: s == 0),
+          for (int k = 0; k < sec.items.length; k++)
+            _scIngredientRow(sec.items[k], sec.indices[k], ratio, app, fb, line, faint),
+        ],
       ],
+    );
+  }
+
+  // Dark-theme section heading for the cooking panes.
+  Widget _scSectionHeader(FbTheme fb, String name, {required bool first}) => Padding(
+        padding: EdgeInsets.only(top: first ? 6 : 20, bottom: 4),
+        child: Row(children: [
+          Container(width: 3, height: 16, decoration: BoxDecoration(color: fb.accent, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 9),
+          Expanded(child: Text(name.toUpperCase(), style: fb.ui(size: 13, weight: FontWeight.w800, color: Colors.white.withValues(alpha: 0.92), letterSpacing: 0.5))),
+        ]),
+      );
+
+  Widget _scIngredientRow(Ingredient ing, int index, double ratio, AppState app, FbTheme fb, Color line, Color faint) {
+    final d = displayIngredient(ing.quantity, ing.unit, ing.name, ing.note, ratio, app.prefs, app.lang);
+    final on = _checked.contains(index);
+    return GestureDetector(
+      onTap: () => setState(() => on ? _checked.remove(index) : _checked.add(index)),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: line))),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: on ? fb.accent : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: on ? fb.accent : Colors.white.withValues(alpha: 0.4), width: 2),
+              ),
+              child: on ? const Center(child: FbIcon('check', size: 16, color: Colors.white)) : null,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(text: '${d.qtyText}${d.unitText.isNotEmpty ? ' ${d.unitText}' : ''} ', style: fb.ui(size: 18, weight: FontWeight.w700, color: on ? faint : fb.accent)),
+                  TextSpan(text: d.name, style: fb.ui(size: 18, color: on ? faint : Colors.white, decoration: on ? TextDecoration.lineThrough : null)),
+                  if (d.note != null) TextSpan(text: ' · ${d.note}', style: fb.ui(size: 18, color: faint, fontStyle: FontStyle.italic)),
+                ]),
+                style: const TextStyle(height: 1.35),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -443,13 +460,22 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
             children: [
               Text('${app.t('sc_step')} ${_stepIdx + 1} ${app.t('sc_of')} ${steps.length}', style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent, letterSpacing: 0.6)),
+              if (_g(step.group) != null) ...[
+                const SizedBox(height: 7),
+                Row(children: [
+                  Container(width: 3, height: 18, decoration: BoxDecoration(color: fb.accent, borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(width: 9),
+                  Expanded(child: Text(_g(step.group)!, style: fb.display(size: 19, weight: FontWeight.w600, color: Colors.white))),
+                ]),
+              ],
               const SizedBox(height: 12),
               Row(
                 children: [
                   for (int i = 0; i < steps.length; i++)
                     Expanded(
                       child: Container(
-                        margin: EdgeInsets.only(right: i < steps.length - 1 ? 6 : 0),
+                        // a wider gap marks a group boundary (next step starts a new section)
+                        margin: EdgeInsets.only(right: i < steps.length - 1 ? (_g(steps[i].group) != _g(steps[i + 1].group) ? 14 : 6) : 0),
                         height: 5,
                         decoration: BoxDecoration(color: i <= _stepIdx ? fb.accent : Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(99)),
                       ),
