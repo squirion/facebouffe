@@ -46,32 +46,47 @@ Future<void> exportRecipesPdf(BuildContext context, List<Recipe> recipes) async 
         ],
         pw.Text(tr(lang, 'ingredients'), style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 6),
-        ...r.ingredients.map((ing) {
-          final d = displayIngredient(ing.quantity, ing.unit, ing.name, ing.note, 1, prefs, lang);
-          final qty = '${d.qtyText}${d.unitText.isNotEmpty ? ' ${d.unitText}' : ''}';
-          return pw.Padding(
-            padding: const pw.EdgeInsets.only(bottom: 3),
-            child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-              pw.SizedBox(width: 80, child: pw.Text(qty, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: accent))),
-              pw.Expanded(child: pw.Text(d.note != null ? '${d.name} · ${d.note}' : d.name, style: const pw.TextStyle(fontSize: 11))),
-            ]),
-          );
-        }),
+        for (final (s, sec) in groupedSections(r.ingredients, (i) => i.group).indexed) ...[
+          if (sec.hasHeader)
+            pw.Padding(
+              padding: pw.EdgeInsets.only(top: s == 0 ? 0 : 6, bottom: 3),
+              child: pw.Text(sec.name!, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: accent)),
+            ),
+          ...sec.items.map((ing) {
+            final d = displayIngredient(ing.quantity, ing.unit, ing.name, ing.note, 1, prefs, lang);
+            final qty = '${d.qtyText}${d.unitText.isNotEmpty ? ' ${d.unitText}' : ''}';
+            return pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 3),
+              child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                pw.SizedBox(width: 80, child: pw.Text(qty, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: accent))),
+                pw.Expanded(child: pw.Text(d.note != null ? '${d.name} · ${d.note}' : d.name, style: const pw.TextStyle(fontSize: 11))),
+              ]),
+            );
+          }),
+        ],
         pw.SizedBox(height: 14),
         pw.Text(tr(lang, 'steps'), style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 6),
-        ...r.steps.asMap().entries.map((e) => pw.Padding(
+        for (final (s, sec) in groupedSections(r.steps, (st) => st.group).indexed) ...[
+          if (sec.hasHeader)
+            pw.Padding(
+              padding: pw.EdgeInsets.only(top: s == 0 ? 0 : 8, bottom: 4),
+              child: pw.Text(sec.name!, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: accent)),
+            ),
+          for (int k = 0; k < sec.items.length; k++)
+            pw.Padding(
               padding: const pw.EdgeInsets.only(bottom: 6),
               child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                pw.Container(width: 18, child: pw.Text('${e.key + 1}.', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: accent))),
+                pw.Container(width: 18, child: pw.Text('${sec.indices[k] + 1}.', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: accent))),
                 pw.Expanded(
                   child: pw.Text(
-                    plain(e.value.text) + (e.value.timerSeconds != null ? '  (${fmtTimer(e.value.timerSeconds)})' : ''),
+                    plain(sec.items[k].text) + (sec.items[k].timerSeconds != null ? '  (${fmtTimer(sec.items[k].timerSeconds)})' : ''),
                     style: const pw.TextStyle(fontSize: 11, lineSpacing: 2),
                   ),
                 ),
               ]),
-            )),
+            ),
+        ],
       ],
     );
   }

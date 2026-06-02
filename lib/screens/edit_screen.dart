@@ -56,12 +56,67 @@ class _EditScreenState extends State<EditScreen> {
     for (final s in form.steps) {
       s.text = detokenizeTemps(s.text);
     }
+    // Section-aware editor rows (headers + item refs); group labels are derived
+    // from header positions on save, so the flat form lists stay canonical.
+    _ingRows = _rowsFrom<Ingredient>(form.ingredients, (i) => i.group);
+    _stepRows = _rowsFrom<Step>(form.steps, (s) => s.group);
+  }
+
+  // Editor working rows for ingredients/steps. The flat form lists are rebuilt
+  // from these (with group labels) on every structural change and on save.
+  List<_EditRow> _ingRows = [];
+  List<_EditRow> _stepRows = [];
+
+  List<_EditRow> _rowsFrom<T>(List<T> items, String? Function(T) groupOf) {
+    final rows = <_EditRow>[];
+    String? cur;
+    for (final it in items) {
+      final g = groupOf(it);
+      final key = (g == null || g.trim().isEmpty) ? null : g.trim();
+      if (key != cur) {
+        if (key != null) rows.add(_EditRow.header(key));
+        cur = key;
+      }
+      rows.add(_EditRow.item(it));
+    }
+    return rows;
+  }
+
+  void _syncIng() {
+    final out = <Ingredient>[];
+    String? cur;
+    for (final r in _ingRows) {
+      if (r.isHeader) {
+        cur = r.name.trim().isEmpty ? null : r.name.trim();
+      } else {
+        (r.item as Ingredient).group = cur;
+        out.add(r.item as Ingredient);
+      }
+    }
+    form.ingredients = out;
+  }
+
+  void _syncSteps() {
+    final out = <Step>[];
+    String? cur;
+    for (final r in _stepRows) {
+      if (r.isHeader) {
+        cur = r.name.trim().isEmpty ? null : r.name.trim();
+      } else {
+        (r.item as Step).group = cur;
+        out.add(r.item as Step);
+      }
+    }
+    form.steps = out;
   }
 
   String get photoId => existing?.id ?? '__draft';
 
   void _save() {
     final app = context.read<AppState>();
+    // Fold the section rows back into the flat lists (with group labels) first.
+    _syncIng();
+    _syncSteps();
     if (form.title.trim().isEmpty) {
       setState(() {
         error = app.t('validation_title');
@@ -240,46 +295,16 @@ class _EditScreenState extends State<EditScreen> {
         physics: const NeverScrollableScrollPhysics(),
         buildDefaultDragHandles: false,
         proxyDecorator: _liftedCard,
-        onReorder: (oldIndex, newIndex) => setState(() => _reorder(form.ingredients, oldIndex, newIndex)),
-        children: [
-          for (int i = 0; i < form.ingredients.length; i++)
-            Padding(
-              key: ObjectKey(form.ingredients[i]),
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: fb.cardSoft, borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.line)),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        _dragHandle(i),
-                        const SizedBox(width: 4),
-                        SizedBox(width: 50, child: _input(fb, form.ingredients[i].quantity?.toString() ?? '', app.t('f_qty'), (v) => form.ingredients[i].quantity = v.isEmpty ? null : num.tryParse(v), number: true, center: true)),
-                        const SizedBox(width: 6),
-                        SizedBox(
-                          width: 82,
-                          child: _UnitDropdown(value: form.ingredients[i].unit, lang: app.lang, onChange: (u) => setState(() => form.ingredients[i].unit = u)),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(child: _input(fb, form.ingredients[i].name, app.t('f_ing_name'), (v) => form.ingredients[i].name = v)),
-                      ],
-                    ),
-                    const SizedBox(height: 7),
-                    Row(
-                      children: [
-                        Expanded(child: _input(fb, form.ingredients[i].note ?? '', '${app.t('f_note')} · ${app.t('f_note_ph')}', (v) => form.ingredients[i].note = v, italic: true)),
-                        const SizedBox(width: 6),
-                        _miniBtn(fb, 'trash', false, () => setState(() => form.ingredients.removeAt(i))),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
+        onReorder: (o, n) => setState(() { _reorder(_ingRows, o, n); _syncIng(); }),
+        children: _ingRowWidgets(app, fb),
       ),
-      _addRowBtn(fb, app.t('f_add_ing'), () => setState(() => form.ingredients.add(Ingredient(name: '')))),
+      Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Wrap(spacing: 10, runSpacing: 10, children: [
+          _addBtn(fb, app.t('f_add_ing'), () => setState(() { _ingRows.add(_EditRow.item(Ingredient(name: ''))); _syncIng(); })),
+          _addBtn(fb, app.t('f_add_section'), () => setState(() => _ingRows.add(_EditRow.header(''))), icon: 'note'),
+        ]),
+      ),
       Padding(
         padding: const EdgeInsets.only(top: 24),
         child: Divider(height: 1, color: fb.line),
@@ -289,6 +314,76 @@ class _EditScreenState extends State<EditScreen> {
         child: NutritionPanel(form: form, onChanged: () => setState(() {})),
       ),
     ];
+  }
+
+  List<Widget> _ingRowWidgets(AppState app, FbTheme fb) {
+    final widgets = <Widget>[];
+    for (int i = 0; i < _ingRows.length; i++) {
+      final row = _ingRows[i];
+      if (row.isHeader) {
+        widgets.add(_sectionHeaderCard(fb, app, row, i, () => setState(() { _ingRows.remove(row); _syncIng(); })));
+      } else {
+        widgets.add(_ingredientCard(app, fb, row, i));
+      }
+    }
+    return widgets;
+  }
+
+  Widget _ingredientCard(AppState app, FbTheme fb, _EditRow row, int displayIndex) {
+    final ing = row.item as Ingredient;
+    return Padding(
+      key: ObjectKey(row),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: fb.cardSoft, borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.line)),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                _dragHandle(displayIndex),
+                const SizedBox(width: 4),
+                SizedBox(width: 50, child: _input(fb, ing.quantity?.toString() ?? '', app.t('f_qty'), (v) => ing.quantity = v.isEmpty ? null : num.tryParse(v), number: true, center: true)),
+                const SizedBox(width: 6),
+                SizedBox(
+                  width: 82,
+                  child: _UnitDropdown(value: ing.unit, lang: app.lang, onChange: (u) => setState(() => ing.unit = u)),
+                ),
+                const SizedBox(width: 6),
+                Expanded(child: _input(fb, ing.name, app.t('f_ing_name'), (v) => ing.name = v)),
+              ],
+            ),
+            const SizedBox(height: 7),
+            Row(
+              children: [
+                Expanded(child: _input(fb, ing.note ?? '', '${app.t('f_note')} · ${app.t('f_note_ph')}', (v) => ing.note = v, italic: true)),
+                const SizedBox(width: 6),
+                _miniBtn(fb, 'trash', false, () => setState(() { _ingRows.remove(row); _syncIng(); })),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A draggable section-header row (editable name) used in both editors.
+  Widget _sectionHeaderCard(FbTheme fb, AppState app, _EditRow row, int displayIndex, VoidCallback onRemove) {
+    return Padding(
+      key: ObjectKey(row),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(4, 5, 8, 5),
+        decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(13), border: Border.all(color: fb.accent.withValues(alpha: 0.45))),
+        child: Row(children: [
+          _dragHandle(displayIndex),
+          const SizedBox(width: 2),
+          Expanded(child: _input(fb, row.name, app.t('f_section_ph'), (v) => row.name = v)),
+          const SizedBox(width: 6),
+          _miniBtn(fb, 'trash', false, onRemove),
+        ]),
+      ),
+    );
   }
 
   // Drag handle that initiates a reorder for the row at [index]. The haptic
@@ -343,69 +438,85 @@ class _EditScreenState extends State<EditScreen> {
         physics: const NeverScrollableScrollPhysics(),
         buildDefaultDragHandles: false,
         proxyDecorator: _liftedCard,
-        onReorder: (oldIndex, newIndex) => setState(() => _reorder(form.steps, oldIndex, newIndex)),
-        children: [
-          for (int i = 0; i < form.steps.length; i++)
-            Padding(
-              key: ObjectKey(form.steps[i]),
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _stepCard(app, fb, i),
-            ),
-        ],
+        onReorder: (o, n) => setState(() { _reorder(_stepRows, o, n); _syncSteps(); }),
+        children: _stepRowWidgets(app, fb),
       ),
-      _addRowBtn(fb, app.t('f_add_step'), () => setState(() => form.steps.add(Step(text: '')))),
+      Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Wrap(spacing: 10, runSpacing: 10, children: [
+          _addBtn(fb, app.t('f_add_step'), () => setState(() { _stepRows.add(_EditRow.item(Step(text: ''))); _syncSteps(); })),
+          _addBtn(fb, app.t('f_add_section'), () => setState(() => _stepRows.add(_EditRow.header(''))), icon: 'note'),
+        ]),
+      ),
     ];
   }
 
-  Widget _stepCard(AppState app, FbTheme fb, int i) {
-    final step = form.steps[i];
+  List<Widget> _stepRowWidgets(AppState app, FbTheme fb) {
+    final widgets = <Widget>[];
+    int stepNo = 0;
+    for (int i = 0; i < _stepRows.length; i++) {
+      final row = _stepRows[i];
+      if (row.isHeader) {
+        widgets.add(_sectionHeaderCard(fb, app, row, i, () => setState(() { _stepRows.remove(row); _syncSteps(); })));
+      } else {
+        widgets.add(_stepCard(app, fb, row, i, ++stepNo));
+      }
+    }
+    return widgets;
+  }
+
+  Widget _stepCard(AppState app, FbTheme fb, _EditRow row, int displayIndex, int stepNo) {
+    final step = row.item as Step;
     final watermark = fb.accent.withValues(alpha: fb.dark ? 0.20 : 0.12);
-    return Container(
-      clipBehavior: Clip.hardEdge,
-      decoration: BoxDecoration(color: fb.cardSoft, borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.line)),
-      child: Stack(
-        children: [
-          // step number, filigrane top-right
-          Positioned(
-            top: -12,
-            right: 8,
-            child: IgnorePointer(child: Text('${i + 1}', style: fb.display(size: 66, weight: FontWeight.w800, color: watermark, height: 1))),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(padding: const EdgeInsets.only(top: 4), child: _dragHandle(i)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TempTextarea(
-                        value: step.text,
-                        onChange: (v) => setState(() => step.text = v),
-                        placeholder: '${app.t('f_step')} ${i + 1}',
-                        rows: 2,
-                        maxRows: 5,
-                        bare: true,
-                        sidePills: false,
-                        controlsBuilder: (insert) => _stepControls(app, fb, i, insert),
-                      ),
-                      if (step.image != null) Padding(padding: const EdgeInsets.only(top: 9), child: _stepPhoto(fb, i)),
-                    ],
-                  ),
-                ),
-              ],
+    return Padding(
+      key: ObjectKey(row),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        clipBehavior: Clip.hardEdge,
+        decoration: BoxDecoration(color: fb.cardSoft, borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.line)),
+        child: Stack(
+          children: [
+            // step number, filigrane top-right
+            Positioned(
+              top: -12,
+              right: 8,
+              child: IgnorePointer(child: Text('$stepNo', style: fb.display(size: 66, weight: FontWeight.w800, color: watermark, height: 1))),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(padding: const EdgeInsets.only(top: 4), child: _dragHandle(displayIndex)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TempTextarea(
+                          value: step.text,
+                          onChange: (v) => setState(() => step.text = v),
+                          placeholder: '${app.t('f_step')} $stepNo',
+                          rows: 2,
+                          maxRows: 5,
+                          bare: true,
+                          sidePills: false,
+                          controlsBuilder: (insert) => _stepControls(app, fb, step, row, insert),
+                        ),
+                        if (step.image != null) Padding(padding: const EdgeInsets.only(top: 9), child: _stepPhoto(fb, step)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _stepControls(AppState app, FbTheme fb, int i, void Function(String) insert) {
-    final step = form.steps[i];
+  Widget _stepControls(AppState app, FbTheme fb, Step step, _EditRow row, void Function(String) insert) {
     final hasImg = step.image != null;
     Widget cf(String label) => GestureDetector(
           onTap: () => insert(label),
@@ -421,7 +532,7 @@ class _EditScreenState extends State<EditScreen> {
             cf('°F'),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => _pickStepPhoto(i),
+              onTap: () => _pickStepPhoto(step),
               child: Container(
                 height: 34,
                 padding: const EdgeInsets.symmetric(horizontal: 11),
@@ -434,7 +545,7 @@ class _EditScreenState extends State<EditScreen> {
               ),
             ),
             const Spacer(),
-            _miniBtn(fb, 'trash', false, () => setState(() => form.steps.removeAt(i))),
+            _miniBtn(fb, 'trash', false, () => setState(() { _stepRows.remove(row); _syncSteps(); })),
           ]),
           const SizedBox(height: 8),
           Row(children: [
@@ -467,8 +578,8 @@ class _EditScreenState extends State<EditScreen> {
     );
   }
 
-  Widget _stepPhoto(FbTheme fb, int i) {
-    final image = form.steps[i].image!;
+  Widget _stepPhoto(FbTheme fb, Step step) {
+    final image = step.image!;
     final isFile = image.contains('/');
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 220),
@@ -488,7 +599,7 @@ class _EditScreenState extends State<EditScreen> {
             top: 6,
             right: 6,
             child: GestureDetector(
-              onTap: () => setState(() => form.steps[i].image = null),
+              onTap: () => setState(() => step.image = null),
               child: Container(width: 26, height: 26, decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: const Center(child: FbIcon('x', size: 14, color: Colors.white))),
             ),
           ),
@@ -497,9 +608,9 @@ class _EditScreenState extends State<EditScreen> {
     );
   }
 
-  Future<void> _pickStepPhoto(int i) async {
+  Future<void> _pickStepPhoto(Step step) async {
     final path = await ImagePick.pick(context);
-    if (path != null && mounted) setState(() => form.steps[i].image = path);
+    if (path != null && mounted) setState(() => step.image = path);
   }
 
   // ── DESCRIPTION ──
@@ -622,22 +733,35 @@ class _EditScreenState extends State<EditScreen> {
         ),
       );
 
-  Widget _addRowBtn(FbTheme fb, String label, VoidCallback onTap) => Align(
-        alignment: Alignment.centerLeft,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            margin: const EdgeInsets.only(top: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: fb.lineStrong, width: 1.5)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              FbIcon('plus', size: fb.fs(17), color: fb.accent),
-              const SizedBox(width: 7),
-              Text(label, style: fb.ui(size: 14, weight: FontWeight.w600, color: fb.accent)),
-            ]),
-          ),
+  // Inline "+ Add ingredient / step / section" button (sits in a Wrap so the
+  // primary add and the add-section button share a row).
+  Widget _addBtn(FbTheme fb, String label, VoidCallback onTap, {String icon = 'plus'}) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: fb.lineStrong, width: 1.5)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            FbIcon(icon, size: fb.fs(17), color: fb.accent),
+            const SizedBox(width: 7),
+            Text(label, style: fb.ui(size: 14, weight: FontWeight.w600, color: fb.accent)),
+          ]),
         ),
       );
+}
+
+/// One row in the section-aware ingredient/step editor: either a group header
+/// (editable [name]) or an item (an Ingredient/Step held by reference, so the
+/// flat form lists remain the source of truth for nutrition and save).
+class _EditRow {
+  final bool isHeader;
+  String name;
+  final Object? item;
+  _EditRow.header(this.name)
+      : isHeader = true,
+        item = null;
+  _EditRow.item(this.item)
+      : isHeader = false,
+        name = '';
 }
 
 class _SectionChip extends StatelessWidget {

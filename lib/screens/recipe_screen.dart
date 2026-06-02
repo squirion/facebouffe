@@ -199,14 +199,17 @@ class _RecipeScreenState extends State<RecipeScreen> {
                         decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(20), boxShadow: fb.shadow),
                         child: Column(
                           children: [
-                            for (int i = 0; i < recipe.ingredients.length; i++)
-                              _IngredientRow(
-                                ing: recipe.ingredients[i],
-                                ratio: ratio,
-                                prefs: app.prefs,
-                                lang: lang,
-                                last: i == recipe.ingredients.length - 1,
-                              ),
+                            for (final (s, sec) in groupedSections(recipe.ingredients, (i) => i.group).indexed) ...[
+                              if (sec.hasHeader) _SectionHeader(name: sec.name!, first: s == 0),
+                              for (int k = 0; k < sec.items.length; k++)
+                                _IngredientRow(
+                                  ing: sec.items[k],
+                                  ratio: ratio,
+                                  prefs: app.prefs,
+                                  lang: lang,
+                                  last: sec.indices[k] == recipe.ingredients.length - 1,
+                                ),
+                            ],
                           ],
                         ),
                       ),
@@ -239,8 +242,11 @@ class _RecipeScreenState extends State<RecipeScreen> {
                       const SizedBox(height: 30),
                       Text(app.t('steps'), style: fb.display(size: 22, weight: FontWeight.w600)),
                       const SizedBox(height: 14),
-                      for (int i = 0; i < recipe.steps.length; i++)
-                        _StepRow(index: i, step: recipe.steps[i], onLink: (id) => Nav.openRecipe(context, id)),
+                      for (final (s, sec) in groupedSections(recipe.steps, (st) => st.group).indexed) ...[
+                        if (sec.hasHeader) _SectionHeader(name: sec.name!, first: s == 0, step: true),
+                        for (int k = 0; k < sec.items.length; k++)
+                          _StepRow(index: sec.indices[k], step: sec.items[k], onLink: (id) => Nav.openRecipe(context, id)),
+                      ],
                       // gallery — user-added photos if any, else seed placeholders
                       if (app.galleryOf(recipe.id).isNotEmpty || recipe.gallery.isNotEmpty) ...[
                         const SizedBox(height: 30),
@@ -496,6 +502,28 @@ class _StepperBtn extends StatelessWidget {
           child: Center(child: FbIcon(icon, size: fb.fs(19), color: fb.accent)),
         ),
       ),
+    );
+  }
+}
+
+/// Group heading for a run of ingredients/steps (e.g. "Pâte", "Glaçage").
+/// [step] gives a touch more breathing room for the larger step list.
+class _SectionHeader extends StatelessWidget {
+  final String name;
+  final bool first;
+  final bool step;
+  const _SectionHeader({required this.name, this.first = false, this.step = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final fb = context.fb;
+    return Padding(
+      padding: EdgeInsets.only(top: first ? (step ? 0 : 6) : (step ? 8 : 16), bottom: step ? 12 : 8),
+      child: Row(children: [
+        Container(width: 3, height: 15, decoration: BoxDecoration(color: fb.accent, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 8),
+        Expanded(child: Text(name.toUpperCase(), style: fb.ui(size: step ? 13.5 : 12.5, weight: FontWeight.w800, color: fb.accent, letterSpacing: 0.4))),
+      ]),
     );
   }
 }
