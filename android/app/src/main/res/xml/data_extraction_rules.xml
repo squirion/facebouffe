@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ Auto Backup (cloud) + device-transfer rules.
+
+  Cloud backup has a ~25 MB per-app quota and FAILS WHOLESALE if exceeded. The
+  recipe database + settings live in shared-preferences and are tiny, so they
+  always fit and restore on reinstall. Photo files (hero/gallery/step images)
+  and the optional on-device model can be large, so we EXCLUDE them from cloud
+  backup to keep the critical recipe data under quota. Device-to-device transfer
+  has no tight quota, so it copies everything (photos included).
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </cloud-backup>
+</data-extraction-rules>

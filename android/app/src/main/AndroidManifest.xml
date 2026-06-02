@@ -13,7 +13,13 @@
     <application
         android:label="Facebouffe"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules">
+        <!-- allowBackup + dataExtractionRules: recipes/settings restore on
+             reinstall via the user's Google Drive (Auto Backup). Photos/model are
+             excluded from cloud backup to stay under the 25 MB quota — see the
+             rules file. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
