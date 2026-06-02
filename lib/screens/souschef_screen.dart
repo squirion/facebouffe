@@ -19,13 +19,14 @@ import '../widgets/fb_icon.dart';
 /// notification keyed by [notifId]). [notifId] == stepIdx (one timer per step).
 class _Timer {
   final String key;
+  final String recipeId; // which stacked recipe owns this timer
   final int stepIdx;
   final int notifId;
   final int total;
   DateTime? endTime; // set while running; null while paused
   int remaining; // authoritative only while paused
   bool running = true;
-  _Timer({required this.key, required this.stepIdx, required this.notifId, required this.total, this.endTime, required this.remaining});
+  _Timer({required this.key, required this.recipeId, required this.stepIdx, required this.notifId, required this.total, this.endTime, required this.remaining});
 
   int get left {
     if (running && endTime != null) {
@@ -34,6 +35,18 @@ class _Timer {
     }
     return remaining;
   }
+}
+
+/// One open recipe in the cooking stack. Holds the per-recipe UI state so each
+/// stacked recipe keeps its own pane, step position and ingredient checklist
+/// (timers live in the shared list, tagged by [recipeId]).
+class _CookSession {
+  final String recipeId;
+  int servings;
+  int pane = 0; // 0 = ingredients, 1 = steps
+  int stepIdx = 0;
+  final Set<int> checked = {};
+  _CookSession(this.recipeId, this.servings);
 }
 
 /// Lean cooking helper: two swipeable panes (ingredients checklist + step-by-
@@ -50,15 +63,19 @@ class SousChefScreen extends StatefulWidget {
 
 class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObserver {
   final _pager = PageController();
-  int _pane = 0;
-  int _stepIdx = 0;
-  final Set<int> _checked = {};
+  final List<_CookSession> _sessions = [];
+  // ignore: prefer_final_fields — becomes mutable when tab-switching lands (Commit B)
+  int _active = 0;
   final List<_Timer> _timers = [];
+  int _notifSeq = 1000; // monotonic, globally-unique notification ids across recipes
   Timer? _ticker;
+
+  _CookSession get _s => _sessions[_active];
 
   @override
   void initState() {
     super.initState();
+    _sessions.add(_CookSession(widget.id, widget.servings));
     WidgetsBinding.instance.addObserver(this);
     WakelockPlus.enable(); // keep the screen awake while cooking (web + Android)
     if (!kIsWeb) TimerNotifications.instance.requestPermissions();
@@ -102,30 +119,33 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
     }
   }
 
-  // Build the bilingual chime title/body for a step timer.
-  ({String title, String body}) _chimeText(int stepIdx) {
+  // Build the bilingual chime title/body for a step timer (names its recipe).
+  ({String title, String body}) _chimeText(String recipeId, int stepIdx) {
     final app = context.read<AppState>();
-    final recipe = app.getRecipe(widget.id);
+    final recipe = app.getRecipe(recipeId);
     final step = '${app.t('sc_step')} ${stepIdx + 1}';
     return (title: app.t('sc_timer_done'), body: recipe != null ? '${recipe.title} · $step' : step);
   }
 
-  void _startStepTimer(int idx, int total) {
+  void _startStepTimer(_CookSession s, int idx, int total) {
     final end = DateTime.now().add(Duration(seconds: total));
+    late int notifId;
     setState(() {
-      final ex = _timers.where((t) => t.stepIdx == idx).firstOrNull;
+      final ex = _timers.where((t) => t.recipeId == s.recipeId && t.stepIdx == idx).firstOrNull;
       if (ex != null) {
         ex.endTime = end;
         ex.remaining = total;
         ex.running = true;
+        notifId = ex.notifId;
       } else {
-        _timers.add(_Timer(key: '$idx-${DateTime.now().microsecondsSinceEpoch}', stepIdx: idx, notifId: idx, total: total, endTime: end, remaining: total));
+        notifId = _notifSeq++;
+        _timers.add(_Timer(key: '${s.recipeId}-$idx-${DateTime.now().microsecondsSinceEpoch}', recipeId: s.recipeId, stepIdx: idx, notifId: notifId, total: total, endTime: end, remaining: total));
       }
     });
-    final txt = _chimeText(idx);
+    final txt = _chimeText(s.recipeId, idx);
     final app = context.read<AppState>();
-    TimerNotifications.instance.cancel(idx);
-    TimerNotifications.instance.schedule(idx, total, title: txt.title, body: txt.body, isAlarm: app.chimeIsAlarm, alarmUri: app.chimeAlarmUri);
+    TimerNotifications.instance.cancel(notifId);
+    TimerNotifications.instance.schedule(notifId, total, title: txt.title, body: txt.body, isAlarm: app.chimeIsAlarm, alarmUri: app.chimeAlarmUri);
     _ensureTicker();
   }
 
@@ -146,7 +166,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
         t.remaining = secs;
         t.running = true;
       });
-      final txt = _chimeText(t.stepIdx);
+      final txt = _chimeText(t.recipeId, t.stepIdx);
       final app = context.read<AppState>();
       TimerNotifications.instance.cancel(t.notifId);
       TimerNotifications.instance.schedule(t.notifId, secs, title: txt.title, body: txt.body, isAlarm: app.chimeIsAlarm, alarmUri: app.chimeAlarmUri);
@@ -158,7 +178,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
   String? _g(String? s) => (s == null || s.trim().isEmpty) ? null : s.trim();
 
   void _setPane(int i) {
-    setState(() => _pane = i);
+    setState(() => _s.pane = i);
     _pager.animateToPage(i, duration: Duration(milliseconds: context.read<AppState>().reduceMotion ? 120 : 340), curve: Curves.easeInOut);
   }
 
@@ -166,9 +186,10 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final fb = context.fb;
-    final recipe = app.getRecipe(widget.id);
+    final s = _s;
+    final recipe = app.getRecipe(s.recipeId);
     if (recipe == null) return const SizedBox();
-    final ratio = widget.servings / recipe.servings;
+    final ratio = s.servings / recipe.servings;
     final steps = recipe.steps;
     final pal = fallbackColorFor(recipe.id);
     final topInset = MediaQuery.of(context).padding.top;
@@ -216,7 +237,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(recipe.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.display(size: 17, weight: FontWeight.w600, color: Colors.white)),
-                          Text('${widget.servings} ${widget.servings == 1 ? app.t('serving_one') : app.t('servings')}', style: fb.ui(size: 12, weight: FontWeight.w600, color: dimC)),
+                          Text('${s.servings} ${s.servings == 1 ? app.t('serving_one') : app.t('servings')}', style: fb.ui(size: 12, weight: FontWeight.w600, color: dimC)),
                         ],
                       ),
                     ),
@@ -278,7 +299,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                                   children: [
                                     Text(done ? app.t('sc_timer_done') : fmtTimer(tm.left), style: fb.ui(size: 15, weight: FontWeight.w700, color: done ? good : Colors.white, height: 1)),
                                     GestureDetector(
-                                      onTap: () { setState(() => _stepIdx = tm.stepIdx); _setPane(1); },
+                                      onTap: () { setState(() => _s.stepIdx = tm.stepIdx); _setPane(1); },
                                       child: Text('${app.t('sc_step')} ${tm.stepIdx + 1}', style: fb.ui(size: 10.5, color: dimC)),
                                     ),
                                   ],
@@ -311,11 +332,11 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                                 onTap: () => _setPane(i),
                                 child: Container(
                                   height: 40,
-                                  decoration: BoxDecoration(color: _pane == i ? fb.accent : surface, borderRadius: BorderRadius.circular(12)),
+                                  decoration: BoxDecoration(color: s.pane == i ? fb.accent : surface, borderRadius: BorderRadius.circular(12)),
                                   alignment: Alignment.center,
                                   child: Text(
-                                    i == 0 ? app.t('sc_ingredients') : '${app.t('sc_steps')}  ${(_stepIdx + 1).clamp(1, steps.length)}/${steps.length}',
-                                    style: fb.ui(size: 15, weight: FontWeight.w700, color: Colors.white.withValues(alpha: _pane == i ? 1 : 0.7)),
+                                    i == 0 ? app.t('sc_ingredients') : '${app.t('sc_steps')}  ${(s.stepIdx + 1).clamp(1, steps.length)}/${steps.length}',
+                                    style: fb.ui(size: 15, weight: FontWeight.w700, color: Colors.white.withValues(alpha: s.pane == i ? 1 : 0.7)),
                                   ),
                                 ),
                               ),
@@ -331,9 +352,9 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                           AnimatedContainer(
                             duration: const Duration(milliseconds: 250),
                             margin: const EdgeInsets.symmetric(horizontal: 3.5),
-                            width: _pane == i ? 18 : 7,
+                            width: s.pane == i ? 18 : 7,
                             height: 7,
-                            decoration: BoxDecoration(color: _pane == i ? Colors.white : faint, borderRadius: BorderRadius.circular(999)),
+                            decoration: BoxDecoration(color: s.pane == i ? Colors.white : faint, borderRadius: BorderRadius.circular(999)),
                           ),
                       ],
                     ),
@@ -344,7 +365,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
               Expanded(
                 child: PageView(
                   controller: _pager,
-                  onPageChanged: (i) => setState(() => _pane = i),
+                  onPageChanged: (i) => setState(() => _s.pane = i),
                   children: [
                     _ingredientsPane(context, recipe, ratio, app, fb, line, faint, good),
                     _stepsPane(context, recipe, steps, app, fb, surface, line, dimC, good, bottomInset),
@@ -384,9 +405,9 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
 
   Widget _scIngredientRow(Ingredient ing, int index, double ratio, AppState app, FbTheme fb, Color line, Color faint) {
     final d = displayIngredient(ing.quantity, ing.unit, ing.name, ing.note, ratio, app.prefs, app.lang);
-    final on = _checked.contains(index);
+    final on = _s.checked.contains(index);
     return GestureDetector(
-      onTap: () => setState(() => on ? _checked.remove(index) : _checked.add(index)),
+      onTap: () => setState(() => on ? _s.checked.remove(index) : _s.checked.add(index)),
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -422,7 +443,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
   }
 
   Widget _stepsPane(BuildContext context, Recipe recipe, List<Step> steps, AppState app, FbTheme fb, Color surface, Color line, Color dimC, Color good, double bottomInset) {
-    final finished = _stepIdx >= steps.length;
+    final finished = _s.stepIdx >= steps.length;
     if (finished) {
       return Center(
         child: Padding(
@@ -451,15 +472,15 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
         ),
       );
     }
-    final step = steps[_stepIdx];
-    final myTimer = _timers.where((t) => t.stepIdx == _stepIdx).firstOrNull;
+    final step = steps[_s.stepIdx];
+    final myTimer = _timers.where((t) => t.recipeId == _s.recipeId && t.stepIdx == _s.stepIdx).firstOrNull;
     return Column(
       children: [
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
             children: [
-              Text('${app.t('sc_step')} ${_stepIdx + 1} ${app.t('sc_of')} ${steps.length}', style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent, letterSpacing: 0.6)),
+              Text('${app.t('sc_step')} ${_s.stepIdx + 1} ${app.t('sc_of')} ${steps.length}', style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent, letterSpacing: 0.6)),
               if (_g(step.group) != null) ...[
                 const SizedBox(height: 7),
                 Row(children: [
@@ -477,7 +498,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                         // a wider gap marks a group boundary (next step starts a new section)
                         margin: EdgeInsets.only(right: i < steps.length - 1 ? (_g(steps[i].group) != _g(steps[i + 1].group) ? 14 : 6) : 0),
                         height: 5,
-                        decoration: BoxDecoration(color: i <= _stepIdx ? fb.accent : Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(99)),
+                        decoration: BoxDecoration(color: i <= _s.stepIdx ? fb.accent : Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(99)),
                       ),
                     ),
                 ],
@@ -488,7 +509,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                 Padding(
                   padding: const EdgeInsets.only(top: 22),
                   child: GestureDetector(
-                    onTap: () => _startStepTimer(_stepIdx, step.timerSeconds!),
+                    onTap: () => _startStepTimer(_s, _s.stepIdx, step.timerSeconds!),
                     child: Container(
                       height: 50,
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -518,21 +539,21 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
           child: Row(
             children: [
               GestureDetector(
-                onTap: _stepIdx == 0 ? null : () => setState(() => _stepIdx--),
+                onTap: _s.stepIdx == 0 ? null : () => setState(() => _s.stepIdx--),
                 child: Opacity(
-                  opacity: _stepIdx == 0 ? 0.4 : 1,
+                  opacity: _s.stepIdx == 0 ? 0.4 : 1,
                   child: Container(width: 56, height: 56, decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: line, width: 1.5)), child: const Center(child: FbIcon('chevL', size: 24, color: Colors.white))),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
-                  onTap: () => setState(() => _stepIdx++),
+                  onTap: () => setState(() => _s.stepIdx++),
                   child: Container(
                     height: 56,
                     decoration: BoxDecoration(color: fb.accent, borderRadius: BorderRadius.circular(16)),
                     child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Text(_stepIdx == steps.length - 1 ? app.t('sc_finish') : app.t('sc_next'), style: fb.ui(size: 17, weight: FontWeight.w700, color: Colors.white)),
+                      Text(_s.stepIdx == steps.length - 1 ? app.t('sc_finish') : app.t('sc_next'), style: fb.ui(size: 17, weight: FontWeight.w700, color: Colors.white)),
                       const SizedBox(width: 8),
                       const FbIcon('chevR', size: 22, color: Colors.white),
                     ]),
