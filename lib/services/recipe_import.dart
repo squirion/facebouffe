@@ -271,6 +271,43 @@ class RecipeImport {
     }
   }
 
+  /// Parse `recipeInstructions` into steps, capturing a HowToSection's `name`
+  /// as the step group so imported recipes keep their phases (e.g. "Pâte",
+  /// "Glaçage"). Plain step lists stay ungrouped.
+  static List<Step> _parseInstructions(dynamic value) {
+    final out = <Step>[];
+    void add(String text, String? group) {
+      final t = text.trim();
+      if (t.isNotEmpty) out.add(Step(text: _tokenizeTemps(t), group: group));
+    }
+
+    if (value == null) return out;
+    if (value is String) {
+      add(value, null);
+    } else if (value is List) {
+      for (final item in value) {
+        if (item is String) {
+          add(item, null);
+        } else if (item is Map) {
+          if (item['@type'] == 'HowToSection') {
+            final name = (item['name'] ?? '').toString().trim();
+            final group = name.isEmpty ? null : name;
+            for (final sub in (item['itemListElement'] as List? ?? [])) {
+              if (sub is Map) {
+                add((sub['text'] ?? '').toString(), group);
+              } else if (sub is String) {
+                add(sub, group);
+              }
+            }
+          } else {
+            add((item['text'] ?? '').toString(), null);
+          }
+        }
+      }
+    }
+    return out;
+  }
+
   static List<String> _asTextList(dynamic value) {
     final out = <String>[];
     if (value == null) return out;
@@ -338,7 +375,7 @@ class RecipeImport {
     }
 
     final ingredients = _asTextList(r['recipeIngredient']).map((l) => _parseIngredient(l)).toList();
-    final steps = _asTextList(r['recipeInstructions']).map((t) => Step(text: _tokenizeTemps(t))).toList();
+    final steps = _parseInstructions(r['recipeInstructions']);
 
     final cats = r['recipeCategory'];
     final catList = cats is String ? [cats] : (cats is List ? cats : []);

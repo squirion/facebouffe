@@ -22,6 +22,7 @@ Rules:
 - "quantity" is a number (decimals allowed, e.g. 0.5) or null.
 - "servings","prepTimeMinutes","cookTimeMinutes" are numbers (0 if unknown).
 - Each cooking step is one sentence in "steps"; write temperatures inline like "180 °C".
+- "group" is OPTIONAL on an ingredient or step: a short section name (e.g. "Pâte", "Garniture", "Glaçage") when the recipe has labelled parts. Use the SAME wording for items in the same part. Omit it or use null when the recipe has no sections.
 - "tags": short lowercase keywords (e.g. "dessert"); may be empty [].
 
 Example of a valid answer:
@@ -145,6 +146,13 @@ String? _unit(dynamic v) {
   return kImportUnits.contains(u) ? u : null; // out-of-enum → treat as unitless
 }
 
+/// Optional section label on an imported item; null/blank/"null" → ungrouped.
+String? _group(dynamic v) {
+  if (v == null) return null;
+  final g = v.toString().trim();
+  return (g.isEmpty || g.toLowerCase() == 'null') ? null : g;
+}
+
 /// Validate model JSON and map it to a reviewable draft [ImportResult].
 /// Throws [ImportException] when the payload isn't a usable recipe.
 ImportResult draftFromModelJson(String raw, {String? source}) {
@@ -168,6 +176,7 @@ ImportResult draftFromModelJson(String raw, {String? source}) {
       unit: _unit(e['unit']),
       name: name,
       note: note.isEmpty ? null : note,
+      group: _group(e['group']),
     ));
   }
 
@@ -176,7 +185,7 @@ ImportResult draftFromModelJson(String raw, {String? source}) {
     final text = (e is Map ? (e['text'] as String? ?? '') : e.toString()).trim();
     if (text.isEmpty) continue;
     final secs = e is Map ? _numOrNull(e['timerSeconds'])?.round() : null;
-    steps.add(Step(text: text, timerSeconds: (secs != null && secs > 0) ? secs : null));
+    steps.add(Step(text: text, timerSeconds: (secs != null && secs > 0) ? secs : null, group: e is Map ? _group(e['group']) : null));
   }
 
   final tags = <String>[];
