@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -92,6 +94,23 @@ class ImagePick {
         out = img.encodeJpg(resized, quality: 80);
       }
       return 'data:image/jpeg;base64,${base64Encode(out)}';
+    }
+    // Android/iOS: downscale to ≤1600 px and re-encode into the app's documents
+    // dir, so recipe photos stay reasonably small and persist (the crop output
+    // lives in a cache dir that the OS can purge).
+    try {
+      final bytes = await cropped.readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded != null) {
+        final resized = decoded.width > 1600 ? img.copyResize(decoded, width: 1600) : decoded;
+        final out = img.encodeJpg(resized, quality: 88);
+        final dir = await getApplicationDocumentsDirectory();
+        final file = File('${dir.path}/photo_${DateTime.now().microsecondsSinceEpoch}.jpg');
+        await file.writeAsBytes(out);
+        return file.path;
+      }
+    } catch (_) {
+      // fall back to the raw cropped path
     }
     return cropped.path;
   }

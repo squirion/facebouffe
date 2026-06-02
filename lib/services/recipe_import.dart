@@ -572,9 +572,14 @@ class RecipeImport {
         }
         return 'data:image/jpeg;base64,${base64Encode(out)}';
       }
+      // Downscale to ≤1600 px before saving (imported heroes can be large).
+      final decoded = img.decodeImage(bytes);
+      final out = decoded != null
+          ? img.encodeJpg(decoded.width > 1600 ? img.copyResize(decoded, width: 1600) : decoded, quality: 88)
+          : bytes;
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/import_${DateTime.now().microsecondsSinceEpoch}.jpg');
-      await file.writeAsBytes(bytes);
+      await file.writeAsBytes(out);
       return file.path;
     } catch (_) {
       return null;
