@@ -28,6 +28,44 @@ Rules:
 Example of a valid answer:
 {"title":"Crêpes","description":"Recette simple.","source":"","servings":4,"prepTimeMinutes":10,"cookTimeMinutes":15,"tags":["dejeuner"],"ingredients":[{"quantity":250,"unit":"g","name":"farine tout usage","note":""},{"quantity":2,"unit":null,"name":"oeufs","note":"gros"},{"quantity":500,"unit":"ml","name":"lait","note":""}],"steps":[{"text":"Mélanger la farine, les oeufs et le lait.","timerSeconds":null},{"text":"Cuire chaque crêpe à feu moyen.","timerSeconds":null}]}''';
 
+/// "I'm feeling adventurous!" generator — invents a recipe from constraints
+/// rather than extracting one. Same strict-JSON contract as [kImportPrompt].
+const String kAdventurePrompt = '''
+You are a creative chef. INVENT a brand-new, original recipe that satisfies the user's constraints below. Be adventurous and surprising, but the recipe MUST be coherent and genuinely cookable, with realistic quantities and clear steps.
+Output ONLY one JSON object — no markdown, no ``` fences, no text before or after.
+NEVER put a double-quote (") inside a string value.
+
+Rules:
+- Write ALL text in the language requested in the constraints (default French). Do not mix languages.
+- Honor the requested meal, the ingredients to include, and the cuisine style(s); you may add complementary ingredients. Respect any extra notes.
+- "unit" must be EXACTLY one of: "g","kg","ml","l","tsp","tbsp","cup","oz","lb","pinch" — or null for countable items (e.g. eggs) or when unknown.
+- "quantity" is a number (decimals allowed, e.g. 0.5) or null. "servings","prepTimeMinutes","cookTimeMinutes" are numbers.
+- Give the dish an inventive "title" and a short, enticing "description".
+- Each cooking step is one sentence in "steps"; write temperatures inline like "180 °C".
+- "tags": short lowercase keywords (e.g. "dessert"); may be empty [].
+- "group" is OPTIONAL on an ingredient or step: a short section name when the recipe has labelled parts.
+
+Example of a valid answer:
+{"title":"Crêpes","description":"Recette simple.","servings":4,"prepTimeMinutes":10,"cookTimeMinutes":15,"tags":["dejeuner"],"ingredients":[{"quantity":250,"unit":"g","name":"farine tout usage","note":""},{"quantity":2,"unit":null,"name":"oeufs","note":"gros"}],"steps":[{"text":"Mélanger la farine et les oeufs.","timerSeconds":null}]}''';
+
+/// "Generate a mutation" — transforms an existing recipe into a new variant per
+/// the user's cues. Same strict-JSON contract as [kImportPrompt].
+const String kMutatePrompt = '''
+You are a creative chef. The user gives you an EXISTING recipe plus some cues. Produce a NEW VARIANT ("mutation") of that recipe that honors the cues — swap or add ingredients, shift the cuisine, or follow the instructions — while staying coherent and genuinely cookable. Keep what makes the original recognizable unless the cues clearly say otherwise. Invent a fitting NEW title for the variant.
+Output ONLY one JSON object — no markdown, no ``` fences, no text before or after.
+NEVER put a double-quote (") inside a string value.
+
+Rules:
+- Write ALL text in the language requested in the cues (default French). Do not mix languages.
+- "unit" must be EXACTLY one of: "g","kg","ml","l","tsp","tbsp","cup","oz","lb","pinch" — or null for countable items or when unknown.
+- "quantity" is a number (decimals allowed) or null. "servings","prepTimeMinutes","cookTimeMinutes" are numbers.
+- Each cooking step is one sentence; write temperatures inline like "180 °C".
+- "tags": short lowercase keywords; may be empty [].
+- "group" is OPTIONAL on an ingredient or step: a short section name when the recipe has labelled parts.
+
+Example shape:
+{"title":"...","description":"...","servings":4,"prepTimeMinutes":10,"cookTimeMinutes":15,"tags":[],"ingredients":[{"quantity":250,"unit":"g","name":"...","note":""}],"steps":[{"text":"...","timerSeconds":null}]}''';
+
 /// Region-guided import uses TWO single-purpose calls (one per region) so a
 /// small model can't bleed step text into ingredient notes or vice-versa.
 const String kPromptIngredients = '''

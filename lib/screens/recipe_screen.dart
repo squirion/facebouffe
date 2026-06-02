@@ -310,10 +310,14 @@ class _RecipeScreenState extends State<RecipeScreen> {
                               feature: 'variants',
                               active: activeTip == 'variants',
                               text: app.t('coach_variants'),
-                              child: _SecondaryAction(icon: 'plus', label: app.t('add_variant'), onTap: () async {
-                                final id = app.addVariant(recipe.id);
-                                if (context.mounted) Nav.editRecipe(context, id);
-                              }),
+                              child: GestureDetector(
+                                // easter egg: long-press to generate an AI "mutation" (BYOK only)
+                                onLongPress: app.hasAnyImportKey ? () => Nav.openMutation(context, recipe.id) : null,
+                                child: _SecondaryAction(icon: 'plus', label: app.t('add_variant'), onTap: () async {
+                                  final id = app.addVariant(recipe.id);
+                                  if (context.mounted) Nav.editRecipe(context, id);
+                                }),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 10),

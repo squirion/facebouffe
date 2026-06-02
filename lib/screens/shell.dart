@@ -6,6 +6,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/fb_icon.dart';
 import '../services/import/share_import.dart';
+import '../nav.dart';
 import 'home_screen.dart';
 import 'search_screen.dart';
 import 'shopping_screen.dart';
@@ -64,6 +65,7 @@ class _RootShellState extends State<RootShell> {
               padding: const EdgeInsets.only(bottom: 8, right: 2),
               child: GestureDetector(
                 onTap: () => showImportSheet(context), // method chooser: manual / link / photo / text (§2f)
+                onLongPress: app.hasAnyImportKey ? () => Nav.openAdventure(context) : null, // easter egg: "I'm feeling adventurous!" (BYOK only)
                 child: Container(
                   width: 60,
                   height: 60,

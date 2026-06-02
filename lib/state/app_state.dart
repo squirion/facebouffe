@@ -452,6 +452,33 @@ class AppState extends ChangeNotifier {
     return newId;
   }
 
+  /// Slot an already-built recipe [gen] into [baseId]'s variant group (creating
+  /// the group if needed) — used by the AI "mutation" generator. Returns its id.
+  String addGeneratedVariant(String baseId, Recipe gen) {
+    final base = getRecipe(baseId);
+    if (base == null) return baseId;
+    final newId = uuid();
+    String gid;
+    if (base.variantGroupId != null) {
+      gid = base.variantGroupId!;
+      getVariantGroup(gid)?.memberIds.add(newId);
+    } else {
+      gid = 'vg-${uuid()}';
+      variantGroups.add(VariantGroup(groupId: gid, memberIds: [baseId, newId], baseId: baseId));
+      base.variantGroupId = gid;
+    }
+    final now = DateTime.now().toIso8601String();
+    gen.id = newId;
+    gen.variantGroupId = gid;
+    gen.createdBy = profile.username;
+    gen.dateAdded = now;
+    gen.dateModified = now;
+    recipes.insert(0, gen);
+    _persistDb();
+    notifyListeners();
+    return newId;
+  }
+
   // ── tags ──
   static const _paletteTags = ['#C0563B', '#E0A458', '#6BA368', '#9C6B8E', '#4A7BA6', '#C58A2E', '#5B8C7E'];
   static const _tagIcons = ['leaf', 'flame', 'bowl', 'cake', 'utensils', 'sunrise', 'dumbbell', 'shrimp'];

@@ -9,6 +9,7 @@ import 'screens/help_screen.dart';
 import 'screens/advanced_settings_screen.dart';
 import 'screens/ai_import_settings_screen.dart';
 import 'screens/recently_deleted_screen.dart';
+import 'screens/adventure_screen.dart';
 import 'screens/gallery_viewer.dart';
 
 /// Thin navigation layer over the root Navigator. Uses platform-default page
@@ -46,6 +47,12 @@ class Nav {
 
   static Future<void> openRecentlyDeleted(BuildContext context) =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => const RecentlyDeletedScreen()));
+
+  static Future<void> openAdventure(BuildContext context) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const AdventureScreen()));
+
+  static Future<void> openMutation(BuildContext context, String baseId) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => AdventureScreen(baseId: baseId)));
 
   /// Fullscreen swipeable gallery viewer, opened from a recipe's gallery tiles.
   static Future<void> openGallery(BuildContext context, List<String> images, int index) =>

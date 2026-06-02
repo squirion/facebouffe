@@ -37,11 +37,27 @@ class ByokClient {
     }
     switch (provider) {
       case 'claude':
-        return _anthropic(apiKey, text, imageBytes, mediaType);
+        return _anthropic(apiKey, kImportPrompt, _userText(text), imageBytes, mediaType);
       case 'openai':
-        return _openai(apiKey, text, imageBytes, mediaType);
+        return _openai(apiKey, kImportPrompt, _userText(text), imageBytes, mediaType);
       case 'gemini':
-        return _gemini(apiKey, text, imageBytes, mediaType);
+        return _gemini(apiKey, kImportPrompt, _userText(text), imageBytes, mediaType);
+      default:
+        throw ImportException('bad_provider');
+    }
+  }
+
+  /// Invent a brand-new recipe from free-form [request] constraints (the
+  /// "I'm feeling adventurous!" generator). Same strict-JSON contract as
+  /// [extract]; text-only, no image.
+  static Future<String> generate({required String provider, required String apiKey, required String request, String system = kAdventurePrompt}) {
+    switch (provider) {
+      case 'claude':
+        return _anthropic(apiKey, system, request, null, 'image/jpeg');
+      case 'openai':
+        return _openai(apiKey, system, request, null, 'image/jpeg');
+      case 'gemini':
+        return _gemini(apiKey, system, request, null, 'image/jpeg');
       default:
         throw ImportException('bad_provider');
     }
@@ -59,9 +75,9 @@ class ByokClient {
   }
 
   // ── Anthropic Messages API ──
-  static Future<String> _anthropic(String key, String? text, Uint8List? img, String mediaType) async {
+  static Future<String> _anthropic(String key, String system, String userText, Uint8List? img, String mediaType) async {
     final content = <Map<String, dynamic>>[
-      {'type': 'text', 'text': _userText(text)},
+      {'type': 'text', 'text': userText},
       if (img != null)
         {
           'type': 'image',
@@ -78,7 +94,7 @@ class ByokClient {
       body: jsonEncode({
         'model': _models['claude'],
         'max_tokens': _maxTokens,
-        'system': kImportPrompt,
+        'system': system,
         'messages': [
           {'role': 'user', 'content': content},
         ],
@@ -95,9 +111,9 @@ class ByokClient {
   }
 
   // ── OpenAI Chat Completions ──
-  static Future<String> _openai(String key, String? text, Uint8List? img, String mediaType) async {
+  static Future<String> _openai(String key, String system, String userText, Uint8List? img, String mediaType) async {
     final content = <Map<String, dynamic>>[
-      {'type': 'text', 'text': _userText(text)},
+      {'type': 'text', 'text': userText},
       if (img != null)
         {
           'type': 'image_url',
@@ -112,7 +128,7 @@ class ByokClient {
         'max_tokens': _maxTokens,
         'response_format': {'type': 'json_object'},
         'messages': [
-          {'role': 'system', 'content': kImportPrompt},
+          {'role': 'system', 'content': system},
           {'role': 'user', 'content': content},
         ],
       }),
@@ -125,9 +141,9 @@ class ByokClient {
   }
 
   // ── Google Gemini generateContent ──
-  static Future<String> _gemini(String key, String? text, Uint8List? img, String mediaType) async {
+  static Future<String> _gemini(String key, String system, String userText, Uint8List? img, String mediaType) async {
     final parts = <Map<String, dynamic>>[
-      {'text': _userText(text)},
+      {'text': userText},
       if (img != null)
         {
           'inline_data': {'mime_type': mediaType, 'data': base64Encode(img)},
@@ -140,7 +156,7 @@ class ByokClient {
       body: jsonEncode({
         'system_instruction': {
           'parts': [
-            {'text': kImportPrompt},
+            {'text': system},
           ],
         },
         'contents': [
