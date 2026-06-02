@@ -545,6 +545,18 @@ class AppState extends ChangeNotifier {
       case 'cookStack':
         tipsSeen.cookStack = true;
         break;
+      case 'customTags':
+        tipsSeen.customTags = true;
+        break;
+      case 'ingredientAliases':
+        tipsSeen.ingredientAliases = true;
+        break;
+      case 'apiKeys':
+        tipsSeen.apiKeys = true;
+        break;
+      case 'preferredAi':
+        tipsSeen.preferredAi = true;
+        break;
     }
     _prefs?.setString('fb_tips', jsonEncode(tipsSeen.toMap()));
     notifyListeners();

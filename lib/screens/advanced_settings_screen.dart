@@ -5,12 +5,20 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../services/cnf.dart';
 import '../widgets/chrome.dart';
+import '../widgets/coach.dart';
 import '../widgets/fb_icon.dart';
 import '../widgets/nutrition.dart';
 import 'settings_screen.dart' show SettingsGroup, TagManager;
 
 class AdvancedSettingsScreen extends StatelessWidget {
   const AdvancedSettingsScreen({super.key});
+
+  // First unseen coach mark on this page (one at a time, top to bottom).
+  String? _activeTip(AppState app) {
+    if (!app.tipsSeen.customTags) return 'customTags';
+    if (!app.tipsSeen.ingredientAliases) return 'ingredientAliases';
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,8 +42,20 @@ class AdvancedSettingsScreen extends StatelessWidget {
             child: ScreenScroll(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               children: [
-                SettingsGroup(label: app.t('custom_tags'), children: const [TagManager()]),
-                SettingsGroup(label: app.t('aliases_title'), children: const [AliasManager()]),
+                Coach(
+                  feature: 'customTags',
+                  active: _activeTip(app) == 'customTags',
+                  text: app.t('coach_custom_tags'),
+                  below: true,
+                  child: SettingsGroup(label: app.t('custom_tags'), children: const [TagManager()]),
+                ),
+                Coach(
+                  feature: 'ingredientAliases',
+                  active: _activeTip(app) == 'ingredientAliases',
+                  text: app.t('coach_aliases'),
+                  below: true,
+                  child: SettingsGroup(label: app.t('aliases_title'), children: const [AliasManager()]),
+                ),
               ],
             ),
           ),

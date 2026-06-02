@@ -8,6 +8,7 @@ import '../theme.dart';
 import '../services/import/byok_client.dart';
 import '../services/import/ondevice_ai.dart';
 import '../widgets/chrome.dart';
+import '../widgets/coach.dart';
 import '../widgets/fb_icon.dart';
 import 'settings_screen.dart' show SettingsGroup;
 
@@ -17,6 +18,13 @@ import 'settings_screen.dart' show SettingsGroup;
 /// ships and isn't a choice, so it doesn't appear here.)
 class AIImportAssistantScreen extends StatelessWidget {
   const AIImportAssistantScreen({super.key});
+
+  // First unseen coach mark on this page (keys, then preferred-AI).
+  String? _activeTip(AppState app) {
+    if (!app.tipsSeen.apiKeys) return 'apiKeys';
+    if (!app.tipsSeen.preferredAi) return 'preferredAi';
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,8 +49,20 @@ class AIImportAssistantScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               children: [
                 SettingsGroup(label: app.t('ondevice_model'), children: const [OnDeviceModelManager()]),
-                SettingsGroup(label: app.t('api_keys'), children: const [ApiKeyManager()]),
-                SettingsGroup(label: app.t('preferred_ai'), children: const [PreferredAiSelector()]),
+                Coach(
+                  feature: 'apiKeys',
+                  active: _activeTip(app) == 'apiKeys',
+                  text: app.t('coach_apikeys'),
+                  below: true,
+                  child: SettingsGroup(label: app.t('api_keys'), children: const [ApiKeyManager()]),
+                ),
+                Coach(
+                  feature: 'preferredAi',
+                  active: _activeTip(app) == 'preferredAi',
+                  text: app.t('coach_preferred_ai'),
+                  below: true,
+                  child: SettingsGroup(label: app.t('preferred_ai'), children: const [PreferredAiSelector()]),
+                ),
               ],
             ),
           ),
