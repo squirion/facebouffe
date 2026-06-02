@@ -144,6 +144,24 @@ class _EditScreenState extends State<EditScreen> {
     Navigator.pop(context);
   }
 
+  Future<void> _confirmDelete(AppState app) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(app.t('delete_confirm_title')),
+        content: Text(app.t('delete_confirm_body')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(app.t('cancel'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('delete'), style: const TextStyle(color: Color(0xFFC0563B), fontWeight: FontWeight.w700))),
+        ],
+      ),
+    );
+    if (ok == true && mounted && existing != null) {
+      app.deleteRecipe(existing!.id);
+      if (mounted) Navigator.popUntil(context, (r) => r.isFirst);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
@@ -258,10 +276,7 @@ class _EditScreenState extends State<EditScreen> {
         Padding(
           padding: const EdgeInsets.only(top: 14),
           child: GestureDetector(
-            onTap: () {
-              app.deleteRecipe(existing!.id);
-              Navigator.popUntil(context, (r) => r.isFirst);
-            },
+            onTap: () => _confirmDelete(app),
             child: Container(
               height: 48,
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(13), border: Border.all(color: fb.line)),
