@@ -51,6 +51,7 @@ class _AdventureScreenState extends State<AdventureScreen> {
   final _notesCtrl = TextEditingController();
   bool _busy = false;
   String? _error;
+  String? _model; // model currently being tried (shown in the waiting overlay)
 
   @override
   void dispose() {
@@ -107,6 +108,7 @@ class _AdventureScreenState extends State<AdventureScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _model = null;
     });
     try {
       final provider = app.importProvider;
@@ -116,6 +118,9 @@ class _AdventureScreenState extends State<AdventureScreen> {
         apiKey: key,
         request: req.toString(),
         system: _mutation ? kMutatePrompt : kAdventurePrompt,
+        onModel: (m) {
+          if (mounted) setState(() => _model = m);
+        },
       );
       final res = draftFromModelJson(raw, source: _source(lang));
       final recipe = res.recipe;
@@ -251,6 +256,11 @@ class _AdventureScreenState extends State<AdventureScreen> {
                   SizedBox(width: 52, height: 52, child: CircularProgressIndicator(strokeWidth: 3, color: fb.accent)),
                   const SizedBox(height: 20),
                   Text(app.t('adv_loading'), style: fb.ui(size: 16, weight: FontWeight.w700)),
+                  if (_model != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(_model!, style: fb.ui(size: 12.5, color: fb.inkFaint)),
+                    ),
                 ]),
               ),
             ),

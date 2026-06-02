@@ -428,7 +428,7 @@ class _VariantChips extends StatelessWidget {
         Text(app.t('variants').toUpperCase(), style: fb.ui(size: 11.5, weight: FontWeight.w700, color: fb.inkFaint, letterSpacing: 0.5)),
         const SizedBox(height: 8),
         SizedBox(
-          height: 50,
+          height: 58,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: members.length,
@@ -448,6 +448,7 @@ class _VariantChips extends StatelessWidget {
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(m.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: active ? Colors.white : fb.ink)),

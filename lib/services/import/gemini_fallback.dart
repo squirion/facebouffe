@@ -36,6 +36,7 @@ class GeminiFallback {
     required String userText,
     Uint8List? img,
     String mediaType = 'image/jpeg',
+    void Function(String model)? onAttempt, // fired with each model id as it's tried
   }) async {
     final now = DateTime.now();
     final ready = <String>[];
@@ -49,6 +50,7 @@ class GeminiFallback {
 
     ImportException? last;
     for (final model in order) {
+      onAttempt?.call(model);
       try {
         final text = await _call(model, apiKey, system, userText, img, mediaType);
         _coolUntil.remove(model); // success clears any cooldown
@@ -65,6 +67,10 @@ class GeminiFallback {
       } on _ModelUnavailable {
         importLog('gemini 404 on $model (bad/unavailable id) → pivoting');
         last = ImportException('provider_error', 'Gemini $model unavailable');
+      } on _BadOutput catch (e) {
+        // no cooldown — a flaky empty response shouldn't deprioritize the model
+        importLog('gemini empty/blocked output on $model (${e.reason}) → pivoting');
+        last = ImportException('provider_error', 'Gemini $model returned no usable output (${e.reason})');
       }
     }
     throw last ?? ImportException('provider_error', 'No Gemini model available');
@@ -90,20 +96,27 @@ class GeminiFallback {
         'contents': [
           {'role': 'user', 'parts': parts},
         ],
-        'generationConfig': {'responseMimeType': 'application/json'},
+        'generationConfig': {'responseMimeType': 'application/json', 'maxOutputTokens': 8192},
       }),
     );
     final code = res.statusCode;
     if (code == 200) {
       final j = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       final cands = (j['candidates'] as List?) ?? const [];
-      if (cands.isEmpty) throw ImportException('provider_error', 'empty Gemini response');
-      final partsOut = ((cands.first as Map)['content'] as Map?)?['parts'] as List? ?? const [];
+      final cand = cands.isNotEmpty ? cands.first as Map : null;
+      final partsOut = ((cand?['content'] as Map?)?['parts'] as List?) ?? const [];
       final buf = StringBuffer();
       for (final p in partsOut) {
         if (p is Map && p['text'] != null) buf.write(p['text']);
       }
-      return buf.toString();
+      final out = buf.toString();
+      // A 200 can still carry no usable text — blocked, or the candidate got
+      // truncated (finishReason MAX_TOKENS / SAFETY). Treat that as pivotable so
+      // we fall through to the next model instead of hard-failing.
+      if (out.trim().isEmpty) {
+        throw _BadOutput(cand?['finishReason']?.toString() ?? (j['promptFeedback']?['blockReason']?.toString() ?? 'empty'));
+      }
+      return out;
     }
     final body = res.body.length > 400 ? res.body.substring(0, 400) : res.body;
     if (code == 429) throw _RateLimited(_parseRetry(res.body));
@@ -141,3 +154,8 @@ class _RateLimited implements Exception {
 class _Overloaded implements Exception {}
 
 class _ModelUnavailable implements Exception {}
+
+class _BadOutput implements Exception {
+  final String reason; // finishReason / blockReason, for debug logs
+  _BadOutput(this.reason);
+}

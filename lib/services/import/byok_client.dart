@@ -52,14 +52,16 @@ class ByokClient {
   /// Invent a brand-new recipe from free-form [request] constraints (the
   /// "I'm feeling adventurous!" generator). Same strict-JSON contract as
   /// [extract]; text-only, no image.
-  static Future<String> generate({required String provider, required String apiKey, required String request, String system = kAdventurePrompt}) {
+  static Future<String> generate({required String provider, required String apiKey, required String request, String system = kAdventurePrompt, void Function(String model)? onModel}) {
     switch (provider) {
       case 'claude':
+        onModel?.call(_models['claude']!);
         return _anthropic(apiKey, system, request, null, 'image/jpeg');
       case 'openai':
+        onModel?.call(_models['openai']!);
         return _openai(apiKey, system, request, null, 'image/jpeg');
       case 'gemini':
-        return _gemini(apiKey, system, request, null, 'image/jpeg');
+        return GeminiFallback.generate(apiKey: apiKey, system: system, userText: request, onAttempt: onModel);
       default:
         throw ImportException('bad_provider');
     }

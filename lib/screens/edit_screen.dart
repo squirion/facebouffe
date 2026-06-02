@@ -28,6 +28,16 @@ class _EditScreenState extends State<EditScreen> {
   Recipe? existing;
   String section = 'infos';
   String? error;
+  // Shared with the reorderable lists so dragging a card near a screen edge
+  // auto-scrolls the page (the lists are shrink-wrapped, so they can't scroll
+  // themselves).
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -219,27 +229,22 @@ class _EditScreenState extends State<EditScreen> {
               ],
             ),
           ),
+          // Ingredients/Steps render as their OWN reorderable scroller (so a card
+          // dragged to a screen edge auto-scrolls); other tabs use a plain list.
           Expanded(
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(18, 18, 18, 30 + MediaQuery.of(context).padding.bottom),
-              children: [
-                if (error != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                    decoration: BoxDecoration(color: const Color(0xFFC0563B).withValues(alpha: 0.09), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFC0563B).withValues(alpha: 0.33))),
-                    child: Row(children: [
-                      const FbIcon('x', size: 16, color: Color(0xFF9C3F29)),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(error!, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: const Color(0xFF9C3F29)))),
-                    ]),
-                  ),
-                if (section == 'infos') ..._infos(app, fb),
-                if (section == 'ing') ..._ingredients(app, fb),
-                if (section == 'steps') ..._steps(app, fb),
-                if (section == 'desc') ..._desc(app, fb),
-              ],
-            ),
+            child: section == 'ing'
+                ? _ingredients(app, fb)
+                : section == 'steps'
+                    ? _steps(app, fb)
+                    : ListView(
+                        controller: _scroll,
+                        padding: EdgeInsets.fromLTRB(18, 18, 18, 30 + MediaQuery.of(context).padding.bottom),
+                        children: [
+                          ?_errorBanner(fb),
+                          if (section == 'infos') ..._infos(app, fb),
+                          if (section == 'desc') ..._desc(app, fb),
+                        ],
+                      ),
           ),
         ],
       ),
@@ -302,33 +307,46 @@ class _EditScreenState extends State<EditScreen> {
     }
   }
 
-  // ── INGREDIENTS ──
-  List<Widget> _ingredients(AppState app, FbTheme fb) {
-    return [
-      ReorderableListView(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        buildDefaultDragHandles: false,
-        proxyDecorator: _liftedCard,
-        onReorder: (o, n) => setState(() { _reorder(_ingRows, o, n); _syncIng(); }),
-        children: _ingRowWidgets(app, fb),
+  // Validation error banner (shown as the active list's header / first child).
+  Widget? _errorBanner(FbTheme fb) {
+    if (error == null) return null;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(color: const Color(0xFFC0563B).withValues(alpha: 0.09), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFC0563B).withValues(alpha: 0.33))),
+      child: Row(children: [
+        const FbIcon('x', size: 16, color: Color(0xFF9C3F29)),
+        const SizedBox(width: 8),
+        Expanded(child: Text(error!, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: const Color(0xFF9C3F29)))),
+      ]),
+    );
+  }
+
+  // ── INGREDIENTS ── (its own scroller so drag-to-edge auto-scrolls)
+  Widget _ingredients(AppState app, FbTheme fb) {
+    return ReorderableListView(
+      scrollController: _scroll,
+      padding: EdgeInsets.fromLTRB(18, 18, 18, 30 + MediaQuery.of(context).padding.bottom),
+      buildDefaultDragHandles: false,
+      proxyDecorator: _liftedCard,
+      header: _errorBanner(fb),
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Wrap(spacing: 10, runSpacing: 10, children: [
+              _addBtn(fb, app.t('f_add_ing'), () => setState(() { _ingRows.add(_EditRow.item(Ingredient(name: ''))); _syncIng(); })),
+              _addBtn(fb, app.t('f_add_section'), () => setState(() => _ingRows.add(_EditRow.header(''))), icon: 'note'),
+            ]),
+          ),
+          Padding(padding: const EdgeInsets.only(top: 24), child: Divider(height: 1, color: fb.line)),
+          Padding(padding: const EdgeInsets.only(top: 22), child: NutritionPanel(form: form, onChanged: () => setState(() {}))),
+        ],
       ),
-      Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: Wrap(spacing: 10, runSpacing: 10, children: [
-          _addBtn(fb, app.t('f_add_ing'), () => setState(() { _ingRows.add(_EditRow.item(Ingredient(name: ''))); _syncIng(); })),
-          _addBtn(fb, app.t('f_add_section'), () => setState(() => _ingRows.add(_EditRow.header(''))), icon: 'note'),
-        ]),
-      ),
-      Padding(
-        padding: const EdgeInsets.only(top: 24),
-        child: Divider(height: 1, color: fb.line),
-      ),
-      Padding(
-        padding: const EdgeInsets.only(top: 22),
-        child: NutritionPanel(form: form, onChanged: () => setState(() {})),
-      ),
-    ];
+      onReorderItem: (o, n) => setState(() { _reorder(_ingRows, o, n); _syncIng(); }),
+      children: _ingRowWidgets(app, fb),
+    );
   }
 
   List<Widget> _ingRowWidgets(AppState app, FbTheme fb) {
@@ -415,8 +433,8 @@ class _EditScreenState extends State<EditScreen> {
         ),
       );
 
+  // onReorderItem already adjusts newIndex for the removed item, so no -1 here.
   void _reorder(List list, int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) newIndex -= 1;
     final item = list.removeAt(oldIndex);
     list.insert(newIndex, item);
   }
@@ -445,25 +463,24 @@ class _EditScreenState extends State<EditScreen> {
     );
   }
 
-  // ── STEPS ──
-  List<Widget> _steps(AppState app, FbTheme fb) {
-    return [
-      ReorderableListView(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        buildDefaultDragHandles: false,
-        proxyDecorator: _liftedCard,
-        onReorder: (o, n) => setState(() { _reorder(_stepRows, o, n); _syncSteps(); }),
-        children: _stepRowWidgets(app, fb),
-      ),
-      Padding(
+  // ── STEPS ── (its own scroller so drag-to-edge auto-scrolls)
+  Widget _steps(AppState app, FbTheme fb) {
+    return ReorderableListView(
+      scrollController: _scroll,
+      padding: EdgeInsets.fromLTRB(18, 18, 18, 30 + MediaQuery.of(context).padding.bottom),
+      buildDefaultDragHandles: false,
+      proxyDecorator: _liftedCard,
+      header: _errorBanner(fb),
+      footer: Padding(
         padding: const EdgeInsets.only(top: 12),
         child: Wrap(spacing: 10, runSpacing: 10, children: [
           _addBtn(fb, app.t('f_add_step'), () => setState(() { _stepRows.add(_EditRow.item(Step(text: ''))); _syncSteps(); })),
           _addBtn(fb, app.t('f_add_section'), () => setState(() => _stepRows.add(_EditRow.header(''))), icon: 'note'),
         ]),
       ),
-    ];
+      onReorderItem: (o, n) => setState(() { _reorder(_stepRows, o, n); _syncSteps(); }),
+      children: _stepRowWidgets(app, fb),
+    );
   }
 
   List<Widget> _stepRowWidgets(AppState app, FbTheme fb) {
@@ -826,7 +843,17 @@ class _TextFieldState extends State<_TextField> {
   @override
   void didUpdateWidget(covariant _TextField old) {
     super.didUpdateWidget(old);
-    if (widget.value != _c.text) _c.text = widget.value;
+    if (widget.value != _c.text) {
+      // Preserve the caret/selection when syncing an external value, rather than
+      // resetting it (the plain `text=` setter collapses selection to offset -1,
+      // which can make the next tap behave oddly).
+      final sel = _c.selection;
+      final keep = sel.isValid && sel.start <= widget.value.length && sel.end <= widget.value.length;
+      _c.value = TextEditingValue(
+        text: widget.value,
+        selection: keep ? sel : TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
   }
 
   @override
