@@ -1,9 +1,12 @@
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide Step;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+
+import '../services/import/file_extract.dart';
 
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -50,6 +53,7 @@ class _ImportSheetState extends State<_ImportSheet> {
   String _mediaType = 'image/jpeg';
   bool _regions = false; // photo: guide OCR by drawing ingredient/step regions
   bool _busy = false;
+  bool _extracting = false; // pulling text out of a picked file
   String? _error;
 
   @override
@@ -98,6 +102,49 @@ class _ImportSheetState extends State<_ImportSheet> {
         _controller.text = 'Tarte au sucre\n8 portions\n\n1 abaisse de tarte\n250 g cassonade\n250 ml crème 35 %\n2 c. à soupe farine\n1 oeuf\n1 c. à thé vanille\n\nPréchauffer le four à 180 °C. Mélanger, verser dans l\'abaisse et cuire 35 minutes.';
       }
     });
+  }
+
+  // Pick a PDF/Word/TXT/HTML file and pull its text into the editable box, so it
+  // runs through the same AI engine as pasted text.
+  Future<void> _pickFile() async {
+    setState(() {
+      _error = null;
+      _extracting = true;
+    });
+    try {
+      final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: FileImport.allowedExtensions, withData: true);
+      if (res == null || res.files.isEmpty) {
+        if (mounted) setState(() => _extracting = false);
+        return;
+      }
+      final f = res.files.first;
+      final bytes = f.bytes;
+      if (bytes == null) {
+        if (mounted) setState(() { _extracting = false; _error = app.t('import_file_error'); });
+        return;
+      }
+      final text = await FileImport.extractText(name: f.name, bytes: bytes);
+      if (!mounted) return;
+      setState(() {
+        _controller.text = text;
+        _extracting = false;
+      });
+    } on ImportException catch (e) {
+      if (mounted) setState(() { _extracting = false; _error = _fileMsg(e.code); });
+    } catch (_) {
+      if (mounted) setState(() { _extracting = false; _error = app.t('import_file_error'); });
+    }
+  }
+
+  String _fileMsg(String code) {
+    switch (code) {
+      case 'pdf_scanned':
+        return app.t('import_file_scanned');
+      case 'file_empty':
+        return app.t('import_file_empty');
+      default:
+        return app.t('import_file_error');
+    }
   }
 
   bool get _ready => method == ImportMethod.photo ? _photo != null : _controller.text.trim().isNotEmpty;
@@ -374,6 +421,21 @@ class _ImportSheetState extends State<_ImportSheet> {
             _analyzing(fb, runLabel)
           else ...[
             _inputField(fb, m),
+            if (m == ImportMethod.text)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: GestureDetector(
+                  onTap: _extracting ? null : _pickFile,
+                  behavior: HitTestBehavior.opaque,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    _extracting
+                        ? SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: fb.accent))
+                        : FbIcon('note', size: 16, color: fb.accent),
+                    const SizedBox(width: 7),
+                    Text(app.t('import_file_btn'), style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent)),
+                  ]),
+                ),
+              ),
             if (m != ImportMethod.photo)
               Padding(
                 padding: const EdgeInsets.only(top: 10),
