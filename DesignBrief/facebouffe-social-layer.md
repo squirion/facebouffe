@@ -280,3 +280,92 @@ abstract class SyncBackend {
 2. **Overlay syncs across your devices** — it's tied to the account and stored server-side (`recipe_overlays`), private to you, and persists across owner updates + carries on fork (§1, §4).
 3. **A variant group may mix linked + owned members** — making a variant from a linked recipe adds an editable owned member alongside the read-only linked ones; no group fork required (§4).
 4. **Steal always previews when it drags in ≥1 other recipe** ("+N recettes liées"); **no cap** on bundle size (§4).
+
+---
+
+## 11. UI — screens & access
+Same block format as the main brief (**Purpose · Access · Key UI · States · Mockup seed**). The social layer **reuses existing surfaces** wherever it can (recipe page, Sous-chef, Settings) and adds a few new screens. The bottom tab bar **stays at four** (Accueil / Recherche / Liste / Réglages) — social is reached contextually, not via a new tab.
+
+### Navigation map
+- **Logged-out (default):** the app looks exactly as today. The only social touchpoint is a **"Se connecter"** row in Réglages. Tapping any social affordance that somehow surfaces while logged-out routes here first.
+- **Logged-in:** two entry points light up —
+  - **Accueil → "Amis"** (a section/button at the top of Home): the social hub — friends, requests, browsing their cookbooks. Carries a **badge** when friend requests are pending.
+  - **Réglages → "Compte"**: account, username, sync status, sign-out (config lives in Settings, consistent with the app).
+- **The recipe page is context-aware** — it renders in one of three modes (your own / visiting a friend's / a linked copy in your book), each adding a few affordances to the page you already have.
+- **A persistent "visiting" cue** (e.g. a tinted top band "Carnet de @marie") whenever you're inside someone else's cookbook or recipe.
+
+### Screen — Connexion (sign-in)
+- **Purpose.** Optionally sign in to unlock social + multi-device sync.
+- **Access.** Réglages → "Se connecter".
+- **Key UI.** Brief explainer ("La connexion est optionnelle — elle active le partage et la synchro"), an **email field → "Envoyer le lien magique"**, then a **"Vérifiez vos courriels"** waiting state. Completing the magic link (deep link back into the app) signs you in. First-ever sign-in continues to **username setup**.
+- **States.** Sending / sent / link-expired-retry / offline (disabled with a note). Already-signed-in → shows Compte instead.
+- **Mockup seed.** "Sign-in screen: a friendly one-line explanation that login is optional, an email field with a 'Envoyer le lien magique' button, and the post-send 'Vérifiez vos courriels' state."
+
+### Screen — Choix du nom d'utilisateur (first sign-in only)
+- **Purpose.** Pick the unique, **fixed** handle friends use to find you.
+- **Access.** Auto, once, right after the first successful sign-in.
+- **Key UI.** Username field with **live availability check** (✓ disponible / ✗ déjà pris / format invalide), a note that it's permanent, a "Continuer" button.
+- **States.** Checking / available / taken / invalid characters.
+- **Mockup seed.** "Username picker: a single field showing a green 'disponible' check, a note 'Ce nom est permanent', and a Continuer button."
+
+### Screen — Compte (account)
+- **Purpose.** Manage the logged-in account + see sync health.
+- **Access.** Réglages → "Compte" (replaces "Se connecter" once logged in).
+- **Key UI.** Username + email; **sync status** ("Synchronisé · il y a 2 min" / "Synchronisation…" / "Hors ligne"); **Se déconnecter** (warns that social/sync pause but the local book stays); entry to the **first-login migration** prompt if pending.
+- **States.** Synced / syncing / offline / sign-out confirm.
+- **Mockup seed.** "Account screen: username + email, a 'Synchronisé · il y a 2 min' status line, and a Se déconnecter button with a reassuring note that recipes stay on the device."
+
+### Screen — Amis (friends hub)
+- **Purpose.** The social home: manage friends, requests, and jump into their cookbooks.
+- **Access.** Accueil → "Amis".
+- **Key UI.** An **"Ajouter un ami"** field (exact **@username**, → request sent); **Demandes reçues** (accept / decline) and **envoyées** (pending); the **accepted-friends list**, each row tapping through to that friend's cookbook; per-friend overflow → **retirer / bloquer**.
+- **States.** No friends yet (teaching empty state: "Ajoutez un ami par son nom d'utilisateur"); request pending/accepted; username not found; blocked list.
+- **Mockup seed.** "Amis screen: an 'Ajouter un ami' @username field, a 'Demandes reçues' section with accept/decline on one request, and a list of accepted friends each with an avatar-initial chip in their recipe color, tappable into their cookbook."
+
+### Screen — Carnet d'un ami (friend's cookbook)
+- **Purpose.** Browse a friend's **shared** recipes (online-only; cached only on steal).
+- **Access.** Amis → tap a friend.
+- **Key UI.** Looks like Home's library but **scoped to the friend**, with the persistent **"Carnet de @marie"** cue; their shared recipes as cards (private ones never appear); tap → their recipe in **visiting mode**.
+- **States.** Online required (offline → "Reconnectez-vous pour voir le carnet de @marie"); friend has shared nothing yet; loading.
+- **Mockup seed.** "A friend's cookbook: a tinted 'Carnet de @marie' band on top, then a grid of her shared recipe cards (some with fallback-color tiles), in the same visual language as Home."
+
+### Recipe page — mode A: visiting a friend's recipe
+- **Purpose.** Read/cook a friend's recipe and react to it.
+- **Access.** From a friend's cookbook (or a friend's inline link).
+- **Key UI (added to the normal recipe page).** The **"Carnet de @marie"** cue; everything **read-only**; **Mode sous-chef works**; an **"Voler cette recette"** primary action; the **Avis** section (your single review to add/edit + others' reviews). No edit/variant/delete (those are owner-only).
+- **States.** Already stolen → the steal button becomes "Déjà dans votre carnet"; review not yet written vs written.
+- **Mockup seed.** "Friend's recipe in visiting mode: the standard recipe page under a 'Carnet de @marie' band, action row reduced to 'Voler cette recette' + 'Mode sous-chef', and an 'Avis' section showing the viewer's star input plus two friends' reviews."
+
+### Recipe page — mode B: your own recipe (sharing + moderation)
+- **Purpose.** Control who sees it and manage feedback.
+- **Access.** Your own recipe page (logged-in).
+- **Key UI (added).** A **visibility control** — **Privé / Partagé avec mes amis** (a toggle near the title/tags), with a subtle "Partagé" indicator on shared recipes; the **Avis** section listing friends' reviews with **delete (moderation)** on each.
+- **States.** Private (default) vs shared; no reviews yet; logged-out → control hidden.
+- **Mockup seed.** "Your recipe page with a 'Partagé avec mes amis' toggle beside the tag row, a small 'Partagé' badge, and an Avis section listing two friends' star+text reviews each with a moderation trash icon."
+
+### Recipe page — mode C: a linked (stolen) recipe in your book
+- **Purpose.** Use a stolen recipe; pull updates; fork to edit.
+- **Access.** Your own library (a recipe you stole).
+- **Key UI (added).** A **lock + "de @marie"** marker; an **"Mise à jour disponible — Actualiser"** banner when the owner's version advanced (poll-on-open); editing is blocked, and the edit/variant entry instead offers **"Créer une variante"** or **"Détacher de la source"**. Your **private notes/rating still work** (overlay).
+- **States.** Up-to-date vs update-available; source deleted → auto-forked notice ("Cette recette a été détachée — l'auteur l'a retirée").
+- **Mockup seed.** "A stolen recipe in your book: a lock chip 'de @marie', an 'Mise à jour disponible · Actualiser' banner, the edit button replaced by a menu offering 'Créer une variante' / 'Détacher de la source', and private notes still editable below."
+
+### Sheet — Aperçu du vol (steal preview)
+- **Purpose.** Confirm a steal that pulls in linked/variant recipes.
+- **Access.** Tapping "Voler cette recette" when the bundle includes ≥1 extra recipe.
+- **Key UI.** "Cette recette en entraîne d'autres" + a short list of the additional recipes (links + variants) that will join your book; **Tout ajouter** / Annuler. (If nothing extra, steal happens directly with no sheet.)
+- **States.** 1 vs many extras; some already in your book (shown as "déjà présent", skipped).
+- **Mockup seed.** "Steal-preview bottom sheet: 'Voler « Gâteau » ajoutera aussi 2 recettes liées' with a small list (Glaçage, Sirop) and a 'Tout ajouter' button."
+
+### Sheet — Migration à la première connexion
+- **Purpose.** Bring existing local recipes into the account without duplicates.
+- **Access.** Auto on first sign-in (first device migrates silently); on a **later device** it appears as a prompt.
+- **Key UI.** "Vous avez N recettes sur cet appareil qui ne sont pas dans votre compte — les ajouter ?" with **Ajouter / Plus tard**.
+- **States.** First device (no prompt, just a synced toast) vs later device (prompt with count) vs nothing to migrate.
+- **Mockup seed.** "First-login migration sheet on a second device: 'Vous avez 5 recettes locales absentes de votre compte — les ajouter ?' with Ajouter / Plus tard."
+
+### Cross-cutting UI additions
+- **Coach marks (§3.7 of the brief, same machinery):** first friend added, first recipe shared (the visibility toggle), first stolen recipe (the lock + fork menu). One at a time.
+- **Empty/teaching states:** no friends, friend shared nothing, offline-in-a-friend's-cookbook, no reviews yet.
+- **Badges:** pending friend-requests on the Amis entry; "Mise à jour disponible" on linked recipes.
+- **Everything bilingual FR/EN**, short labels; the "visiting" cue and read-only state must be unmistakable so a friend's recipe is never confused with your own.
