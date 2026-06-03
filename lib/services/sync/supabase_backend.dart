@@ -48,7 +48,14 @@ class SupabaseSyncBackend implements SyncBackend {
   Future<void> claimUsername(String handle) async {
     final uid = _c.auth.currentUser?.id;
     if (uid == null) throw StateError('not signed in');
-    await _c.from('profiles').insert({'id': uid, 'username': handle.trim().toLowerCase()});
+    try {
+      await _c.from('profiles').insert({'id': uid, 'username': handle.trim().toLowerCase()});
+    } on PostgrestException catch (e) {
+      // 23505 = unique_violation (handle already taken). Anything else (e.g. a
+      // missing RLS policy → 42501) is a real error and should surface as such.
+      if (e.code == '23505') throw const UsernameTakenException();
+      rethrow;
+    }
   }
 
   @override

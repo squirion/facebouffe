@@ -15,6 +15,12 @@ class Account {
   Account withUsername(String? u) => Account(id: id, email: email, username: u);
 }
 
+/// Thrown by [SyncBackend.claimUsername] when the handle is already taken
+/// (unique violation), so callers can tell it apart from a network/RLS error.
+class UsernameTakenException implements Exception {
+  const UsernameTakenException();
+}
+
 abstract class SyncBackend {
   /// Current account, or null when signed out / offline-only.
   Account? get currentAccount;

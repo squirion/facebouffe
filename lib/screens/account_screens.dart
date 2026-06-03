@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
+import '../services/sync/sync_backend.dart' show UsernameTakenException;
 import '../theme.dart';
 import '../widgets/chrome.dart';
 import '../widgets/fb_icon.dart';
@@ -27,7 +28,7 @@ class _AccountHeader extends StatelessWidget {
             GestureDetector(onTap: () => Navigator.pop(context), child: SizedBox(width: 40, height: 40, child: Center(child: FbIcon('back', size: fb.fs(22), color: fb.ink)))),
             const SizedBox(width: 4),
           ],
-          Text(title, style: fb.display(size: 25, weight: FontWeight.w600)),
+          Expanded(child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: fb.display(size: 25, weight: FontWeight.w600))),
         ]),
       ),
     );
@@ -229,6 +230,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
   Timer? _debounce;
   _Avail _state = _Avail.idle;
   bool _claiming = false;
+  String? _claimError; // non-"taken" failure (network / server / RLS)
   int _checkSeq = 0; // guards against out-of-order async results
 
   static final _re = RegExp(r'^[a-z0-9_]{3,20}$');
@@ -244,6 +246,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
 
   void _onChanged(AppState app) {
     _debounce?.cancel();
+    if (_claimError != null) _claimError = null;
     final h = _handle;
     if (h.isEmpty) {
       setState(() => _state = _Avail.idle);
@@ -269,14 +272,18 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
 
   Future<void> _claim(AppState app) async {
     if (_state != _Avail.free) return;
-    setState(() => _claiming = true);
+    setState(() { _claiming = true; _claimError = null; });
     try {
       await app.claimUsername(_handle);
       if (!mounted) return;
       Navigator.pop(context);
-    } catch (_) {
+    } on UsernameTakenException {
       if (!mounted) return;
       setState(() { _claiming = false; _state = _Avail.taken; });
+    } catch (_) {
+      // network / server / policy error — not a name collision
+      if (!mounted) return;
+      setState(() { _claiming = false; _claimError = app.t('signin_error'); });
     }
   }
 
@@ -316,6 +323,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                   Text(_hint(app), style: fb.ui(size: 13, weight: FontWeight.w600, color: _hintColor(fb), height: 1.4)),
                   const SizedBox(height: 8),
                   Text(app.t('username_permanent'), style: fb.ui(size: 13, color: fb.inkFaint)),
+                  if (_claimError != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_claimError!, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: const Color(0xFFC0563B)))),
                   const SizedBox(height: 22),
                   _PrimaryButton(label: app.t('continue_btn'), busy: _claiming, onTap: _state == _Avail.free ? () => _claim(app) : null),
                 ],

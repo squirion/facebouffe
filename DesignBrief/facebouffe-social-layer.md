@@ -183,6 +183,9 @@ create policy linked_self  on linked_recipes for all using ( user_id = auth.uid(
 -- profiles
 alter table profiles enable row level security;
 create policy profiles_read on profiles for select using ( id = auth.uid() or private.is_friend(id, auth.uid()) );
+-- a user creates/edits only their own profile row (required for username claim)
+create policy profiles_insert on profiles for insert with check ( id = auth.uid() );
+create policy profiles_update on profiles for update using ( id = auth.uid() ) with check ( id = auth.uid() );
 
 -- friendships (manage rows you're part of; can't accept your own request)
 alter table friendships enable row level security;
