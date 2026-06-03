@@ -48,12 +48,14 @@ extension CloudSync on AppState {
     _syncBusy = true;
     _setSyncStatus(SyncStatus.syncing);
     try {
+      await _handleAccountSwitch(); // reset local store if it belongs to another account
       _loadSyncState();
       if (!_migrated) {
         await _initialMigration();
       } else {
         await _reconcile();
       }
+      _prefs?.setString('fb_local_owner', account!.id);
       await refreshFriends();
       _setSyncStatus(SyncStatus.synced);
     } catch (e) {
@@ -183,6 +185,38 @@ extension CloudSync on AppState {
     return out;
   }
 
+  // ── reviews (Phase 5) ──
+  List<Review> reviewsFor(String recipeId) => _reviewsCache[recipeId] ?? const [];
+
+  Review? myReview(String recipeId) {
+    final me = account?.id;
+    if (me == null) return null;
+    for (final r in reviewsFor(recipeId)) {
+      if (r.authorId == me) return r;
+    }
+    return null;
+  }
+
+  Future<void> loadReviews(String recipeId) async {
+    if (!_canSync) return;
+    try {
+      _reviewsCache[recipeId] = await sync.fetchReviews(recipeId);
+      notify();
+    } catch (_) {/* keep last-known */}
+  }
+
+  Future<void> submitReview(String recipeId, int stars, String text) async {
+    if (!_canSync || stars < 1) return;
+    await sync.upsertReview(recipeId, stars, text.trim(), account!.username!);
+    await loadReviews(recipeId);
+  }
+
+  Future<void> deleteReview(String recipeId, String commentId) async {
+    if (!_canSync) return;
+    await sync.deleteReview(commentId);
+    await loadReviews(recipeId);
+  }
+
   /// Drop transient visiting recipes + their in-memory image paths.
   void clearVisiting() {
     for (final id in visitingRecipes.keys) {
@@ -231,6 +265,49 @@ extension CloudSync on AppState {
   void cloudPushLibrary() {
     if (!_canSync || !_migrated) return;
     unawaited(_safe(() => sync.upsertLibrary(_libraryData(), DateTime.now())));
+  }
+
+  // ── account ownership of the local store (shared-device safety) ──
+  //
+  // The local cookbook belongs to one account (or anonymous) at a time. If a
+  // *different* account signs in on this device, the local recipes are the
+  // previous user's (already safe in their cloud) — so reset to a clean slate
+  // and pull this account's cookbook fresh.
+  Future<void> _handleAccountSwitch() async {
+    final me = account!.id;
+    String? owner = _prefs?.getString('fb_local_owner');
+    if (owner == null) {
+      // first run with this marker — infer from any account migrated here
+      for (final k in (_prefs?.getKeys() ?? const <String>{})) {
+        if (k.startsWith('fb_synced_') && (_prefs?.getBool(k) ?? false)) {
+          owner = k.substring('fb_synced_'.length);
+          break;
+        }
+      }
+    }
+    if (owner == null || owner == me) return; // anonymous/same owner → no switch
+    await _resetLocalCookbook();
+    _prefs?.remove('fb_synced_$me');
+    _prefs?.remove('fb_sync_state_$me');
+    _syncedIds.clear();
+    _localOnlyIds.clear();
+  }
+
+  // Wipe the local cookbook back to seeds (preserving app settings), clearing
+  // all per-account sync/photo/review state.
+  Future<void> _resetLocalCookbook() async {
+    final keepProfile = profile;
+    await _loadSeed(); // recipes/tags/variantGroups ← seed
+    profile = keepProfile; // keep language/units/etc.
+    recipePhotos.clear();
+    recipeGallery.clear();
+    _reviewsCache.clear();
+    friends = [];
+    clearVisiting();
+    _persistDb();
+    _persistPhotos();
+    _persistGallery();
+    notify();
   }
 
   // ── migration ──

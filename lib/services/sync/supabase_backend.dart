@@ -295,4 +295,41 @@ class SupabaseSyncBackend implements SyncBackend {
       );
     }).toList();
   }
+
+  // ── Phase 5: reviews ──
+
+  @override
+  Future<List<Review>> fetchReviews(String recipeId) async {
+    final rows = await _c.from('comments').select('id,author_id,author_username,stars,text,updated_at').eq('recipe_id', recipeId).order('updated_at');
+    return (rows as List).map((r) {
+      final m = r as Map<String, dynamic>;
+      return Review(
+        id: m['id'] as String,
+        authorId: m['author_id'] as String,
+        authorUsername: m['author_username'] as String?,
+        stars: (m['stars'] as num?)?.toInt() ?? 0,
+        text: m['text'] as String? ?? '',
+        updatedAt: DateTime.tryParse(m['updated_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+      );
+    }).toList();
+  }
+
+  @override
+  Future<void> upsertReview(String recipeId, int stars, String text, String authorUsername) async {
+    final uid = _c.auth.currentUser?.id;
+    if (uid == null) throw StateError('not signed in');
+    await _c.from('comments').upsert({
+      'recipe_id': recipeId,
+      'author_id': uid,
+      'author_username': authorUsername,
+      'stars': stars,
+      'text': text,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'recipe_id,author_id');
+  }
+
+  @override
+  Future<void> deleteReview(String commentId) async {
+    await _c.from('comments').delete().eq('id', commentId);
+  }
 }

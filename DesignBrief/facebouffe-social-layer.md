@@ -107,13 +107,14 @@ create table user_library (
 
 -- Reviews (shared layer). One per (recipe, author).
 create table comments (
-  id         uuid primary key default gen_random_uuid(),
-  recipe_id  uuid not null references recipes(id) on delete cascade,
-  author_id  uuid not null references profiles(id) on delete cascade,
-  stars      int  not null check (stars between 1 and 5),
-  text       text not null default '',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
+  id              uuid primary key default gen_random_uuid(),
+  recipe_id       uuid not null references recipes(id) on delete cascade,
+  author_id       uuid not null references profiles(id) on delete cascade,
+  author_username text,                                  -- denormalized: a viewer who isn't friends with the author still sees the name
+  stars           int  not null check (stars between 1 and 5),
+  text            text not null default '',
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
   unique (recipe_id, author_id)
 );
 
@@ -332,6 +333,7 @@ abstract class SyncBackend {
 - **Avoid cross-device duplicates:**
   - **First device** to sign in (cloud cookbook empty) → migrate everything (upsert recipes, upload images, push overlays).
   - **Later devices** (cloud cookbook non-empty) → **pull first**, then show local-only recipes (UUIDs absent from the cloud) as an explicit *"Add these N recipes to your account?"* prompt — never blind-upload (two devices independently typed "the same" dish under different UUIDs and can't be auto-merged).
+- **Shared-device account switch.** The local store belongs to one account at a time (tracked in `fb_local_owner`). If a *different* account signs in on the same device, the local recipes are the previous user's (already in their cloud) → reset to seeds and pull the new account's cookbook fresh. Prevents one account from claiming another's recipes (and the RLS write error that follows).
 
 ---
 

@@ -29,6 +29,17 @@ class FriendshipExistsException implements Exception {
   const FriendshipExistsException();
 }
 
+/// One review (a `comments` row): stars + text by one author on one recipe.
+class Review {
+  final String id;
+  final String authorId;
+  final String? authorUsername; // denormalized so non-friends' names still show
+  final int stars;
+  final String text;
+  final DateTime updatedAt;
+  const Review({required this.id, required this.authorId, required this.authorUsername, required this.stars, required this.text, required this.updatedAt});
+}
+
 /// One friendship edge from the signed-in user's perspective.
 class FriendEdge {
   final String userId; // the other person
@@ -166,4 +177,15 @@ abstract class SyncBackend {
 
   /// A friend's recipes that are shared with friends (RLS enforces access).
   Future<List<CloudRecipe>> fetchFriendRecipes(String friendId);
+
+  // ── Phase 5: reviews ──
+
+  /// All reviews on a recipe you can access (RLS-gated).
+  Future<List<Review>> fetchReviews(String recipeId);
+
+  /// Create or replace your review (one per author per recipe).
+  Future<void> upsertReview(String recipeId, int stars, String text, String authorUsername);
+
+  /// Delete a review by id (yours, or any on a recipe you own — moderation).
+  Future<void> deleteReview(String commentId);
 }

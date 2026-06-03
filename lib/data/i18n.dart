@@ -221,6 +221,10 @@ const Map<String, Map<String, String>> kI18n = {
     'shared_badge': 'Partagé', 'friend_cookbook': 'Carnet de', 'visiting_band': 'Carnet de',
     'shared_recipes': 'recettes partagées', 'cookbook_empty': 'n\'a encore rien partagé.',
     'cookbook_offline': 'Reconnectez-vous pour voir le carnet de', 'retry': 'Réessayer',
+    // ── reviews ──
+    'reviews': 'Avis', 'your_review': 'Votre avis', 'add_review': 'Laisser un avis',
+    'review_ph': 'Écrivez un mot sur cette recette…', 'save_review': 'Publier', 'edit_review': 'Modifier',
+    'no_reviews': 'Aucun avis pour l\'instant.', 'moderate_delete': 'Supprimer (modération)',
   },
   'en': {
     'tab_home': 'Home', 'tab_search': 'Search', 'tab_list': 'Groceries', 'tab_settings': 'Settings',
@@ -442,6 +446,10 @@ const Map<String, Map<String, String>> kI18n = {
     'shared_badge': 'Shared', 'friend_cookbook': 'Cookbook of', 'visiting_band': 'Cookbook of',
     'shared_recipes': 'shared recipes', 'cookbook_empty': 'hasn\'t shared anything yet.',
     'cookbook_offline': 'Reconnect to see the cookbook of', 'retry': 'Retry',
+    // ── reviews ──
+    'reviews': 'Reviews', 'your_review': 'Your review', 'add_review': 'Leave a review',
+    'review_ph': 'Write a note about this recipe…', 'save_review': 'Post', 'edit_review': 'Edit',
+    'no_reviews': 'No reviews yet.', 'moderate_delete': 'Delete (moderation)',
   },
 };
 

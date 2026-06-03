@@ -13,6 +13,7 @@ import '../widgets/coach.dart';
 import '../widgets/common.dart';
 import '../widgets/fb_icon.dart';
 import '../widgets/nutrition.dart';
+import '../widgets/reviews.dart';
 import 'settings_screen.dart' show Segmented;
 
 class RecipeScreen extends StatefulWidget {
@@ -307,6 +308,12 @@ class _RecipeScreenState extends State<RecipeScreen> {
                       ],
                       // nutrition label (estimate)
                       NutritionCard(recipe: recipe),
+                      // reviews — your editor when visiting a friend's recipe;
+                      // moderation list on your own shared recipe
+                      if (visiting)
+                        ReviewsSection(recipeId: recipe.id, canReview: true)
+                      else if (owned && recipe.visibility == 'friends')
+                        ReviewsSection(recipeId: recipe.id, canModerate: true),
                       // personal journal + owner actions (hidden when visiting a friend's recipe)
                       if (!visiting) ...[
                         const SizedBox(height: 30),

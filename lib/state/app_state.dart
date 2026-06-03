@@ -91,6 +91,7 @@ class AppState extends ChangeNotifier {
   // not in your library). getRecipe() falls through to these so the existing recipe
   // page / Sous-chef work by id without persisting anything.
   final Map<String, Recipe> visitingRecipes = {};
+  final Map<String, List<Review>> _reviewsCache = {}; // recipe id -> reviews (Phase 5)
 
   // ── lookups ──
   Map<String, Tag> get tagsById => {for (final t in tags) t.id: t};
