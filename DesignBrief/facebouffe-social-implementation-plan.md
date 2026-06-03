@@ -18,7 +18,7 @@ The architecture names R2 for cheap image hosting at scale, but for the **limite
    - **Secret key** (`sb_secret_…`, = the old *service_role* key) — **secret. NEVER put this in the app.** Bypasses RLS; admin/CI/edge-function use only. Treat it like a root password. (Bonus over the legacy JWTs: publishable/secret keys are independently **rotatable/revocable**.)
 4. **Auth → Sign In / Providers:** just **enable the Email provider** (it's on by default). There is **no separate "magic link" toggle** — enabling Email turns on *both* passwordless flows (**magic link** *and* **email OTP code**); you choose which by what the app calls. Leave the Email settings as-is.
    - **Start with the email-OTP *code* flow** (`signInWithOtp(email)` → user types the emailed code → `verifyOTP`). It needs **zero deep-link setup** — best first step.
-   - The **clickable magic-link** flow additionally needs a **redirect URL**: Auth → **URL Configuration** → add a deep link (e.g. `io.facebouffe://login-callback`) to Redirect URLs + a Site URL, plus an Android intent-filter and in-app link handling. Add this later.
+   - The **clickable magic-link** flow additionally needs a **redirect URL**: Auth → **URL Configuration** → add a deep link (e.g. `com.facebouffe.facebouffe://login-callback`) to Redirect URLs + a Site URL, plus an Android intent-filter and in-app link handling. Add this later.
    - (Free tier sends email via Supabase's shared SMTP with low hourly limits — fine for dev; add your own SMTP before a real launch.)
 5. **Schema:** apply the DDL + RLS from the spec. Two ways:
    - Quick start: paste into **SQL Editor** and run.
