@@ -12,17 +12,17 @@ The architecture names R2 for cheap image hosting at scale, but for the **limite
 ### Supabase setup (you'll do this once)
 1. Sign up at **supabase.com** (free; GitHub or email).
 2. **New project** → name it, set a **database password** (save it in a password manager — it's the Postgres admin password; rarely needed but keep it), pick a **region** near you, free plan.
-3. After it provisions, open **Project Settings → API** and copy:
+3. After it provisions, open **Project Settings → API Keys** and copy (use the **new** keys; the legacy `anon`/`service_role` JWTs are deprecated):
    - **Project URL** — e.g. `https://abcd1234.supabase.co`
-   - **anon public key** — a long JWT. **This is safe to ship in the app** (it's designed to be public; *Row-Level Security* is what protects data).
-   - **service_role key** — **secret. NEVER put this in the app.** Admin/CI/edge-function use only. Treat it like a root password.
+   - **Publishable key** (`sb_publishable_…`, = the old *anon* key) — **safe to ship in the app** (client key; *Row-Level Security* protects the data). Pass it as the `anonKey` in `Supabase.initialize` (use a current `supabase_flutter`).
+   - **Secret key** (`sb_secret_…`, = the old *service_role* key) — **secret. NEVER put this in the app.** Bypasses RLS; admin/CI/edge-function use only. Treat it like a root password. (Bonus over the legacy JWTs: publishable/secret keys are independently **rotatable/revocable**.)
 4. **Auth → Providers:** enable **Email**, turn on **magic link** (passwordless). Under **Auth → URL Configuration**, add the app's **redirect URL** (a custom scheme, e.g. `io.facebouffe://login-callback`) so the email link returns to the app. (Free tier sends email via Supabase's shared SMTP with low hourly limits — fine for dev; add your own SMTP before a real launch.)
 5. **Schema:** apply the DDL + RLS from the spec. Two ways:
    - Quick start: paste into **SQL Editor** and run.
    - Better: the **Supabase CLI** (`supabase init`, migrations in `supabase/migrations/*.sql`, `supabase db push`) so the schema is **versioned in the repo and portable** — recommended once it stabilizes.
 6. **Storage:** create a **private bucket** (e.g. `recipe-images`), add storage RLS policies, serve via **signed URLs**. (Objects will be named by content hash — §5 of the spec.)
 
-**What the app actually needs:** just the **Project URL + anon key**, passed in via `--dart-define` (don't hard-code; keep them in CI/run config). Add the `supabase_flutter` package. Everything else (service_role) stays off-device.
+**What the app actually needs:** just the **Project URL + publishable key**, passed in via `--dart-define` (don't hard-code; keep them in CI/run config). Add the `supabase_flutter` package. The **secret key** stays off-device.
 
 ### Cloudflare R2 (only if/when you adopt it — Phase 7)
 1. Cloudflare account (free) → **R2** → it'll ask you to **enable R2 / add billing** even though there's a free tier (10 GB storage, **no egress fees**).
@@ -30,7 +30,7 @@ The architecture names R2 for cheap image hosting at scale, but for the **limite
 3. Don't put S3 creds in the app. Instead route uploads / signed-URL minting through a **Supabase Edge Function** (Deno/TS) that holds the R2 secret. (This is the extra complexity you avoid by staying on Supabase Storage for v1.)
 
 ### The one security rule that matters
-The app ships **only the anon key**; **RLS is what makes that safe.** Tables are **unprotected until you enable RLS on each one** — so *enable + test RLS before any real data goes in*. All true secrets (service_role, R2 keys) live server-side, never in the APK.
+The app ships **only the publishable key**; **RLS is what makes that safe.** Tables are **unprotected until you enable RLS on each one** — so *enable + test RLS before any real data goes in*. All true secrets (the secret key, R2 keys) live server-side, never in the APK.
 
 ### Beginner gotchas
 - Free Supabase projects **pause after ~1 week idle** — wake from the dashboard.
