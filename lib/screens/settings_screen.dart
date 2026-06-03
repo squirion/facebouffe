@@ -60,7 +60,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final app = context.watch<AppState>();
     final fb = context.fb;
     final lang = app.lang;
-    final savedCount = app.baseRecipes.length;
 
     return Column(
       children: [
@@ -71,32 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ScreenScroll(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 children: [
-                  // profile card
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 22),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(20), boxShadow: fb.shadow),
-                    child: Row(children: [
-                      Container(width: 56, height: 56, decoration: BoxDecoration(color: fb.accent, shape: BoxShape.circle), alignment: Alignment.center, child: Text((app.profile.username.isEmpty ? '?' : app.profile.username)[0].toUpperCase(), style: fb.display(size: 26, weight: FontWeight.w600, color: Colors.white))),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(app.t('username_label').toUpperCase(), style: fb.ui(size: 11, weight: FontWeight.w700, color: fb.inkFaint, letterSpacing: 0.4)),
-                            _UsernameField(),
-                            Text('$savedCount ${app.t('recipes_saved')}', style: fb.ui(size: 13, color: fb.inkSoft)),
-                          ],
-                        ),
-                      ),
-                    ]),
-                  ),
-                  SettingsGroup(label: app.t('account'), children: [
-                    app.signedIn
-                        ? _NavRow(icon: 'user', label: app.t('account'), sub: '@${app.account?.username ?? '…'}', onTap: () => Nav.openAccount(context), last: true)
-                        : _NavRow(icon: 'user', label: app.t('signin'), sub: app.t('signin_local_note'), onTap: () => Nav.openSignIn(context), last: true),
-                  ]),
+                  // (account/identity now lives in the Home top-right circle)
                   SettingsGroup(label: app.t('set_language'), children: [
                     _SettingsRow(label: app.t('set_language'), width: 178, child: Segmented(value: lang, onChange: app.setLanguage, options: const [('fr', 'Français'), ('en', 'English')])),
                   ]),
@@ -246,32 +220,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } else if (choice == 'subset') {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const ExportSelectScreen()));
     }
-  }
-}
-
-class _UsernameField extends StatefulWidget {
-  @override
-  State<_UsernameField> createState() => _UsernameFieldState();
-}
-
-class _UsernameFieldState extends State<_UsernameField> {
-  late final TextEditingController _c = TextEditingController(text: context.read<AppState>().profile.username);
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final fb = context.fb;
-    return TextField(
-      controller: _c,
-      onChanged: (v) => context.read<AppState>().setUsername(v),
-      style: fb.display(size: 20, weight: FontWeight.w600),
-      decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.zero, border: InputBorder.none),
-    );
   }
 }
 

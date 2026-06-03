@@ -354,12 +354,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setUsername(String v) {
-    profile.username = v;
-    _persistDb();
-    notifyListeners();
-  }
-
   void setReduceMotion(bool v) {
     if (reduceMotion == v) return;
     reduceMotion = v;
@@ -525,7 +519,7 @@ class AppState extends ChangeNotifier {
     }
     final id = _uuidV4(); // real UUID — recipes live in a uuid-keyed cloud pool
     form.id = id;
-    form.createdBy = profile.username;
+    form.createdBy = account?.username ?? ''; // provenance = your @handle (ownership is owner_id)
     form.dateAdded = now;
     form.dateModified = now;
     recipes.insert(0, form);
@@ -597,7 +591,7 @@ class AppState extends ChangeNotifier {
     final now = DateTime.now().toIso8601String();
     gen.id = newId;
     gen.variantGroupId = gid;
-    gen.createdBy = profile.username;
+    gen.createdBy = account?.username ?? '';
     gen.dateAdded = now;
     gen.dateModified = now;
     recipes.insert(0, gen);

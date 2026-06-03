@@ -57,14 +57,17 @@ class HomeScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                // account circle: signed-in → initial → Compte; signed-out → person icon → sign-in
                 GestureDetector(
-                  onTap: () => context.read<ShellTab>().go(3),
+                  onTap: () => app.signedIn ? Nav.openAccount(context) : Nav.openSignIn(context),
                   child: Container(
                     width: 42,
                     height: 42,
-                    decoration: BoxDecoration(color: fb.card, shape: BoxShape.circle, border: Border.all(color: fb.line), boxShadow: fb.shadow),
+                    decoration: BoxDecoration(color: app.signedIn ? fb.accent : fb.card, shape: BoxShape.circle, border: Border.all(color: app.signedIn ? fb.accent : fb.line), boxShadow: fb.shadow),
                     alignment: Alignment.center,
-                    child: Text((app.profile.username.isEmpty ? '?' : app.profile.username)[0].toUpperCase(), style: fb.display(size: 18, weight: FontWeight.w600, color: fb.accent)),
+                    child: app.signedIn
+                        ? Text((app.account?.username?.isNotEmpty == true ? app.account!.username! : '?')[0].toUpperCase(), style: fb.display(size: 18, weight: FontWeight.w600, color: Colors.white))
+                        : FbIcon('user', size: fb.fs(20), color: fb.inkSoft),
                   ),
                 ),
               ],
