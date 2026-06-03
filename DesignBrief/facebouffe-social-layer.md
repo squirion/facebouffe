@@ -127,61 +127,94 @@ create table recipe_images (
 ---
 
 ## 3. Row-Level Security (representative policies)
-Helpers keep the access predicate in one place:
+RLS helpers live in a **`private` schema** (NOT the API-exposed `public`) so they can't be called as REST RPCs — they exist only to be referenced inside policies. Grant `execute` to `authenticated` so policy evaluation works.
 ```sql
-create or replace function is_friend(u1 uuid, u2 uuid) returns boolean
+create schema if not exists private;
+
+create or replace function private.is_friend(u1 uuid, u2 uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from friendships f
     where f.status = 'accepted'
-      and ((f.user_a = least(u1,u2) and f.user_b = greatest(u1,u2)))
+      and f.user_a = least(u1,u2) and f.user_b = greatest(u1,u2)
   );
 $$;
 
-create or replace function can_read_recipe(rid uuid) returns boolean
+create or replace function private.can_read_recipe(rid uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from recipes r where r.id = rid and (
       r.owner_id = auth.uid()
-      or (r.visibility = 'friends' and is_friend(r.owner_id, auth.uid()))
+      or (r.visibility = 'friends' and private.is_friend(r.owner_id, auth.uid()))
       or exists (select 1 from linked_recipes l where l.recipe_id = rid and l.user_id = auth.uid())
     )
   );
 $$;
+revoke all on function private.is_friend(uuid,uuid)    from public;
+revoke all on function private.can_read_recipe(uuid)   from public;
+grant usage   on schema   private                       to authenticated;
+grant execute on function private.is_friend(uuid,uuid)  to authenticated;
+grant execute on function private.can_read_recipe(uuid) to authenticated;
 ```
 ```sql
+-- recipes
 alter table recipes enable row level security;
-create policy recipes_read   on recipes for select using ( can_read_recipe(id) );
+create policy recipes_read   on recipes for select using ( private.can_read_recipe(id) );
 create policy recipes_write  on recipes for all    using ( owner_id = auth.uid() ) with check ( owner_id = auth.uid() );
 
+-- comments
 alter table comments enable row level security;
-create policy comments_read  on comments for select using ( can_read_recipe(recipe_id) );
-create policy comments_author on comments for insert with check ( author_id = auth.uid() and can_read_recipe(recipe_id) );
+create policy comments_read  on comments for select using ( private.can_read_recipe(recipe_id) );
+create policy comments_author on comments for insert with check ( author_id = auth.uid() and private.can_read_recipe(recipe_id) );
 create policy comments_edit  on comments for update using ( author_id = auth.uid() );
--- delete by author OR by the recipe owner (moderation):
-create policy comments_delete on comments for delete using (
+create policy comments_delete on comments for delete using (   -- author OR recipe owner (moderation)
   author_id = auth.uid()
   or exists (select 1 from recipes r where r.id = recipe_id and r.owner_id = auth.uid())
 );
 
+-- recipe_overlays (private to each user)
 alter table recipe_overlays enable row level security;
 create policy overlay_self on recipe_overlays for all using ( user_id = auth.uid() ) with check ( user_id = auth.uid() );
 
+-- linked_recipes (your own subscriptions)
 alter table linked_recipes enable row level security;
 create policy linked_self  on linked_recipes for all using ( user_id = auth.uid() ) with check ( user_id = auth.uid() );
 
+-- profiles
 alter table profiles enable row level security;
-create policy profiles_read on profiles for select using ( id = auth.uid() or is_friend(id, auth.uid()) );
+create policy profiles_read on profiles for select using ( id = auth.uid() or private.is_friend(id, auth.uid()) );
+
+-- friendships (manage rows you're part of; can't accept your own request)
+alter table friendships enable row level security;
+create policy friendships_read   on friendships for select using ( user_a = auth.uid() or user_b = auth.uid() );
+create policy friendships_insert on friendships for insert
+  with check ( requested_by = auth.uid() and (user_a = auth.uid() or user_b = auth.uid()) and status = 'pending' );
+create policy friendships_update on friendships for update
+  using  ( user_a = auth.uid() or user_b = auth.uid() )
+  with check ( (user_a = auth.uid() or user_b = auth.uid()) and (status <> 'accepted' or requested_by <> auth.uid()) );
+create policy friendships_delete on friendships for delete using ( user_a = auth.uid() or user_b = auth.uid() );
+
+-- blocks (only the blocker manages their blocks)
+alter table blocks enable row level security;
+create policy blocks_all on blocks for all using ( blocker_id = auth.uid() ) with check ( blocker_id = auth.uid() );
+
+-- images / recipe_images: RLS on, NO client policies (default-deny). Maintained
+-- server-side (a trigger or the service role) in the image-sync phase; clients
+-- never touch these tables directly — they read images via signed URLs.
+alter table images enable row level security;
+alter table recipe_images enable row level security;
 ```
-**Friend-finding without a directory:** a `security definer` RPC, not table browsing:
+**Friend-finding without a directory:** a `security definer` RPC in `public` (so it *is* callable), but **signed-in users only** — exact match, never partial:
 ```sql
 create or replace function lookup_username(handle text)
 returns table (id uuid, username text, display_name text)
 language sql stable security definer set search_path = public as $$
   select id, username, display_name from profiles where username = lower(handle) limit 1;
-$$;  -- exact match only; reveals nothing on partials → no browsing
+$$;
+revoke all on function lookup_username(text) from public, anon;  -- not callable anonymously
+grant execute on function lookup_username(text) to authenticated;
 ```
-*(Images are read via signed R2 URLs minted by an edge function that checks `can_read_recipe`; the `images`/`recipe_images` tables are service-role only.)*
+*(Images are read via signed URLs minted server-side after a `can_read_recipe` check; `images`/`recipe_images` stay client-locked. The Security Advisor will still flag `lookup_username` as an authenticated-callable SECURITY DEFINER function — that one is **intentional**.)*
 
 ---
 
