@@ -194,6 +194,20 @@ create policy linked_self  on linked_recipes for all using ( user_id = auth.uid(
 alter table user_library enable row level security;
 create policy library_self on user_library for all using ( user_id = auth.uid() ) with check ( user_id = auth.uid() );
 
+-- images (content-addressed, deduped globally) + recipe_images link table (Phase 2B)
+alter table images enable row level security;
+create policy images_rw on images for all to authenticated using ( true ) with check ( true );
+alter table recipe_images enable row level security;
+create policy recipe_images_rw on recipe_images for all to authenticated
+  using      ( exists (select 1 from recipes r where r.id = recipe_id and r.owner_id = auth.uid()) )
+  with check ( exists (select 1 from recipes r where r.id = recipe_id and r.owner_id = auth.uid()) );
+
+-- Storage: a private 'recipe-images' bucket; signed-in users read/write objects.
+-- insert into storage.buckets (id, name, public) values ('recipe-images','recipe-images',false);
+-- create policy "recipe images read"   on storage.objects for select to authenticated using ( bucket_id = 'recipe-images' );
+-- create policy "recipe images insert" on storage.objects for insert to authenticated with check ( bucket_id = 'recipe-images' );
+-- create policy "recipe images update" on storage.objects for update to authenticated using ( bucket_id = 'recipe-images' );
+
 -- profiles
 alter table profiles enable row level security;
 create policy profiles_read on profiles for select using ( id = auth.uid() or private.is_friend(id, auth.uid()) );

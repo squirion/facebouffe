@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../config/supabase_config.dart';
@@ -155,5 +156,46 @@ class SupabaseSyncBackend implements SyncBackend {
       'data': data,
       'updated_at': updatedAt.toUtc().toIso8601String(),
     });
+  }
+
+  // ── Phase 2B: content-addressed images ──
+  static const _bucket = 'recipe-images';
+
+  @override
+  Future<void> uploadImageIfAbsent(String hash, Uint8List bytes, String contentType) async {
+    // content-addressed dedup: if the registry already has this hash, the bytes
+    // are already in storage — nothing to do.
+    final existing = await _c.from('images').select('hash').eq('hash', hash).maybeSingle();
+    if (existing != null) return;
+    await _c.storage.from(_bucket).uploadBinary(
+          hash,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, upsert: true),
+        );
+    await _c.from('images').upsert({
+      'hash': hash,
+      'r2_key': hash, // storage object key (R2 migration keeps this contract)
+      'content_type': contentType,
+      'size_bytes': bytes.length,
+    });
+  }
+
+  @override
+  Future<Uint8List?> downloadImage(String hash) async {
+    try {
+      return await _c.storage.from(_bucket).download(hash);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> setRecipeImages(String recipeId, List<String> hashes) async {
+    await _c.from('recipe_images').delete().eq('recipe_id', recipeId);
+    final unique = hashes.toSet().toList();
+    if (unique.isEmpty) return;
+    await _c.from('recipe_images').insert([
+      for (final h in unique) {'recipe_id': recipeId, 'image_hash': h},
+    ]);
   }
 }

@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File;
+import 'dart:io' show File, Directory;
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:crypto/crypto.dart' show sha256;
+import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -79,6 +81,8 @@ class AppState extends ChangeNotifier {
   final Set<String> _localOnlyIds = {}; // recipes the user chose NOT to sync (later-device "skip")
   List<Recipe> _pendingLocalOnly = []; // recipes offered in the MigrationSheet
   bool _syncBusy = false;
+  final Map<String, String> _imgHashCache = {}; // local photo path -> sha-256 content hash
+  final Map<String, List<String>> _recipeImgHashes = {}; // recipe id -> last-synced image hash set
 
   // ── lookups ──
   Map<String, Tag> get tagsById => {for (final t in tags) t.id: t};

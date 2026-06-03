@@ -91,8 +91,7 @@ extension CloudSync on AppState {
       }
       try {
         for (final r in pending) {
-          await sync.upsertRecipe(_cloudRecipeOf(r));
-          await sync.upsertOverlay(_overlayOf(r));
+          await _pushRecipeFull(r);
           _syncedIds.add(r.id);
         }
         await sync.upsertLibrary(_libraryData(), DateTime.now());
@@ -114,11 +113,27 @@ extension CloudSync on AppState {
     if (!_canSync || !_migrated || _localOnlyIds.contains(r.id)) return;
     if (!_isUuid(r.id)) return; // legacy non-uuid id — the reconcile sweep re-mints + pushes it
     unawaited(_safe(() async {
-      await sync.upsertRecipe(_cloudRecipeOf(r));
-      await sync.upsertOverlay(_overlayOf(r));
+      await _pushRecipeFull(r);
       _syncedIds.add(r.id);
       _persistSyncState();
     }));
+  }
+
+  /// Upload the recipe's photos (content-addressed), then upsert its content
+  /// (with image hashes embedded) and its overlay.
+  Future<void> _pushRecipeFull(Recipe r) async {
+    final base = _cloudRecipeOf(r);
+    final hashes = await _uploadImagesFor(r);
+    final content = Map<String, dynamic>.from(base.content)..['imageHashes'] = hashes;
+    await sync.upsertRecipe(CloudRecipe(
+      id: base.id,
+      visibility: base.visibility,
+      version: base.version,
+      dateModified: base.dateModified,
+      content: content,
+      linkIds: base.linkIds,
+    ));
+    await sync.upsertOverlay(_overlayOf(r));
   }
 
   void cloudDeleteRecipe(String id) {
@@ -153,12 +168,15 @@ extension CloudSync on AppState {
       recipes.removeWhere(_isSeed); // pristine seeds are replaced by cloud copies
       _applyLibraryIfAny(lib);
       final overlayById = {for (final o in overlays) o.recipeId: o};
+      final imgByRecipe = <String, Map<String, dynamic>>{};
       for (final c in cloud) {
         if (getRecipe(c.id) == null) {
           final r = _recipeFromCloud(c);
           final o = overlayById[c.id];
           if (o != null) _applyOverlayTo(r, o);
           recipes.add(r);
+          final ih = c.content['imageHashes'];
+          if (ih is Map) imgByRecipe[c.id] = Map<String, dynamic>.from(ih);
         }
       }
       _syncedIds
@@ -173,6 +191,7 @@ extension CloudSync on AppState {
       _persistDb();
       _persistPhotos();
       _persistGallery();
+      unawaited(_downloadImages(imgByRecipe)); // restore photos in the background
     }
   }
 
@@ -206,8 +225,7 @@ extension CloudSync on AppState {
 
   Future<void> _pushEverything() async {
     for (final r in recipes) {
-      await sync.upsertRecipe(_cloudRecipeOf(r));
-      await sync.upsertOverlay(_overlayOf(r));
+      await _pushRecipeFull(r);
     }
     await sync.upsertLibrary(_libraryData(), DateTime.now());
   }
@@ -223,6 +241,12 @@ extension CloudSync on AppState {
     final cloudById = {for (final c in cloud) c.id: c};
     final overlayById = {for (final o in overlays) o.recipeId: o};
 
+    final imgByRecipe = <String, Map<String, dynamic>>{};
+    void noteImages(CloudRecipe c) {
+      final ih = c.content['imageHashes'];
+      if (ih is Map) imgByRecipe[c.id] = Map<String, dynamic>.from(ih);
+    }
+
     // 1) pull: add new cloud recipes / apply cloud when it's newer (LWW)
     for (final c in cloud) {
       final local = getRecipe(c.id);
@@ -231,12 +255,14 @@ extension CloudSync on AppState {
         final o = overlayById[c.id];
         if (o != null) _applyOverlayTo(r, o);
         recipes.insert(0, r);
+        noteImages(c);
       } else {
         final lm = _parse(local.dateModified);
         if (c.dateModified.isAfter(lm)) {
           _replaceContent(local, c);
           final o = overlayById[c.id];
           if (o != null) _applyOverlayTo(local, o);
+          noteImages(c);
         }
       }
     }
@@ -252,8 +278,7 @@ extension CloudSync on AppState {
         recipeGallery.remove(r.id);
       } else {
         // created locally (e.g. offline) → push
-        await sync.upsertRecipe(_cloudRecipeOf(r));
-        await sync.upsertOverlay(_overlayOf(r));
+        await _pushRecipeFull(r);
       }
     }
 
@@ -262,8 +287,7 @@ extension CloudSync on AppState {
       final local = getRecipe(c.id);
       if (local == null) continue;
       if (_parse(local.dateModified).isAfter(c.dateModified)) {
-        await sync.upsertRecipe(_cloudRecipeOf(local));
-        await sync.upsertOverlay(_overlayOf(local));
+        await _pushRecipeFull(local);
       }
     }
 
@@ -276,6 +300,121 @@ extension CloudSync on AppState {
     _persistPhotos();
     _persistGallery();
     notify();
+    unawaited(_downloadImages(imgByRecipe)); // fill photos in the background
+  }
+
+  // ── images (Phase 2B) ──
+
+  /// Upload a recipe's hero + gallery photos (content-addressed dedup) and
+  /// register them for ref-count GC. Returns `{hero: hash?, gallery: [hash,…]}`.
+  Future<Map<String, dynamic>> _uploadImagesFor(Recipe r) async {
+    String? heroHash;
+    final hero = recipePhotos[r.id];
+    if (hero != null && hero.isNotEmpty) heroHash = await _hashAndUpload(hero);
+    final galleryHashes = <String>[];
+    for (final p in (recipeGallery[r.id] ?? const <String>[])) {
+      final h = await _hashAndUpload(p);
+      if (h != null) galleryHashes.add(h);
+    }
+    final all = [?heroHash, ...galleryHashes];
+    final prev = _recipeImgHashes[r.id];
+    if (prev == null || !_listEq(prev, all)) {
+      await sync.setRecipeImages(r.id, all);
+      _recipeImgHashes[r.id] = all;
+    }
+    return {'hero': heroHash, 'gallery': galleryHashes};
+  }
+
+  Future<String?> _hashAndUpload(String path) async {
+    final cached = _imgHashCache[path];
+    if (cached != null) return cached; // already hashed (and uploaded) this session
+    final bytes = await _readImageBytes(path);
+    if (bytes == null) return null;
+    final hash = sha256.convert(bytes).toString();
+    await sync.uploadImageIfAbsent(hash, bytes, 'image/jpeg');
+    _imgHashCache[path] = hash;
+    return hash;
+  }
+
+  Future<Uint8List?> _readImageBytes(String path) async {
+    try {
+      if (path.startsWith('data:')) {
+        final i = path.indexOf(',');
+        return base64Decode(path.substring(i + 1));
+      }
+      if (kIsWeb) return null; // web non-data paths aren't readable as files
+      return await File(path).readAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Download + cache any cloud images referenced by pulled recipes, then map
+  /// them back into recipePhotos / recipeGallery. Runs in the background.
+  Future<void> _downloadImages(Map<String, Map<String, dynamic>> byRecipe) async {
+    if (byRecipe.isEmpty || kIsWeb) return;
+    Directory dir;
+    try {
+      dir = await getApplicationDocumentsDirectory();
+    } catch (_) {
+      return;
+    }
+    var changed = false;
+    for (final entry in byRecipe.entries) {
+      final id = entry.key;
+      final ih = entry.value;
+      final hero = ih['hero'] as String?;
+      final heroPath = recipePhotos[id];
+      if (hero != null && (heroPath == null || !File(heroPath).existsSync())) {
+        final p = await _ensureCached(dir, hero);
+        if (p != null) {
+          recipePhotos[id] = p;
+          changed = true;
+        }
+      }
+      final galleryHashes = (ih['gallery'] as List?)?.map((e) => e as String).toList() ?? const [];
+      if (galleryHashes.isNotEmpty && (recipeGallery[id] == null || recipeGallery[id]!.isEmpty)) {
+        final paths = <String>[];
+        for (final h in galleryHashes) {
+          final p = await _ensureCached(dir, h);
+          if (p != null) paths.add(p);
+        }
+        if (paths.isNotEmpty) {
+          recipeGallery[id] = paths;
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      _persistPhotos();
+      _persistGallery();
+      notify();
+    }
+  }
+
+  Future<String?> _ensureCached(Directory dir, String hash) async {
+    final f = File('${dir.path}/img_$hash.jpg');
+    if (await f.exists()) {
+      _imgHashCache[f.path] = hash;
+      return f.path;
+    }
+    final bytes = await sync.downloadImage(hash);
+    if (bytes == null) return null;
+    try {
+      await f.writeAsBytes(bytes);
+    } catch (_) {
+      return null;
+    }
+    _imgHashCache[f.path] = hash;
+    return f.path;
+  }
+
+  bool _listEq(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   // ── mapping helpers ──

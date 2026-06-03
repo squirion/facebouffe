@@ -4,6 +4,8 @@
 /// sharing, steal) add methods as they're built.
 library;
 
+import 'dart:typed_data';
+
 /// A signed-in account (auth identity). `username` is null until the profile is
 /// created on first sign-in.
 class Account {
@@ -106,4 +108,17 @@ abstract class SyncBackend {
 
   /// Create or replace this user's library blob.
   Future<void> upsertLibrary(Map<String, dynamic> data, DateTime updatedAt);
+
+  // ── Phase 2B: content-addressed images ──
+
+  /// Upload [bytes] under [hash] (sha-256) to image storage and register it in
+  /// the `images` table. No-op if the hash already exists (content-addressed
+  /// dedup across all recipes/users).
+  Future<void> uploadImageIfAbsent(String hash, Uint8List bytes, String contentType);
+
+  /// Download the bytes for a content hash, or null if missing.
+  Future<Uint8List?> downloadImage(String hash);
+
+  /// Replace the set of image hashes linked to a recipe (drives ref-count GC).
+  Future<void> setRecipeImages(String recipeId, List<String> hashes);
 }
