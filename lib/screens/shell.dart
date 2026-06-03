@@ -12,6 +12,7 @@ import 'search_screen.dart';
 import 'shopping_screen.dart';
 import 'settings_screen.dart';
 import 'import_sheet.dart';
+import 'account_screens.dart' show showMigrationSheet;
 
 /// Holds the active bottom-tab index; screens switch tabs via [go].
 class ShellTab extends ValueNotifier<int> {
@@ -37,6 +38,8 @@ class RootShell extends StatefulWidget {
 }
 
 class _RootShellState extends State<RootShell> {
+  bool _migrationShowing = false;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +56,16 @@ class _RootShellState extends State<RootShell> {
     final tab = context.watch<ShellTab>();
     final index = tab.value;
     final showFab = index == 0 || index == 1;
+
+    // Later-device migration: ask once whether to add local-only recipes (§8).
+    if (app.migrationPending && !_migrationShowing) {
+      _migrationShowing = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await showMigrationSheet(context, app);
+        _migrationShowing = false;
+      });
+    }
 
     return Scaffold(
       backgroundColor: fb.canvas,

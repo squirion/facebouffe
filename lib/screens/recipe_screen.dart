@@ -675,13 +675,13 @@ class _JournalState extends State<_Journal> {
     super.initState();
     // Flush the edited note to disk when the field loses focus.
     _notesFocus.addListener(() {
-      if (!_notesFocus.hasFocus) context.read<AppState>().saveDb();
+      if (!_notesFocus.hasFocus) context.read<AppState>().saveDb(widget.recipe.id);
     });
   }
 
   @override
   void dispose() {
-    context.read<AppState>().saveDb(); // flush any last edit on leaving the page
+    context.read<AppState>().saveDb(widget.recipe.id); // flush any last edit on leaving the page
     _notes.dispose();
     _notesFocus.dispose();
     super.dispose();

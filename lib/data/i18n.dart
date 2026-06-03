@@ -203,6 +203,10 @@ const Map<String, Map<String, String>> kI18n = {
     'signout_confirm': 'Se déconnecter ?',
     'signout_note': 'Vos recettes restent sur l\'appareil. Vous pourrez vous reconnecter plus tard.',
     'signin_error': 'Échec de la connexion. Réessayez.',
+    'sync_syncing': 'Synchronisation…', 'sync_offline': 'Hors ligne', 'sync_error': 'Erreur de synchro',
+    'migrate_title': 'Recettes sur cet appareil',
+    'migrate_body': 'Vous avez %s recette(s) sur cet appareil qui ne sont pas dans votre compte. Les ajouter ?',
+    'migrate_add': 'Ajouter à mon compte', 'migrate_keep': 'Garder local seulement',
   },
   'en': {
     'tab_home': 'Home', 'tab_search': 'Search', 'tab_list': 'Groceries', 'tab_settings': 'Settings',
@@ -406,6 +410,10 @@ const Map<String, Map<String, String>> kI18n = {
     'signout_confirm': 'Sign out?',
     'signout_note': 'Your recipes stay on your device. You can sign back in later.',
     'signin_error': 'Sign-in failed. Please try again.',
+    'sync_syncing': 'Syncing…', 'sync_offline': 'Offline', 'sync_error': 'Sync error',
+    'migrate_title': 'Recipes on this device',
+    'migrate_body': 'You have %s recipe(s) on this device that aren\'t in your account. Add them?',
+    'migrate_add': 'Add to my account', 'migrate_keep': 'Keep local only',
   },
 };
 

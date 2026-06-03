@@ -449,7 +449,7 @@ class AccountScreen extends StatelessWidget {
                   ]),
                 ),
                 _InfoGroup(label: app.t('account_sync'), rows: [
-                  _InfoRow(label: app.t('account_sync'), value: app.t('sync_synced'), accentValue: true),
+                  _SyncRow(),
                 ]),
                 const SizedBox(height: 10),
                 GestureDetector(
@@ -492,20 +492,88 @@ class _InfoGroup extends StatelessWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  final String label, value;
-  final bool accentValue;
-  const _InfoRow({required this.label, required this.value, this.accentValue = false});
-
+/// Live sync-status row. Tapping it forces a re-sync.
+class _SyncRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fb = context.fb;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-      child: Row(children: [
-        Expanded(child: Text(label, style: fb.ui(size: 15.5, weight: FontWeight.w600))),
-        Text(value, style: fb.ui(size: 14.5, weight: FontWeight.w600, color: accentValue ? fb.accent : fb.inkSoft)),
-      ]),
+    final app = context.watch<AppState>();
+    final (label, color, spin) = switch (app.syncStatus) {
+      SyncStatus.syncing => (app.t('sync_syncing'), fb.inkSoft, true),
+      SyncStatus.synced => (app.t('sync_synced'), fb.accent, false),
+      SyncStatus.offline => (app.t('sync_offline'), fb.inkSoft, false),
+      SyncStatus.error => (app.t('sync_error'), const Color(0xFFC0563B), false),
+      SyncStatus.idle => (app.t('sync_synced'), fb.inkSoft, false),
+    };
+    return GestureDetector(
+      onTap: () => app.runCloudSync(),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+        child: Row(children: [
+          Expanded(child: Text(app.t('account_sync'), style: fb.ui(size: 15.5, weight: FontWeight.w600))),
+          if (spin) ...[
+            SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: fb.inkSoft)),
+            const SizedBox(width: 8),
+          ],
+          Text(label, style: fb.ui(size: 14.5, weight: FontWeight.w600, color: color)),
+        ]),
+      ),
     );
   }
+}
+
+/// Modal asking a later device whether to add its local-only recipes to the
+/// account (spec §8). Shown automatically when [AppState.migrationPending].
+Future<void> showMigrationSheet(BuildContext context, AppState app) async {
+  final fb = context.fb;
+  final n = app.pendingMigrationCount;
+  if (n == 0) {
+    await app.resolveMigration(false);
+    return;
+  }
+  final add = await showModalBottomSheet<bool>(
+    context: context,
+    isDismissible: false,
+    enableDrag: false,
+    backgroundColor: fb.card,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(app.t('migrate_title'), style: fb.display(size: 21, weight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text(app.t('migrate_body').replaceFirst('%s', '$n'), style: fb.ui(size: 14.5, color: fb.inkSoft, height: 1.45)),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: () => Navigator.pop(ctx, true),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                height: 50,
+                decoration: BoxDecoration(color: fb.accent, borderRadius: BorderRadius.circular(14)),
+                alignment: Alignment.center,
+                child: Text(app.t('migrate_add'), style: fb.ui(size: 15.5, weight: FontWeight.w700, color: Colors.white)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () => Navigator.pop(ctx, false),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                height: 50,
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: fb.line)),
+                alignment: Alignment.center,
+                child: Text(app.t('migrate_keep'), style: fb.ui(size: 15.5, weight: FontWeight.w600, color: fb.inkSoft)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  await app.resolveMigration(add ?? false);
 }

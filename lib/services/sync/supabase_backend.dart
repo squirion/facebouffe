@@ -60,4 +60,100 @@ class SupabaseSyncBackend implements SyncBackend {
 
   @override
   Future<void> signOut() => _c.auth.signOut();
+
+  // ── Phase 2A: personal cloud sync ──
+
+  @override
+  Future<List<CloudRecipe>> fetchOwnedRecipes() async {
+    final uid = _c.auth.currentUser?.id;
+    if (uid == null) return [];
+    final rows = await _c.from('recipes').select('id,visibility,version,date_modified,content,link_ids').eq('owner_id', uid);
+    return (rows as List).map((r) {
+      final m = r as Map<String, dynamic>;
+      return CloudRecipe(
+        id: m['id'] as String,
+        visibility: m['visibility'] as String? ?? 'private',
+        version: (m['version'] as num?)?.toInt() ?? 1,
+        dateModified: DateTime.tryParse(m['date_modified'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+        content: Map<String, dynamic>.from(m['content'] as Map),
+        linkIds: (m['link_ids'] as List?)?.map((e) => e as String).toList() ?? const [],
+      );
+    }).toList();
+  }
+
+  @override
+  Future<void> upsertRecipe(CloudRecipe r) async {
+    final uid = _c.auth.currentUser?.id;
+    if (uid == null) throw StateError('not signed in');
+    await _c.from('recipes').upsert({
+      'id': r.id,
+      'owner_id': uid,
+      'visibility': r.visibility,
+      'version': r.version,
+      'date_modified': r.dateModified.toUtc().toIso8601String(),
+      'content': r.content,
+      'link_ids': r.linkIds,
+    });
+  }
+
+  @override
+  Future<void> deleteRecipe(String id) async {
+    await _c.from('recipes').delete().eq('id', id);
+  }
+
+  @override
+  Future<List<CloudOverlay>> fetchOverlays() async {
+    final uid = _c.auth.currentUser?.id;
+    if (uid == null) return [];
+    final rows = await _c.from('recipe_overlays').select('recipe_id,notes,last_cooked,made_count,rating,updated_at').eq('user_id', uid);
+    return (rows as List).map((r) {
+      final m = r as Map<String, dynamic>;
+      return CloudOverlay(
+        recipeId: m['recipe_id'] as String,
+        notes: m['notes'] as String? ?? '',
+        lastCooked: m['last_cooked'] != null ? DateTime.tryParse(m['last_cooked'] as String) : null,
+        madeCount: (m['made_count'] as num?)?.toInt() ?? 0,
+        rating: (m['rating'] as num?)?.toInt() ?? 0,
+        updatedAt: DateTime.tryParse(m['updated_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+      );
+    }).toList();
+  }
+
+  @override
+  Future<void> upsertOverlay(CloudOverlay o) async {
+    final uid = _c.auth.currentUser?.id;
+    if (uid == null) throw StateError('not signed in');
+    await _c.from('recipe_overlays').upsert({
+      'user_id': uid,
+      'recipe_id': o.recipeId,
+      'notes': o.notes,
+      'last_cooked': o.lastCooked?.toUtc().toIso8601String(),
+      'made_count': o.madeCount,
+      'rating': o.rating,
+      'updated_at': o.updatedAt.toUtc().toIso8601String(),
+    }, onConflict: 'user_id,recipe_id');
+  }
+
+  @override
+  Future<({Map<String, dynamic> data, DateTime updatedAt})?> fetchLibrary() async {
+    final uid = _c.auth.currentUser?.id;
+    if (uid == null) return null;
+    final row = await _c.from('user_library').select('data,updated_at').eq('user_id', uid).maybeSingle();
+    if (row == null) return null;
+    return (
+      data: Map<String, dynamic>.from(row['data'] as Map? ?? const {}),
+      updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+
+  @override
+  Future<void> upsertLibrary(Map<String, dynamic> data, DateTime updatedAt) async {
+    final uid = _c.auth.currentUser?.id;
+    if (uid == null) throw StateError('not signed in');
+    await _c.from('user_library').upsert({
+      'user_id': uid,
+      'data': data,
+      'updated_at': updatedAt.toUtc().toIso8601String(),
+    });
+  }
 }

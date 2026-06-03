@@ -91,8 +91,18 @@ create table recipe_overlays (
   notes       text not null default '',
   last_cooked timestamptz,
   made_count  int  not null default 0,
+  rating      int  not null default 0,                -- private 0–5 rating (distinct from public review stars)
   updated_at  timestamptz not null default now(),
   primary key (user_id, recipe_id)
+);
+
+-- Per-user "library" blob: tag definitions, variant groups, learned aliases —
+-- the collections that have no table of their own but must sync across devices
+-- (last-write-wins by updated_at). Phase 2A.
+create table user_library (
+  user_id    uuid primary key references profiles(id) on delete cascade,
+  data       jsonb not null default '{}',
+  updated_at timestamptz not null default now()
 );
 
 -- Reviews (shared layer). One per (recipe, author).
@@ -179,6 +189,10 @@ create policy overlay_self on recipe_overlays for all using ( user_id = auth.uid
 -- linked_recipes (your own subscriptions)
 alter table linked_recipes enable row level security;
 create policy linked_self  on linked_recipes for all using ( user_id = auth.uid() ) with check ( user_id = auth.uid() );
+
+-- user_library (private to each user)
+alter table user_library enable row level security;
+create policy library_self on user_library for all using ( user_id = auth.uid() ) with check ( user_id = auth.uid() );
 
 -- profiles
 alter table profiles enable row level security;

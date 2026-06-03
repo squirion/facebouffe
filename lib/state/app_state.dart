@@ -17,6 +17,11 @@ import '../data/models.dart';
 import '../data/i18n.dart';
 import '../data/format.dart';
 
+part 'app_state_sync.dart';
+
+/// Cloud-sync health, surfaced in the account screen.
+enum SyncStatus { idle, syncing, synced, offline, error }
+
 /// Single source of truth for the whole app. Holds the recipe database, tags,
 /// variant groups, profile/settings, shopping list, coach-mark flags and the
 /// per-recipe photo store. Mutations notify listeners and persist locally.
@@ -67,6 +72,14 @@ class AppState extends ChangeNotifier {
 
   AppState({SyncBackend? sync}) : sync = sync ?? SupabaseSyncBackend();
 
+  // ── cloud sync (Phase 2A) ──
+  SyncStatus syncStatus = SyncStatus.idle;
+  bool migrationPending = false; // later-device: local-only recipes await user choice
+  final Set<String> _syncedIds = {}; // recipe ids known to exist in the cloud
+  final Set<String> _localOnlyIds = {}; // recipes the user chose NOT to sync (later-device "skip")
+  List<Recipe> _pendingLocalOnly = []; // recipes offered in the MigrationSheet
+  bool _syncBusy = false;
+
   // ── lookups ──
   Map<String, Tag> get tagsById => {for (final t in tags) t.id: t};
   Recipe? getRecipe(String? id) {
@@ -82,6 +95,10 @@ class AppState extends ChangeNotifier {
     }
     return null;
   }
+
+  /// Public passthrough so the cloud-sync extension (a separate part) can poke
+  /// listeners — `notifyListeners` itself is protected to ChangeNotifier.
+  void notify() => notifyListeners();
 
   String t(String key) => tr(profile.language, key);
   String get lang => profile.language;
@@ -177,6 +194,7 @@ class AppState extends ChangeNotifier {
       final u = await sync.fetchMyUsername();
       account = account?.withUsername(u);
       notifyListeners();
+      if (u != null) unawaited(runCloudSync());
     } catch (_) {}
   }
 
@@ -197,11 +215,16 @@ class AppState extends ChangeNotifier {
     await sync.claimUsername(handle);
     account = account?.withUsername(handle.trim().toLowerCase());
     notifyListeners();
+    unawaited(runCloudSync()); // first-ever sign-in → migrate this device's cookbook
   }
 
   Future<void> signOutAccount() async {
     await sync.signOut();
     account = null;
+    _syncedIds.clear();
+    _pendingLocalOnly = [];
+    migrationPending = false;
+    syncStatus = SyncStatus.idle;
     notifyListeners();
   }
 
@@ -338,6 +361,7 @@ class AppState extends ChangeNotifier {
     fn(r);
     r.dateModified = DateTime.now().toIso8601String();
     _persistDb();
+    cloudPushRecipe(r);
     notifyListeners();
   }
 
@@ -349,22 +373,38 @@ class AppState extends ChangeNotifier {
     } else {
       r.tags.add('tag-fav');
     }
+    r.dateModified = DateTime.now().toIso8601String();
     _persistDb();
+    cloudPushRecipe(r);
     notifyListeners();
   }
 
   void setRating(String id, int v) => updateRecipe(id, (r) => r.personal.rating = v);
 
   /// Persist the in-memory database (used to flush inline notes edits without
-  /// rebuilding the UI on every keystroke).
-  void saveDb() => _persistDb();
+  /// rebuilding the UI on every keystroke). Pass [touchedId] to also bump that
+  /// recipe's modified time and push the change to the cloud.
+  void saveDb([String? touchedId]) {
+    if (touchedId != null) {
+      final r = getRecipe(touchedId);
+      if (r != null) {
+        r.dateModified = DateTime.now().toIso8601String();
+        _persistDb();
+        cloudPushRecipe(r);
+        return;
+      }
+    }
+    _persistDb();
+  }
 
   void markCooked(String id) {
     final r = getRecipe(id);
     if (r == null) return;
     r.personal.madeCount += 1;
-    r.personal.lastCooked = '2026-05-28T00:00:00Z';
+    r.personal.lastCooked = DateTime.now().toIso8601String();
+    r.dateModified = DateTime.now().toIso8601String();
     _persistDb();
+    cloudPushRecipe(r);
     notifyListeners();
   }
 
@@ -391,6 +431,7 @@ class AppState extends ChangeNotifier {
     if (photo != null) _persistPhotos();
     if (gallery != null) _persistGallery();
     _persistDb();
+    cloudDeleteRecipe(id);
     notifyListeners();
   }
 
@@ -411,6 +452,7 @@ class AppState extends ChangeNotifier {
     _persistPhotos();
     _persistGallery();
     _persistDb();
+    cloudPushRecipe(recipe);
     notifyListeners();
   }
 
@@ -452,10 +494,11 @@ class AppState extends ChangeNotifier {
       form.dateModified = now;
       if (idx >= 0) recipes[idx] = form;
       _persistDb();
+      cloudPushRecipe(form);
       notifyListeners();
       return existing.id;
     }
-    final id = uuid();
+    final id = _uuidV4(); // real UUID — recipes live in a uuid-keyed cloud pool
     form.id = id;
     form.createdBy = profile.username;
     form.dateAdded = now;
@@ -469,6 +512,7 @@ class AppState extends ChangeNotifier {
     _persistPhotos();
     _persistGallery();
     _persistDb();
+    cloudPushRecipe(form);
     notifyListeners();
     return id;
   }
@@ -478,7 +522,7 @@ class AppState extends ChangeNotifier {
   String addVariant(String id) {
     final base = getRecipe(id);
     if (base == null) return id;
-    final newId = uuid();
+    final newId = _uuidV4();
     String gid;
     if (base.variantGroupId != null) {
       gid = base.variantGroupId!;
@@ -503,6 +547,9 @@ class AppState extends ChangeNotifier {
     copy.links = [];
     recipes.insert(0, copy);
     _persistDb();
+    cloudPushRecipe(base); // base may have gained a variantGroupId
+    cloudPushRecipe(copy);
+    cloudPushLibrary(); // variant group membership changed
     notifyListeners();
     return newId;
   }
@@ -512,7 +559,7 @@ class AppState extends ChangeNotifier {
   String addGeneratedVariant(String baseId, Recipe gen) {
     final base = getRecipe(baseId);
     if (base == null) return baseId;
-    final newId = uuid();
+    final newId = _uuidV4();
     String gid;
     if (base.variantGroupId != null) {
       gid = base.variantGroupId!;
@@ -530,6 +577,9 @@ class AppState extends ChangeNotifier {
     gen.dateModified = now;
     recipes.insert(0, gen);
     _persistDb();
+    cloudPushRecipe(base);
+    cloudPushRecipe(gen);
+    cloudPushLibrary();
     notifyListeners();
     return newId;
   }
@@ -554,6 +604,7 @@ class AppState extends ChangeNotifier {
     final id = 'tag-${uuid()}';
     tags.add(Tag(id: id, system: false, name: name.trim(), icon: _tagIcons[tags.length % _tagIcons.length], color: _paletteTags[tags.length % _paletteTags.length]));
     _persistDb();
+    cloudPushLibrary();
     notifyListeners();
     return (id: id, created: true);
   }
@@ -564,16 +615,25 @@ class AppState extends ChangeNotifier {
     final tg = tags.firstWhere((t) => t.id == id);
     tg.name = name.trim();
     _persistDb();
+    cloudPushLibrary();
     notifyListeners();
     return true;
   }
 
   void deleteTag(String id) {
     tags.removeWhere((t) => t.id == id);
+    final touched = <Recipe>[];
     for (final r in recipes) {
-      r.tags.remove(id);
+      if (r.tags.remove(id)) {
+        r.dateModified = DateTime.now().toIso8601String();
+        touched.add(r);
+      }
     }
     _persistDb();
+    cloudPushLibrary();
+    for (final r in touched) {
+      cloudPushRecipe(r);
+    }
     notifyListeners();
   }
 

@@ -21,6 +21,43 @@ class UsernameTakenException implements Exception {
   const UsernameTakenException();
 }
 
+/// One owned recipe in the cloud (`recipes` row). [content] is the recipe's
+/// full json minus the private `personal` overlay (which syncs separately).
+class CloudRecipe {
+  final String id;
+  final String visibility; // 'private' | 'friends'
+  final int version;
+  final DateTime dateModified;
+  final Map<String, dynamic> content;
+  final List<String> linkIds;
+  const CloudRecipe({
+    required this.id,
+    required this.visibility,
+    required this.version,
+    required this.dateModified,
+    required this.content,
+    required this.linkIds,
+  });
+}
+
+/// One user's private overlay for a recipe (`recipe_overlays` row).
+class CloudOverlay {
+  final String recipeId;
+  final String notes;
+  final DateTime? lastCooked;
+  final int madeCount;
+  final int rating;
+  final DateTime updatedAt;
+  const CloudOverlay({
+    required this.recipeId,
+    required this.notes,
+    required this.lastCooked,
+    required this.madeCount,
+    required this.rating,
+    required this.updatedAt,
+  });
+}
+
 abstract class SyncBackend {
   /// Current account, or null when signed out / offline-only.
   Account? get currentAccount;
@@ -45,4 +82,28 @@ abstract class SyncBackend {
 
   /// End the session (local data is untouched).
   Future<void> signOut();
+
+  // ── Phase 2A: personal cloud sync ──
+
+  /// All recipes owned by the signed-in user.
+  Future<List<CloudRecipe>> fetchOwnedRecipes();
+
+  /// Create or replace one owned recipe (upsert by id; RLS enforces ownership).
+  Future<void> upsertRecipe(CloudRecipe recipe);
+
+  /// Delete one owned recipe by id.
+  Future<void> deleteRecipe(String id);
+
+  /// This user's private overlays (notes/rating/madeCount/lastCooked).
+  Future<List<CloudOverlay>> fetchOverlays();
+
+  /// Create or replace one overlay (upsert by user+recipe).
+  Future<void> upsertOverlay(CloudOverlay overlay);
+
+  /// This user's library blob (tag defs, variant groups, aliases) + its
+  /// updated_at, or null if none exists yet.
+  Future<({Map<String, dynamic> data, DateTime updatedAt})?> fetchLibrary();
+
+  /// Create or replace this user's library blob.
+  Future<void> upsertLibrary(Map<String, dynamic> data, DateTime updatedAt);
 }
