@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import '../services/sync/sync_backend.dart' show UsernameTakenException;
+import '../services/image_pick.dart';
 import '../theme.dart';
+import '../widgets/avatar.dart';
 import '../widgets/chrome.dart';
 import '../widgets/fb_icon.dart';
 
@@ -401,6 +403,43 @@ class AccountScreen extends StatelessWidget {
     if (context.mounted) Navigator.pop(context);
   }
 
+  Future<void> _editAvatar(BuildContext context, AppState app) async {
+    final fb = context.fb;
+    final hasAvatar = app.account?.avatarHash != null;
+    Widget row(String icon, String label, String value, {bool danger = false}) => GestureDetector(
+          onTap: () => Navigator.pop(context, value),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            child: Row(children: [
+              FbIcon(icon, size: 18, color: danger ? const Color(0xFFC0563B) : fb.inkSoft),
+              const SizedBox(width: 12),
+              Text(label, style: fb.ui(size: 15, weight: FontWeight.w600, color: danger ? const Color(0xFFC0563B) : fb.ink)),
+            ]),
+          ),
+        );
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: fb.card,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 8),
+          row('camera', app.t('change_photo'), 'change'),
+          if (hasAvatar) row('trash', app.t('remove_photo'), 'remove', danger: true),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (!context.mounted) return;
+    if (choice == 'change') {
+      final path = await ImagePick.pick(context);
+      if (path != null) await app.applyAvatar(path);
+    } else if (choice == 'remove') {
+      await app.removeAvatar();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
@@ -414,7 +453,6 @@ class AccountScreen extends StatelessWidget {
     }
 
     final handle = acct.username ?? '…';
-    final initial = (acct.username?.isNotEmpty == true ? acct.username! : acct.email).characters.first.toUpperCase();
 
     return Scaffold(
       backgroundColor: fb.canvas,
@@ -431,7 +469,25 @@ class AccountScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(20), boxShadow: fb.shadow),
                   child: Row(children: [
-                    Container(width: 56, height: 56, decoration: BoxDecoration(color: fb.accent, shape: BoxShape.circle), alignment: Alignment.center, child: Text(initial, style: fb.display(size: 26, weight: FontWeight.w600, color: Colors.white))),
+                    GestureDetector(
+                      onTap: () => _editAvatar(context, app),
+                      behavior: HitTestBehavior.opaque,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Avatar(hash: acct.avatarHash, letter: acct.username ?? acct.email, size: 56),
+                          Positioned(
+                            right: -2,
+                            bottom: -2,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(color: fb.accent, shape: BoxShape.circle, border: Border.all(color: fb.card, width: 2)),
+                              child: const Icon(Icons.camera_alt, size: 11, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(

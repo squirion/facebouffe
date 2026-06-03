@@ -39,6 +39,7 @@ create table profiles (
   id           uuid primary key references auth.users(id) on delete cascade,
   username     text unique not null check (username ~ '^[a-z0-9_]{3,20}$'),
   display_name text,
+  avatar_hash  text,                                    -- optional avatar image (content-addressed, same images registry); GC must treat as a ref
   created_at   timestamptz not null default now()
 );
 

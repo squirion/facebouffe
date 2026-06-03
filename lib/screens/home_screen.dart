@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../nav.dart';
+import '../widgets/avatar.dart';
 import '../widgets/banners.dart';
 import '../widgets/cards.dart';
 import '../widgets/chrome.dart';
@@ -57,18 +58,18 @@ class HomeScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                // account circle: signed-in → initial → Compte; signed-out → person icon → sign-in
+                // account circle: signed-in → avatar/initial → Compte; signed-out → person icon → sign-in
                 GestureDetector(
                   onTap: () => app.signedIn ? Nav.openAccount(context) : Nav.openSignIn(context),
-                  child: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(color: app.signedIn ? fb.accent : fb.card, shape: BoxShape.circle, border: Border.all(color: app.signedIn ? fb.accent : fb.line), boxShadow: fb.shadow),
-                    alignment: Alignment.center,
-                    child: app.signedIn
-                        ? Text((app.account?.username?.isNotEmpty == true ? app.account!.username! : '?')[0].toUpperCase(), style: fb.display(size: 18, weight: FontWeight.w600, color: Colors.white))
-                        : FbIcon('user', size: fb.fs(20), color: fb.inkSoft),
-                  ),
+                  child: app.signedIn
+                      ? Avatar(hash: app.account?.avatarHash, letter: app.account?.username ?? '?', size: 63)
+                      : Container(
+                          width: 63,
+                          height: 63,
+                          decoration: BoxDecoration(color: fb.card, shape: BoxShape.circle, border: Border.all(color: fb.line), boxShadow: fb.shadow),
+                          alignment: Alignment.center,
+                          child: FbIcon('user', size: fb.fs(30), color: fb.inkSoft),
+                        ),
                 ),
               ],
             ),

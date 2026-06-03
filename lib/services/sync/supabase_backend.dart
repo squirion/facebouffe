@@ -30,11 +30,18 @@ class SupabaseSyncBackend implements SyncBackend {
       _c.auth.verifyOTP(email: email, token: code.trim(), type: OtpType.email);
 
   @override
-  Future<String?> fetchMyUsername() async {
+  Future<({String? username, String? avatarHash})> fetchMyProfile() async {
     final uid = _c.auth.currentUser?.id;
-    if (uid == null) return null;
-    final row = await _c.from('profiles').select('username').eq('id', uid).maybeSingle();
-    return row?['username'] as String?;
+    if (uid == null) return (username: null, avatarHash: null);
+    final row = await _c.from('profiles').select('username,avatar_hash').eq('id', uid).maybeSingle();
+    return (username: row?['username'] as String?, avatarHash: row?['avatar_hash'] as String?);
+  }
+
+  @override
+  Future<void> setMyAvatar(String? hash) async {
+    final uid = _c.auth.currentUser?.id;
+    if (uid == null) throw StateError('not signed in');
+    await _c.from('profiles').update({'avatar_hash': hash}).eq('id', uid);
   }
 
   @override
@@ -238,10 +245,17 @@ class SupabaseSyncBackend implements SyncBackend {
       return FriendEdge(userId: other, username: null, status: m['status'] as String? ?? 'pending', outgoing: m['requested_by'] == me);
     }).toList();
     if (edges.isEmpty) return edges;
-    final profs = await _c.from('profiles').select('id,username').inFilter('id', edges.map((e) => e.userId).toList());
-    final nameById = {for (final p in (profs as List)) (p as Map)['id'] as String: p['username'] as String?};
+    final profs = await _c.from('profiles').select('id,username,avatar_hash').inFilter('id', edges.map((e) => e.userId).toList());
+    final byId = {for (final p in (profs as List)) (p as Map)['id'] as String: p};
     return [
-      for (final e in edges) FriendEdge(userId: e.userId, username: nameById[e.userId], status: e.status, outgoing: e.outgoing),
+      for (final e in edges)
+        FriendEdge(
+          userId: e.userId,
+          username: byId[e.userId]?['username'] as String?,
+          avatarHash: byId[e.userId]?['avatar_hash'] as String?,
+          status: e.status,
+          outgoing: e.outgoing,
+        ),
     ];
   }
 

@@ -92,6 +92,8 @@ class AppState extends ChangeNotifier {
   // page / Sous-chef work by id without persisting anything.
   final Map<String, Recipe> visitingRecipes = {};
   final Map<String, List<Review>> _reviewsCache = {}; // recipe id -> reviews (Phase 5)
+  final Map<String, String> avatarCache = {}; // avatar hash -> local cached file path
+  final Set<String> _avatarLoading = {}; // avatar hashes currently downloading
 
   // ── lookups ──
   Map<String, Tag> get tagsById => {for (final t in tags) t.id: t};
@@ -205,10 +207,10 @@ class AppState extends ChangeNotifier {
 
   Future<void> _refreshUsername() async {
     try {
-      final u = await sync.fetchMyUsername();
-      account = account?.withUsername(u);
+      final p = await sync.fetchMyProfile();
+      account = account?.withUsername(p.username).withAvatar(p.avatarHash);
       notifyListeners();
-      if (u != null) unawaited(runCloudSync());
+      if (p.username != null) unawaited(runCloudSync());
     } catch (_) {}
   }
 
@@ -217,10 +219,10 @@ class AppState extends ChangeNotifier {
   /// Verify the emailed code. Returns true if a username still needs to be chosen.
   Future<bool> verifySignInCode(String email, String code) async {
     await sync.verifyEmailCode(email.trim(), code);
-    final u = await sync.fetchMyUsername();
-    account = sync.currentAccount?.withUsername(u);
+    final p = await sync.fetchMyProfile();
+    account = sync.currentAccount?.withUsername(p.username).withAvatar(p.avatarHash);
     notifyListeners();
-    return u == null;
+    return p.username == null;
   }
 
   Future<bool> usernameAvailable(String handle) => sync.isUsernameAvailable(handle);

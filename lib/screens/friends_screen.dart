@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -5,6 +7,7 @@ import '../state/app_state.dart';
 import '../services/sync/sync_backend.dart' show FriendEdge;
 import '../theme.dart';
 import '../nav.dart';
+import '../widgets/avatar.dart';
 import '../widgets/chrome.dart';
 import '../widgets/fb_icon.dart';
 import 'settings_screen.dart' show SettingsGroup;
@@ -162,23 +165,35 @@ class _FriendsScreenState extends State<FriendsScreen> {
                             ),
                           ),
                       ]),
-                    // accepted friends
-                    SettingsGroup(label: '${app.t('friends_list')} · ${accepted.length}', children: [
-                      if (accepted.isEmpty)
-                        Padding(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22), child: Text(app.t('friends_empty'), textAlign: TextAlign.center, style: fb.ui(size: 14, color: fb.inkSoft, height: 1.5)))
-                      else
-                        for (int i = 0; i < accepted.length; i++)
-                          _FriendRow(
-                            edge: accepted[i],
-                            last: i == accepted.length - 1,
-                            onTap: accepted[i].username == null ? null : () => Nav.openFriendCookbook(context, accepted[i].userId, accepted[i].username!),
-                            trailing: GestureDetector(
-                              onTap: () => _friendMenu(app, accepted[i]),
-                              behavior: HitTestBehavior.opaque,
-                              child: Padding(padding: const EdgeInsets.all(4), child: FbIcon('more', size: fb.fs(20), color: fb.inkSoft)),
+                    // accepted friends — square avatar tiles, 2-up
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+                      child: Text('${app.t('friends_list').toUpperCase()} · ${accepted.length}', style: fb.ui(size: 12, weight: FontWeight.w700, color: fb.inkFaint, letterSpacing: 0.5)),
+                    ),
+                    if (accepted.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+                        decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(18), boxShadow: fb.shadow),
+                        child: Text(app.t('friends_empty'), textAlign: TextAlign.center, style: fb.ui(size: 14, color: fb.inkSoft, height: 1.5)),
+                      )
+                    else
+                      GridView.count(
+                        crossAxisCount: 2,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        children: [
+                          for (final f in accepted)
+                            _FriendTile(
+                              edge: f,
+                              onTap: f.username == null ? null : () => Nav.openFriendCookbook(context, f.userId, f.username!),
+                              onMenu: () => _friendMenu(app, f),
                             ),
-                          ),
-                    ]),
+                        ],
+                      ),
+                    const SizedBox(height: 8),
                   ],
                 ),
                 if (_flash != null)
@@ -245,27 +260,74 @@ class _FriendRow extends StatelessWidget {
   final FriendEdge edge;
   final Widget trailing;
   final bool last;
-  final VoidCallback? onTap;
-  const _FriendRow({required this.edge, required this.trailing, this.last = false, this.onTap});
+  const _FriendRow({required this.edge, required this.trailing, this.last = false});
 
   @override
   Widget build(BuildContext context) {
     final fb = context.fb;
     final handle = edge.username ?? '…';
-    final initial = (edge.username?.isNotEmpty == true ? edge.username! : '?').characters.first.toUpperCase();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: last ? null : BoxDecoration(border: Border(bottom: BorderSide(color: fb.line))),
+      child: Row(children: [
+        Avatar(hash: edge.avatarHash, letter: edge.username ?? '?', size: 40),
+        const SizedBox(width: 12),
+        Expanded(child: Text('@$handle', style: fb.ui(size: 15.5, weight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
+        const SizedBox(width: 10),
+        trailing,
+      ]),
+    );
+  }
+}
+
+/// Square avatar tile for the accepted-friends grid: full-bleed avatar (or a
+/// big letter), username overlaid on a scrim, and a ⋯ menu.
+class _FriendTile extends StatelessWidget {
+  final FriendEdge edge;
+  final VoidCallback? onTap;
+  final VoidCallback onMenu;
+  const _FriendTile({required this.edge, required this.onTap, required this.onMenu});
+
+  @override
+  Widget build(BuildContext context) {
+    final fb = context.fb;
+    final app = context.watch<AppState>();
+    final path = app.avatarFor(edge.avatarHash);
+    final handle = edge.username ?? '…';
+    final letter = (edge.username?.isNotEmpty == true ? edge.username! : '?').characters.first.toUpperCase();
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: last ? null : BoxDecoration(border: Border(bottom: BorderSide(color: fb.line))),
-        child: Row(children: [
-          Container(width: 40, height: 40, decoration: BoxDecoration(color: fb.accent, shape: BoxShape.circle), alignment: Alignment.center, child: Text(initial, style: fb.display(size: 18, weight: FontWeight.w600, color: Colors.white))),
-          const SizedBox(width: 12),
-          Expanded(child: Text('@$handle', style: fb.ui(size: 15.5, weight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
-          const SizedBox(width: 10),
-          trailing,
-        ]),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (path != null && !kIsWeb)
+              Image.file(File(path), fit: BoxFit.cover, gaplessPlayback: true)
+            else
+              Container(color: fb.accent, alignment: Alignment.center, child: Text(letter, style: fb.display(size: 52, weight: FontWeight.w600, color: Colors.white))),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 20, 12, 10),
+                decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withValues(alpha: 0.6)])),
+                child: Text('@$handle', maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 14.5, weight: FontWeight.w700, color: Colors.white)),
+              ),
+            ),
+            Positioned(
+              top: 6,
+              right: 6,
+              child: GestureDetector(
+                onTap: onMenu,
+                behavior: HitTestBehavior.opaque,
+                child: Container(width: 30, height: 30, decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.32), shape: BoxShape.circle), child: const Center(child: FbIcon('more', size: 18, color: Colors.white))),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

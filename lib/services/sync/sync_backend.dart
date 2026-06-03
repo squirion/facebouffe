@@ -12,9 +12,11 @@ class Account {
   final String id; // auth user id (uuid)
   final String email;
   final String? username;
-  const Account({required this.id, required this.email, this.username});
+  final String? avatarHash; // sha-256 of the avatar image, or null
+  const Account({required this.id, required this.email, this.username, this.avatarHash});
 
-  Account withUsername(String? u) => Account(id: id, email: email, username: u);
+  Account withUsername(String? u) => Account(id: id, email: email, username: u, avatarHash: avatarHash);
+  Account withAvatar(String? h) => Account(id: id, email: email, username: username, avatarHash: h);
 }
 
 /// Thrown by [SyncBackend.claimUsername] when the handle is already taken
@@ -46,7 +48,8 @@ class FriendEdge {
   final String? username; // resolved from profiles (null if unreadable)
   final String status; // 'pending' | 'accepted'
   final bool outgoing; // pending request that I sent
-  const FriendEdge({required this.userId, required this.username, required this.status, required this.outgoing});
+  final String? avatarHash;
+  const FriendEdge({required this.userId, required this.username, required this.status, required this.outgoing, this.avatarHash});
 
   bool get accepted => status == 'accepted';
   bool get incoming => status == 'pending' && !outgoing;
@@ -102,8 +105,12 @@ abstract class SyncBackend {
   /// Verify the emailed code → establishes a session.
   Future<void> verifyEmailCode(String email, String code);
 
-  /// This account's username, or null if no profile row exists yet.
-  Future<String?> fetchMyUsername();
+  /// This account's profile (username + avatar hash). username is null if no
+  /// profile row exists yet.
+  Future<({String? username, String? avatarHash})> fetchMyProfile();
+
+  /// Set (or clear, with null) this account's avatar image hash.
+  Future<void> setMyAvatar(String? hash);
 
   /// True if [handle] is free to claim (exact-match, case-insensitive).
   Future<bool> isUsernameAvailable(String handle);

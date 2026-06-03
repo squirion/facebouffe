@@ -185,6 +185,65 @@ extension CloudSync on AppState {
     return out;
   }
 
+  // ── avatars ──
+  /// Local cached path for an avatar hash, or null (kicks off a background
+  /// download when missing — the widget rebuilds when it lands).
+  String? avatarFor(String? hash) {
+    if (hash == null) return null;
+    final p = avatarCache[hash];
+    if (p != null) return p;
+    unawaited(_ensureAvatar(hash));
+    return null;
+  }
+
+  Future<void> _ensureAvatar(String hash) async {
+    if (kIsWeb || avatarCache.containsKey(hash) || _avatarLoading.contains(hash)) return;
+    _avatarLoading.add(hash);
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final f = File('${dir.path}/avatar_$hash.jpg');
+      if (!await f.exists()) {
+        final bytes = await sync.downloadImage(hash);
+        if (bytes == null) return;
+        await f.writeAsBytes(bytes);
+      }
+      avatarCache[hash] = f.path;
+      notify();
+    } catch (_) {
+      // leave uncached; falls back to the letter
+    } finally {
+      _avatarLoading.remove(hash);
+    }
+  }
+
+  /// Set the signed-in user's avatar from a picked/cropped local image.
+  Future<void> applyAvatar(String localPath) async {
+    if (!_canSync) return;
+    try {
+      final bytes = await _readImageBytes(localPath);
+      if (bytes == null) return;
+      final hash = sha256.convert(bytes).toString();
+      await sync.uploadImageIfAbsent(hash, bytes, 'image/jpeg');
+      await sync.setMyAvatar(hash);
+      avatarCache[hash] = localPath; // show the picked file immediately
+      account = account?.withAvatar(hash);
+      notify();
+    } catch (_) {
+      _setSyncStatus(online ? SyncStatus.error : SyncStatus.offline);
+    }
+  }
+
+  Future<void> removeAvatar() async {
+    if (!_canSync) return;
+    try {
+      await sync.setMyAvatar(null);
+      account = account?.withAvatar(null);
+      notify();
+    } catch (_) {
+      _setSyncStatus(online ? SyncStatus.error : SyncStatus.offline);
+    }
+  }
+
   // ── reviews (Phase 5) ──
   List<Review> reviewsFor(String recipeId) => _reviewsCache[recipeId] ?? const [];
 
