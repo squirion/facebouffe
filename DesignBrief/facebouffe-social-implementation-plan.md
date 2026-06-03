@@ -16,7 +16,10 @@ The architecture names R2 for cheap image hosting at scale, but for the **limite
    - **Project URL** — e.g. `https://abcd1234.supabase.co`
    - **Publishable key** (`sb_publishable_…`, = the old *anon* key) — **safe to ship in the app** (client key; *Row-Level Security* protects the data). Pass it as the `anonKey` in `Supabase.initialize` (use a current `supabase_flutter`).
    - **Secret key** (`sb_secret_…`, = the old *service_role* key) — **secret. NEVER put this in the app.** Bypasses RLS; admin/CI/edge-function use only. Treat it like a root password. (Bonus over the legacy JWTs: publishable/secret keys are independently **rotatable/revocable**.)
-4. **Auth → Providers:** enable **Email**, turn on **magic link** (passwordless). Under **Auth → URL Configuration**, add the app's **redirect URL** (a custom scheme, e.g. `io.facebouffe://login-callback`) so the email link returns to the app. (Free tier sends email via Supabase's shared SMTP with low hourly limits — fine for dev; add your own SMTP before a real launch.)
+4. **Auth → Sign In / Providers:** just **enable the Email provider** (it's on by default). There is **no separate "magic link" toggle** — enabling Email turns on *both* passwordless flows (**magic link** *and* **email OTP code**); you choose which by what the app calls. Leave the Email settings as-is.
+   - **Start with the email-OTP *code* flow** (`signInWithOtp(email)` → user types the emailed code → `verifyOTP`). It needs **zero deep-link setup** — best first step.
+   - The **clickable magic-link** flow additionally needs a **redirect URL**: Auth → **URL Configuration** → add a deep link (e.g. `io.facebouffe://login-callback`) to Redirect URLs + a Site URL, plus an Android intent-filter and in-app link handling. Add this later.
+   - (Free tier sends email via Supabase's shared SMTP with low hourly limits — fine for dev; add your own SMTP before a real launch.)
 5. **Schema:** apply the DDL + RLS from the spec. Two ways:
    - Quick start: paste into **SQL Editor** and run.
    - Better: the **Supabase CLI** (`supabase init`, migrations in `supabase/migrations/*.sql`, `supabase db push`) so the schema is **versioned in the repo and portable** — recommended once it stabilizes.
@@ -60,7 +63,7 @@ The app ships **only the publishable key**; **RLS is what makes that safe.** Tab
 
 ### Phase 1 — Auth & account (optional login)
 **Goal:** sign in, get an identity, sign out. *(Mockup: SignInScreen, UsernameSetupScreen, AccountScreen.)*
-- Magic-link sign-in (`signInWithOtp` + `emailRedirectTo`); handle the **deep link** back into the app (Android intent filter for the custom scheme) and `onAuthStateChange`.
+- Passwordless email sign-in. **Start with the OTP-code flow** (`signInWithOtp(email)` → `verifyOTP(email, code)`) — no deep links. Defer the clickable **magic link** (`emailRedirectTo` + Android intent filter + redirect URL) to a later pass. Wire `onAuthStateChange`.
 - **Username setup** on first sign-in: live uniqueness check via `lookup_username`/insert; permanent handle.
 - **Account screen** in Réglages: username/email, sync-status placeholder, **sign-out** (note that local data stays).
 - **Acceptance:** sign in via emailed link on a real device; pick a unique username (collision rejected); see Compte; sign out; the logged-out app is identical to today.
