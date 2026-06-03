@@ -204,6 +204,7 @@ class Recipe {
   List<String> tags; // includes "tag-fav" when favorited
   String? variantGroupId;
   List<String> links;
+  String visibility; // 'private' | 'friends' — who can see it once synced (§4)
   List<Ingredient> ingredients;
   List<Step> steps;
   Personal personal;
@@ -225,6 +226,7 @@ class Recipe {
     List<String>? tags,
     this.variantGroupId,
     List<String>? links,
+    this.visibility = 'private',
     List<Ingredient>? ingredients,
     List<Step>? steps,
     Personal? personal,
@@ -252,6 +254,7 @@ class Recipe {
         tags: (j['tags'] as List?)?.map((e) => e as String).toList() ?? [],
         variantGroupId: j['variantGroupId'] as String?,
         links: (j['links'] as List?)?.map((e) => e as String).toList() ?? [],
+        visibility: j['visibility'] as String? ?? 'private',
         ingredients: (j['ingredients'] as List?)?.map((e) => Ingredient.fromJson(e as Map<String, dynamic>)).toList() ?? [],
         steps: (j['steps'] as List?)?.map((e) => Step.fromJson(e as Map<String, dynamic>)).toList() ?? [],
         personal: j['personal'] != null ? Personal.fromJson(j['personal'] as Map<String, dynamic>) : Personal(),
@@ -274,6 +277,7 @@ class Recipe {
         'tags': tags,
         'variantGroupId': variantGroupId,
         'links': links,
+        'visibility': visibility,
         'ingredients': ingredients.map((e) => e.toJson()).toList(),
         'steps': steps.map((e) => e.toJson()).toList(),
         'personal': personal.toJson(),

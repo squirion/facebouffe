@@ -161,4 +161,9 @@ abstract class SyncBackend {
 
   /// Block [otherId] (also removes any existing friendship).
   Future<void> blockUser(String otherId);
+
+  // ── Phase 4: browse a friend's shared cookbook ──
+
+  /// A friend's recipes that are shared with friends (RLS enforces access).
+  Future<List<CloudRecipe>> fetchFriendRecipes(String friendId);
 }

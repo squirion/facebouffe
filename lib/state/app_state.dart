@@ -87,6 +87,10 @@ class AppState extends ChangeNotifier {
   final Map<String, String> _imgHashCache = {}; // local photo path -> sha-256 content hash
   final Map<String, List<String>> _recipeImgHashes = {}; // recipe id -> last-synced image hash set
   List<FriendEdge> friends = []; // friendship edges (accepted + pending), resolved usernames
+  // Transient: a friend's shared recipes while browsing their cookbook (online-only,
+  // not in your library). getRecipe() falls through to these so the existing recipe
+  // page / Sous-chef work by id without persisting anything.
+  final Map<String, Recipe> visitingRecipes = {};
 
   // ── lookups ──
   Map<String, Tag> get tagsById => {for (final t in tags) t.id: t};
@@ -94,6 +98,7 @@ class AppState extends ChangeNotifier {
     for (final r in recipes) {
       if (r.id == id) return r;
     }
+    if (id != null) return visitingRecipes[id]; // friend's cookbook (transient)
     return null;
   }
 
@@ -389,6 +394,17 @@ class AppState extends ChangeNotifier {
   }
 
   void setRating(String id, int v) => updateRecipe(id, (r) => r.personal.rating = v);
+
+  /// Set a recipe's share visibility ('private' | 'friends'). Owned recipes only.
+  void setVisibility(String id, String v) {
+    final r = getRecipe(id);
+    if (r == null || !recipes.any((x) => x.id == id)) return; // owned only
+    r.visibility = v;
+    r.dateModified = DateTime.now().toIso8601String();
+    _persistDb();
+    cloudPushRecipe(r);
+    notifyListeners();
+  }
 
   /// Persist the in-memory database (used to flush inline notes edits without
   /// rebuilding the UI on every keystroke). Pass [touchedId] to also bump that
@@ -881,6 +897,17 @@ class AppState extends ChangeNotifier {
     _persistDb();
     notifyListeners();
     return incoming.length;
+  }
+
+  /// Number of variant-group members that still exist (deleted recipes leave
+  /// stale ids in [VariantGroup.memberIds]; restoring re-counts them). Used for
+  /// the "N variantes" badge so it never counts trashed/purged variants.
+  int liveVariantCount(String? groupId) {
+    if (groupId == null) return 0;
+    final g = getVariantGroup(groupId);
+    if (g == null) return 0;
+    final ids = recipes.map((r) => r.id).toSet();
+    return g.memberIds.where(ids.contains).length;
   }
 
   /// Recipes deduplicated by variant group (group shown once via its base).

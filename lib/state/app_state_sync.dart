@@ -162,6 +162,36 @@ extension CloudSync on AppState {
     }
   }
 
+  // ── browse a friend's cookbook (Phase 4) ──
+
+  /// Fetch a friend's shared recipes into [visitingRecipes] (transient) and
+  /// kick off image downloads. Throws on network error so the UI can show the
+  /// online-required state.
+  Future<List<Recipe>> loadFriendCookbook(String friendId) async {
+    final cloud = await sync.fetchFriendRecipes(friendId);
+    final imgs = <String, Map<String, dynamic>>{};
+    final out = <Recipe>[];
+    for (final c in cloud) {
+      final r = _recipeFromCloud(c)..visibility = c.visibility;
+      visitingRecipes[r.id] = r;
+      out.add(r);
+      final ih = c.content['imageHashes'];
+      if (ih is Map) imgs[c.id] = Map<String, dynamic>.from(ih);
+    }
+    notify();
+    unawaited(_downloadImages(imgs, persist: false)); // visiting images aren't persisted
+    return out;
+  }
+
+  /// Drop transient visiting recipes + their in-memory image paths.
+  void clearVisiting() {
+    for (final id in visitingRecipes.keys) {
+      recipePhotos.remove(id);
+      recipeGallery.remove(id);
+    }
+    visitingRecipes.clear();
+  }
+
   // ── fire-and-forget push hooks (called from mutators) ──
   void cloudPushRecipe(Recipe r) {
     if (!_canSync || !_migrated || _localOnlyIds.contains(r.id)) return;
@@ -405,7 +435,7 @@ extension CloudSync on AppState {
 
   /// Download + cache any cloud images referenced by pulled recipes, then map
   /// them back into recipePhotos / recipeGallery. Runs in the background.
-  Future<void> _downloadImages(Map<String, Map<String, dynamic>> byRecipe) async {
+  Future<void> _downloadImages(Map<String, Map<String, dynamic>> byRecipe, {bool persist = true}) async {
     if (byRecipe.isEmpty || kIsWeb) return;
     Directory dir;
     try {
@@ -440,8 +470,10 @@ extension CloudSync on AppState {
       }
     }
     if (changed) {
-      _persistPhotos();
-      _persistGallery();
+      if (persist) {
+        _persistPhotos();
+        _persistGallery();
+      }
       notify();
     }
   }
@@ -476,7 +508,7 @@ extension CloudSync on AppState {
     final content = r.toJson()..remove('personal'); // overlay syncs separately
     return CloudRecipe(
       id: r.id,
-      visibility: 'private',
+      visibility: r.visibility,
       version: 1, // real versioning arrives with steal/"update available" (Phase 6)
       dateModified: _parse(r.dateModified),
       content: content,

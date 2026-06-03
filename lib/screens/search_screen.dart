@@ -52,10 +52,7 @@ class _SearchScreenState extends State<SearchScreen> {
       return hay.contains(q.trim().toLowerCase());
     }).toList();
 
-    int vcount(r) {
-      final g = r.variantGroupId != null ? app.getVariantGroup(r.variantGroupId) : null;
-      return g?.memberIds.length ?? 0;
-    }
+    int vcount(r) => app.liveVariantCount(r.variantGroupId);
 
     return Column(
       children: [

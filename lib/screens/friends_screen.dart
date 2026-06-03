@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../services/sync/sync_backend.dart' show FriendEdge;
 import '../theme.dart';
+import '../nav.dart';
 import '../widgets/chrome.dart';
 import '../widgets/fb_icon.dart';
 import 'settings_screen.dart' show SettingsGroup;
@@ -170,6 +171,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                           _FriendRow(
                             edge: accepted[i],
                             last: i == accepted.length - 1,
+                            onTap: accepted[i].username == null ? null : () => Nav.openFriendCookbook(context, accepted[i].userId, accepted[i].username!),
                             trailing: GestureDetector(
                               onTap: () => _friendMenu(app, accepted[i]),
                               behavior: HitTestBehavior.opaque,
@@ -243,23 +245,28 @@ class _FriendRow extends StatelessWidget {
   final FriendEdge edge;
   final Widget trailing;
   final bool last;
-  const _FriendRow({required this.edge, required this.trailing, this.last = false});
+  final VoidCallback? onTap;
+  const _FriendRow({required this.edge, required this.trailing, this.last = false, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final fb = context.fb;
     final handle = edge.username ?? '…';
     final initial = (edge.username?.isNotEmpty == true ? edge.username! : '?').characters.first.toUpperCase();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: last ? null : BoxDecoration(border: Border(bottom: BorderSide(color: fb.line))),
-      child: Row(children: [
-        Container(width: 40, height: 40, decoration: BoxDecoration(color: fb.accent, shape: BoxShape.circle), alignment: Alignment.center, child: Text(initial, style: fb.display(size: 18, weight: FontWeight.w600, color: Colors.white))),
-        const SizedBox(width: 12),
-        Expanded(child: Text('@$handle', style: fb.ui(size: 15.5, weight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
-        const SizedBox(width: 10),
-        trailing,
-      ]),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: last ? null : BoxDecoration(border: Border(bottom: BorderSide(color: fb.line))),
+        child: Row(children: [
+          Container(width: 40, height: 40, decoration: BoxDecoration(color: fb.accent, shape: BoxShape.circle), alignment: Alignment.center, child: Text(initial, style: fb.display(size: 18, weight: FontWeight.w600, color: Colors.white))),
+          const SizedBox(width: 12),
+          Expanded(child: Text('@$handle', style: fb.ui(size: 15.5, weight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: 10),
+          trailing,
+        ]),
+      ),
     );
   }
 }

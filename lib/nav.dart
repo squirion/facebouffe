@@ -13,14 +13,18 @@ import 'screens/adventure_screen.dart';
 import 'screens/gallery_viewer.dart';
 import 'screens/account_screens.dart';
 import 'screens/friends_screen.dart';
+import 'screens/friend_cookbook_screen.dart';
 
 /// Thin navigation layer over the root Navigator. Uses platform-default page
 /// transitions (Material fade-through / Cupertino slide) per the brief.
 class Nav {
-  static Future<void> openRecipe(BuildContext context, String id, {bool replace = false}) {
-    final route = MaterialPageRoute(builder: (_) => RecipeScreen(id: id));
+  static Future<void> openRecipe(BuildContext context, String id, {bool replace = false, bool visiting = false, String? ownerName}) {
+    final route = MaterialPageRoute(builder: (_) => RecipeScreen(id: id, visiting: visiting, ownerName: ownerName));
     return replace ? Navigator.pushReplacement(context, route) : Navigator.push(context, route);
   }
+
+  static Future<void> openFriendCookbook(BuildContext context, String friendId, String username) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => FriendCookbookScreen(friendId: friendId, username: username)));
 
   static Future<void> cook(BuildContext context, String id, int servings) =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => SousChefScreen(id: id, servings: servings)));

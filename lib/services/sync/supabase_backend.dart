@@ -273,4 +273,26 @@ class SupabaseSyncBackend implements SyncBackend {
     final (a, b) = _pair(me, otherId);
     await _c.from('friendships').delete().eq('user_a', a).eq('user_b', b);
   }
+
+  // ── Phase 4: browse a friend's shared cookbook ──
+
+  @override
+  Future<List<CloudRecipe>> fetchFriendRecipes(String friendId) async {
+    final rows = await _c
+        .from('recipes')
+        .select('id,visibility,version,date_modified,content,link_ids')
+        .eq('owner_id', friendId)
+        .eq('visibility', 'friends');
+    return (rows as List).map((r) {
+      final m = r as Map<String, dynamic>;
+      return CloudRecipe(
+        id: m['id'] as String,
+        visibility: m['visibility'] as String? ?? 'friends',
+        version: (m['version'] as num?)?.toInt() ?? 1,
+        dateModified: DateTime.tryParse(m['date_modified'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+        content: Map<String, dynamic>.from(m['content'] as Map),
+        linkIds: (m['link_ids'] as List?)?.map((e) => e as String).toList() ?? const [],
+      );
+    }).toList();
+  }
 }

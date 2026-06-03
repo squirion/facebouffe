@@ -216,6 +216,11 @@ const Map<String, Map<String, String>> kI18n = {
     'request_sent': 'Demande envoyée à', 'user_not_found': 'Nom d\'utilisateur introuvable',
     'already_friend': 'Déjà dans vos amis', 'cannot_self': 'Vous ne pouvez pas vous ajouter',
     'remove_friend': 'Retirer', 'block_user': 'Bloquer', 'block_confirm': 'Bloquer @%s ?',
+    // ── sharing & browsing ──
+    'visibility': 'Visibilité', 'vis_private': 'Privé', 'vis_friends': 'Partagé avec mes amis',
+    'shared_badge': 'Partagé', 'friend_cookbook': 'Carnet de', 'visiting_band': 'Carnet de',
+    'shared_recipes': 'recettes partagées', 'cookbook_empty': 'n\'a encore rien partagé.',
+    'cookbook_offline': 'Reconnectez-vous pour voir le carnet de', 'retry': 'Réessayer',
   },
   'en': {
     'tab_home': 'Home', 'tab_search': 'Search', 'tab_list': 'Groceries', 'tab_settings': 'Settings',
@@ -432,6 +437,11 @@ const Map<String, Map<String, String>> kI18n = {
     'request_sent': 'Request sent to', 'user_not_found': 'Username not found',
     'already_friend': 'Already a friend', 'cannot_self': 'You can\'t add yourself',
     'remove_friend': 'Remove', 'block_user': 'Block', 'block_confirm': 'Block @%s?',
+    // ── sharing & browsing ──
+    'visibility': 'Visibility', 'vis_private': 'Private', 'vis_friends': 'Shared with friends',
+    'shared_badge': 'Shared', 'friend_cookbook': 'Cookbook of', 'visiting_band': 'Cookbook of',
+    'shared_recipes': 'shared recipes', 'cookbook_empty': 'hasn\'t shared anything yet.',
+    'cookbook_offline': 'Reconnect to see the cookbook of', 'retry': 'Retry',
   },
 };
 

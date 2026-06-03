@@ -13,10 +13,13 @@ import '../widgets/coach.dart';
 import '../widgets/common.dart';
 import '../widgets/fb_icon.dart';
 import '../widgets/nutrition.dart';
+import 'settings_screen.dart' show Segmented;
 
 class RecipeScreen extends StatefulWidget {
   final String id;
-  const RecipeScreen({super.key, required this.id});
+  final bool visiting; // browsing a friend's recipe (read-only, owner-only affordances hidden)
+  final String? ownerName; // friend's @username, shown in the visiting band
+  const RecipeScreen({super.key, required this.id, this.visiting = false, this.ownerName});
 
   @override
   State<RecipeScreen> createState() => _RecipeScreenState();
@@ -33,6 +36,8 @@ class _RecipeScreenState extends State<RecipeScreen> {
     final lang = app.lang;
     final recipe = app.getRecipe(widget.id);
     if (recipe == null) return Scaffold(backgroundColor: fb.canvas, body: const SizedBox());
+    final visiting = widget.visiting;
+    final owned = !visiting && app.signedIn; // can toggle sharing on your own recipes
 
     final servings = _servings ??= recipe.servings;
     final ratio = servings / recipe.servings;
@@ -133,6 +138,10 @@ class _RecipeScreenState extends State<RecipeScreen> {
                           ],
                         ),
                       ),
+                      if (owned) ...[
+                        const SizedBox(height: 16),
+                        _VisibilityControl(recipe: recipe),
+                      ],
                       const SizedBox(height: 16),
                       // cook mode CTA
                       Coach(
@@ -298,41 +307,42 @@ class _RecipeScreenState extends State<RecipeScreen> {
                       ],
                       // nutrition label (estimate)
                       NutritionCard(recipe: recipe),
-                      // personal journal
-                      const SizedBox(height: 30),
-                      _Journal(recipe: recipe),
-                      // action row
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Coach(
-                              feature: 'variants',
-                              active: activeTip == 'variants',
-                              text: app.t('coach_variants'),
-                              child: GestureDetector(
-                                // easter egg: long-press to generate an AI "mutation" (BYOK only)
-                                onLongPress: app.hasAnyImportKey ? () => Nav.openMutation(context, recipe.id) : null,
-                                child: _SecondaryAction(icon: 'plus', label: app.t('add_variant'), onTap: () async {
-                                  final id = app.addVariant(recipe.id);
-                                  if (context.mounted) Nav.editRecipe(context, id);
-                                }),
+                      // personal journal + owner actions (hidden when visiting a friend's recipe)
+                      if (!visiting) ...[
+                        const SizedBox(height: 30),
+                        _Journal(recipe: recipe),
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Coach(
+                                feature: 'variants',
+                                active: activeTip == 'variants',
+                                text: app.t('coach_variants'),
+                                child: GestureDetector(
+                                  // easter egg: long-press to generate an AI "mutation" (BYOK only)
+                                  onLongPress: app.hasAnyImportKey ? () => Nav.openMutation(context, recipe.id) : null,
+                                  child: _SecondaryAction(icon: 'plus', label: app.t('add_variant'), onTap: () async {
+                                    final id = app.addVariant(recipe.id);
+                                    if (context.mounted) Nav.editRecipe(context, id);
+                                  }),
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Coach(
-                              feature: 'pdfExport',
-                              active: activeTip == 'pdfExport',
-                              text: app.t('coach_pdf'),
-                              child: _SecondaryAction(icon: 'note', label: app.t('export_pdf'), onTap: () => exportRecipesPdf(context, [recipe])),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Coach(
+                                feature: 'pdfExport',
+                                active: activeTip == 'pdfExport',
+                                text: app.t('coach_pdf'),
+                                child: _SecondaryAction(icon: 'note', label: app.t('export_pdf'), onTap: () => exportRecipesPdf(context, [recipe])),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(child: _SecondaryAction(icon: 'pencil', label: app.t('edit'), onTap: () => Nav.editRecipe(context, recipe.id))),
-                        ],
-                      ),
+                            const SizedBox(width: 10),
+                            Expanded(child: _SecondaryAction(icon: 'pencil', label: app.t('edit'), onTap: () => Nav.editRecipe(context, recipe.id))),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -341,19 +351,81 @@ class _RecipeScreenState extends State<RecipeScreen> {
           ),
           // hero top buttons
           Positioned(
-            top: topInset + 6,
+            top: topInset + (visiting ? 44 : 6),
             left: 14,
             right: 14,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 RoundBtn(icon: 'back', onTap: () => Navigator.pop(context)),
-                Row(children: [
-                  _PopStar(active: fav, onTap: () => app.toggleFav(recipe.id)),
-                  const SizedBox(width: 8),
-                  RoundBtn(icon: 'pencil', onTap: () => Nav.editRecipe(context, recipe.id)),
-                ]),
+                if (!visiting)
+                  Row(children: [
+                    _PopStar(active: fav, onTap: () => app.toggleFav(recipe.id)),
+                    const SizedBox(width: 8),
+                    RoundBtn(icon: 'pencil', onTap: () => Nav.editRecipe(context, recipe.id)),
+                  ]),
               ],
+            ),
+          ),
+          // visiting cue — "Carnet de @marie"
+          if (visiting)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: EdgeInsets.only(top: topInset + 6, bottom: 8),
+                color: fb.accent,
+                alignment: Alignment.center,
+                child: Text('${app.t('visiting_band')} @${widget.ownerName ?? ''}', style: fb.ui(size: 13.5, weight: FontWeight.w700, color: Colors.white)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Owner-only Privé / Partagé control shown above the Sous-chef button (§4,
+/// mode B). Matches the mockup: status icon + label, with a Segmented toggle.
+class _VisibilityControl extends StatelessWidget {
+  final Recipe recipe;
+  const _VisibilityControl({required this.recipe});
+
+  @override
+  Widget build(BuildContext context) {
+    final fb = context.fb;
+    final app = context.watch<AppState>();
+    final shared = recipe.visibility == 'friends';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(16), boxShadow: fb.shadow),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(color: shared ? fb.accentSoft : fb.canvas2, borderRadius: BorderRadius.circular(10)),
+            child: Center(child: FbIcon(shared ? 'users' : 'lock', size: fb.fs(18), color: shared ? fb.accent : fb.inkFaint)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(app.t('visibility'), style: fb.ui(size: 13.5, weight: FontWeight.w700)),
+                Text(shared ? app.t('vis_friends') : app.t('vis_private'), maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 12, color: fb.inkFaint)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 150,
+            child: Segmented(
+              value: recipe.visibility,
+              onChange: (v) => app.setVisibility(recipe.id, v),
+              options: [('private', app.t('vis_private')), ('friends', app.lang == 'fr' ? 'Amis' : 'Friends')],
             ),
           ),
         ],
