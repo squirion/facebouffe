@@ -24,6 +24,9 @@ part 'app_state_sync.dart';
 /// Cloud-sync health, surfaced in the account screen.
 enum SyncStatus { idle, syncing, synced, offline, error }
 
+/// Outcome of trying to add a friend by username.
+enum AddFriendResult { sent, notFound, self, already, error }
+
 /// Single source of truth for the whole app. Holds the recipe database, tags,
 /// variant groups, profile/settings, shopping list, coach-mark flags and the
 /// per-recipe photo store. Mutations notify listeners and persist locally.
@@ -83,6 +86,7 @@ class AppState extends ChangeNotifier {
   bool _syncBusy = false;
   final Map<String, String> _imgHashCache = {}; // local photo path -> sha-256 content hash
   final Map<String, List<String>> _recipeImgHashes = {}; // recipe id -> last-synced image hash set
+  List<FriendEdge> friends = []; // friendship edges (accepted + pending), resolved usernames
 
   // ── lookups ──
   Map<String, Tag> get tagsById => {for (final t in tags) t.id: t};
@@ -227,6 +231,7 @@ class AppState extends ChangeNotifier {
     account = null;
     _syncedIds.clear();
     _pendingLocalOnly = [];
+    friends = [];
     migrationPending = false;
     syncStatus = SyncStatus.idle;
     notifyListeners();

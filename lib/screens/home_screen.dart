@@ -77,6 +77,37 @@ class HomeScreen extends StatelessWidget {
               // deployment banners (update available / install app) — self-hide
               const UpdateBanner(),
               const WebPromoBanner(),
+              // social hub (signed-in only)
+              if (app.signedIn)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: GestureDetector(
+                    onTap: () => Nav.openFriends(context),
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(18), boxShadow: fb.shadow),
+                      child: Row(children: [
+                        Container(width: 38, height: 38, decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(11)), child: Center(child: FbIcon('users', size: 20, color: fb.accent))),
+                        const SizedBox(width: 13),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                            Text(app.t('social_friends'), style: fb.ui(size: 15.5, weight: FontWeight.w700)),
+                            Text(app.t('social_hub_sub'), style: fb.ui(size: 12.5, color: fb.inkFaint)),
+                          ]),
+                        ),
+                        if (app.incomingRequestCount > 0)
+                          Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: fb.accent, borderRadius: BorderRadius.circular(999)),
+                            child: Text('${app.incomingRequestCount}', style: fb.ui(size: 12, weight: FontWeight.w700, color: Colors.white)),
+                          ),
+                        FbIcon('chevR', size: fb.fs(18), color: fb.inkFaint),
+                      ]),
+                    ),
+                  ),
+                ),
               // category browse hub
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),

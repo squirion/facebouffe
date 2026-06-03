@@ -23,6 +23,24 @@ class UsernameTakenException implements Exception {
   const UsernameTakenException();
 }
 
+/// Thrown by [SyncBackend.sendFriendRequest] when a friendship row already
+/// exists for the pair (pending or accepted).
+class FriendshipExistsException implements Exception {
+  const FriendshipExistsException();
+}
+
+/// One friendship edge from the signed-in user's perspective.
+class FriendEdge {
+  final String userId; // the other person
+  final String? username; // resolved from profiles (null if unreadable)
+  final String status; // 'pending' | 'accepted'
+  final bool outgoing; // pending request that I sent
+  const FriendEdge({required this.userId, required this.username, required this.status, required this.outgoing});
+
+  bool get accepted => status == 'accepted';
+  bool get incoming => status == 'pending' && !outgoing;
+}
+
 /// One owned recipe in the cloud (`recipes` row). [content] is the recipe's
 /// full json minus the private `personal` overlay (which syncs separately).
 class CloudRecipe {
@@ -121,4 +139,26 @@ abstract class SyncBackend {
 
   /// Replace the set of image hashes linked to a recipe (drives ref-count GC).
   Future<void> setRecipeImages(String recipeId, List<String> hashes);
+
+  // ── Phase 3: friends ──
+
+  /// Exact-match username lookup (no partial search). Returns id+username, or
+  /// null if no such user.
+  Future<({String id, String username})?> lookupProfile(String handle);
+
+  /// Send a pending friend request to [otherId]. Throws [FriendshipExistsException]
+  /// if a friendship row already exists for the pair.
+  Future<void> sendFriendRequest(String otherId);
+
+  /// All friendship edges involving the signed-in user, with usernames resolved.
+  Future<List<FriendEdge>> fetchFriends();
+
+  /// Accept an incoming pending request from [otherId].
+  Future<void> acceptFriend(String otherId);
+
+  /// Remove a friendship/request with [otherId] (decline / cancel / unfriend).
+  Future<void> removeFriend(String otherId);
+
+  /// Block [otherId] (also removes any existing friendship).
+  Future<void> blockUser(String otherId);
 }

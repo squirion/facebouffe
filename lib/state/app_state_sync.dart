@@ -54,6 +54,7 @@ extension CloudSync on AppState {
       } else {
         await _reconcile();
       }
+      await refreshFriends();
       _setSyncStatus(SyncStatus.synced);
     } catch (e) {
       debugPrint('[sync] runCloudSync failed: $e');
@@ -106,6 +107,59 @@ extension CloudSync on AppState {
     _persistPhotos();
     _persistGallery();
     notify();
+  }
+
+  // ── friends (Phase 3) ──
+  List<FriendEdge> get acceptedFriends => friends.where((f) => f.accepted).toList();
+  List<FriendEdge> get incomingRequests => friends.where((f) => f.incoming).toList();
+  List<FriendEdge> get outgoingRequests => friends.where((f) => f.status == 'pending' && f.outgoing).toList();
+  int get incomingRequestCount => friends.where((f) => f.incoming).length;
+
+  Future<void> refreshFriends() async {
+    if (!_canSync) return;
+    try {
+      friends = await sync.fetchFriends();
+      notify();
+    } catch (_) {/* keep last-known list */}
+  }
+
+  /// Look up [handle] and send a friend request. Returns the outcome (+ the
+  /// resolved username on success).
+  Future<({AddFriendResult result, String? username})> addFriend(String handle) async {
+    if (!_canSync) return (result: AddFriendResult.error, username: null);
+    try {
+      final prof = await sync.lookupProfile(handle);
+      if (prof == null) return (result: AddFriendResult.notFound, username: null);
+      if (prof.id == account!.id) return (result: AddFriendResult.self, username: null);
+      await sync.sendFriendRequest(prof.id);
+      await refreshFriends();
+      return (result: AddFriendResult.sent, username: prof.username);
+    } on FriendshipExistsException {
+      return (result: AddFriendResult.already, username: null);
+    } catch (_) {
+      return (result: AddFriendResult.error, username: null);
+    }
+  }
+
+  Future<void> acceptFriendRequest(String otherId) async {
+    await _friendOp(() => sync.acceptFriend(otherId));
+  }
+
+  Future<void> removeFriendship(String otherId) async {
+    await _friendOp(() => sync.removeFriend(otherId));
+  }
+
+  Future<void> blockUser(String otherId) async {
+    await _friendOp(() => sync.blockUser(otherId));
+  }
+
+  Future<void> _friendOp(Future<void> Function() op) async {
+    try {
+      await op();
+      await refreshFriends();
+    } catch (_) {
+      _setSyncStatus(online ? SyncStatus.error : SyncStatus.offline);
+    }
   }
 
   // ── fire-and-forget push hooks (called from mutators) ──

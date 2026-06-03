@@ -210,7 +210,16 @@ create policy recipe_images_rw on recipe_images for all to authenticated
 
 -- profiles
 alter table profiles enable row level security;
-create policy profiles_read on profiles for select using ( id = auth.uid() or private.is_friend(id, auth.uid()) );
+-- readable: yourself + anyone you share a friendship row with (pending OR accepted,
+-- so a pending request can show the other person's username). Phase 3.
+create policy profiles_read on profiles for select using (
+  id = auth.uid()
+  or exists (
+    select 1 from friendships f
+    where (f.user_a = auth.uid() and f.user_b = id)
+       or (f.user_b = auth.uid() and f.user_a = id)
+  )
+);
 -- a user creates/edits only their own profile row (required for username claim)
 create policy profiles_insert on profiles for insert with check ( id = auth.uid() );
 create policy profiles_update on profiles for update using ( id = auth.uid() ) with check ( id = auth.uid() );
@@ -229,11 +238,7 @@ create policy friendships_delete on friendships for delete using ( user_a = auth
 alter table blocks enable row level security;
 create policy blocks_all on blocks for all using ( blocker_id = auth.uid() ) with check ( blocker_id = auth.uid() );
 
--- images / recipe_images: RLS on, NO client policies (default-deny). Maintained
--- server-side (a trigger or the service role) in the image-sync phase; clients
--- never touch these tables directly — they read images via signed URLs.
-alter table images enable row level security;
-alter table recipe_images enable row level security;
+-- (images / recipe_images policies are defined above, in the Phase 2B block.)
 ```
 **Friend-finding without a directory:** a `security definer` RPC in `public` (so it *is* callable), but **signed-in users only** — exact match, never partial:
 ```sql

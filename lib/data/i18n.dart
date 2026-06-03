@@ -207,6 +207,15 @@ const Map<String, Map<String, String>> kI18n = {
     'migrate_title': 'Recettes sur cet appareil',
     'migrate_body': 'Vous avez %s recette(s) sur cet appareil qui ne sont pas dans votre compte. Les ajouter ?',
     'migrate_add': 'Ajouter à mon compte', 'migrate_keep': 'Garder local seulement',
+    // ── friends ──
+    'social_friends': 'Amis', 'social_hub_sub': 'Partagez et découvrez des recettes',
+    'add_friend': 'Ajouter un ami', 'add_friend_ph': 'nom d\'utilisateur', 'send_request': 'Envoyer',
+    'requests_in': 'Demandes reçues', 'requests_out': 'Demandes envoyées', 'friends_list': 'Amis',
+    'accept': 'Accepter', 'decline': 'Refuser', 'pending': 'En attente',
+    'friends_empty': 'Aucun ami pour l\'instant. Ajoutez quelqu\'un par son nom d\'utilisateur.',
+    'request_sent': 'Demande envoyée à', 'user_not_found': 'Nom d\'utilisateur introuvable',
+    'already_friend': 'Déjà dans vos amis', 'cannot_self': 'Vous ne pouvez pas vous ajouter',
+    'remove_friend': 'Retirer', 'block_user': 'Bloquer', 'block_confirm': 'Bloquer @%s ?',
   },
   'en': {
     'tab_home': 'Home', 'tab_search': 'Search', 'tab_list': 'Groceries', 'tab_settings': 'Settings',
@@ -414,6 +423,15 @@ const Map<String, Map<String, String>> kI18n = {
     'migrate_title': 'Recipes on this device',
     'migrate_body': 'You have %s recipe(s) on this device that aren\'t in your account. Add them?',
     'migrate_add': 'Add to my account', 'migrate_keep': 'Keep local only',
+    // ── friends ──
+    'social_friends': 'Friends', 'social_hub_sub': 'Share and discover recipes',
+    'add_friend': 'Add a friend', 'add_friend_ph': 'username', 'send_request': 'Send',
+    'requests_in': 'Requests received', 'requests_out': 'Requests sent', 'friends_list': 'Friends',
+    'accept': 'Accept', 'decline': 'Decline', 'pending': 'Pending',
+    'friends_empty': 'No friends yet. Add someone by their username.',
+    'request_sent': 'Request sent to', 'user_not_found': 'Username not found',
+    'already_friend': 'Already a friend', 'cannot_self': 'You can\'t add yourself',
+    'remove_friend': 'Remove', 'block_user': 'Block', 'block_confirm': 'Block @%s?',
   },
 };
 

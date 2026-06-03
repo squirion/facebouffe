@@ -407,11 +407,9 @@ class AccountScreen extends StatelessWidget {
     final fb = context.fb;
     final acct = app.account;
 
-    // If we get signed out while on this screen, close it.
+    // Signed out — render blank during the pop animation. _confirmSignOut owns
+    // the navigation (popping here too would double-pop past the root → black).
     if (acct == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) Navigator.maybePop(context);
-      });
       return Scaffold(backgroundColor: fb.canvas, body: const SizedBox.shrink());
     }
 

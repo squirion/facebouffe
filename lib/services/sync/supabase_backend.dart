@@ -198,4 +198,79 @@ class SupabaseSyncBackend implements SyncBackend {
       for (final h in unique) {'recipe_id': recipeId, 'image_hash': h},
     ]);
   }
+
+  // ── Phase 3: friends ──
+
+  // Friendships store one row per pair in canonical order (user_a < user_b).
+  (String, String) _pair(String me, String other) => me.compareTo(other) < 0 ? (me, other) : (other, me);
+
+  @override
+  Future<({String id, String username})?> lookupProfile(String handle) async {
+    final res = await _c.rpc('lookup_username', params: {'handle': handle.trim().toLowerCase()});
+    if (res is List && res.isNotEmpty) {
+      final m = res.first as Map<String, dynamic>;
+      return (id: m['id'] as String, username: m['username'] as String);
+    }
+    return null;
+  }
+
+  @override
+  Future<void> sendFriendRequest(String otherId) async {
+    final me = _c.auth.currentUser?.id;
+    if (me == null) throw StateError('not signed in');
+    final (a, b) = _pair(me, otherId);
+    try {
+      await _c.from('friendships').insert({'user_a': a, 'user_b': b, 'requested_by': me, 'status': 'pending'});
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') throw const FriendshipExistsException();
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<FriendEdge>> fetchFriends() async {
+    final me = _c.auth.currentUser?.id;
+    if (me == null) return [];
+    final rows = await _c.from('friendships').select('user_a,user_b,requested_by,status').or('user_a.eq.$me,user_b.eq.$me');
+    final edges = (rows as List).map((r) {
+      final m = r as Map<String, dynamic>;
+      final other = m['user_a'] == me ? m['user_b'] as String : m['user_a'] as String;
+      return FriendEdge(userId: other, username: null, status: m['status'] as String? ?? 'pending', outgoing: m['requested_by'] == me);
+    }).toList();
+    if (edges.isEmpty) return edges;
+    final profs = await _c.from('profiles').select('id,username').inFilter('id', edges.map((e) => e.userId).toList());
+    final nameById = {for (final p in (profs as List)) (p as Map)['id'] as String: p['username'] as String?};
+    return [
+      for (final e in edges) FriendEdge(userId: e.userId, username: nameById[e.userId], status: e.status, outgoing: e.outgoing),
+    ];
+  }
+
+  @override
+  Future<void> acceptFriend(String otherId) async {
+    final me = _c.auth.currentUser?.id;
+    if (me == null) throw StateError('not signed in');
+    final (a, b) = _pair(me, otherId);
+    await _c.from('friendships').update({'status': 'accepted'}).eq('user_a', a).eq('user_b', b);
+  }
+
+  @override
+  Future<void> removeFriend(String otherId) async {
+    final me = _c.auth.currentUser?.id;
+    if (me == null) throw StateError('not signed in');
+    final (a, b) = _pair(me, otherId);
+    await _c.from('friendships').delete().eq('user_a', a).eq('user_b', b);
+  }
+
+  @override
+  Future<void> blockUser(String otherId) async {
+    final me = _c.auth.currentUser?.id;
+    if (me == null) throw StateError('not signed in');
+    try {
+      await _c.from('blocks').insert({'blocker_id': me, 'blocked_id': otherId});
+    } on PostgrestException catch (e) {
+      if (e.code != '23505') rethrow; // already blocked → fine
+    }
+    final (a, b) = _pair(me, otherId);
+    await _c.from('friendships').delete().eq('user_a', a).eq('user_b', b);
+  }
 }
