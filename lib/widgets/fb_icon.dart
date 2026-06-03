@@ -24,6 +24,7 @@ class FbIcon extends StatelessWidget {
     'check': Icons.check,
     'clock': Icons.schedule,
     'users': Icons.people_outline,
+    'user': Icons.person_outline,
     'flame': Icons.local_fire_department_outlined,
     'pencil': Icons.edit_outlined,
     'trash': Icons.delete_outline,

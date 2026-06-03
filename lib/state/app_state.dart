@@ -10,6 +10,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../services/import/ondevice_ai.dart';
+import '../services/sync/sync_backend.dart';
+import '../services/sync/supabase_backend.dart';
 
 import '../data/models.dart';
 import '../data/i18n.dart';
@@ -56,6 +58,14 @@ class AppState extends ChangeNotifier {
   String appVersion = ''; // e.g. "1.0.1+2" — loaded from package_info
   SharedPreferences? _prefs;
   bool ready = false;
+
+  // ── account / social layer (Phase 2) — optional sign-in ──
+  final SyncBackend sync;
+  Account? account; // null = signed out / offline-only
+  StreamSubscription<Account?>? _acctSub;
+  bool get signedIn => account != null;
+
+  AppState({SyncBackend? sync}) : sync = sync ?? SupabaseSyncBackend();
 
   // ── lookups ──
   Map<String, Tag> get tagsById => {for (final t in tags) t.id: t};
@@ -146,7 +156,52 @@ class AppState extends ChangeNotifier {
       final pkg = await PackageInfo.fromPlatform();
       appVersion = '${pkg.version}+${pkg.buildNumber}';
     } catch (_) {}
+    _initAccount();
     ready = true;
+    notifyListeners();
+  }
+
+  // ── account / social ──
+  void _initAccount() {
+    account = sync.currentAccount;
+    if (account != null) _refreshUsername();
+    _acctSub = sync.accountChanges.listen((a) async {
+      account = a;
+      if (a != null && a.username == null) await _refreshUsername();
+      notifyListeners();
+    });
+  }
+
+  Future<void> _refreshUsername() async {
+    try {
+      final u = await sync.fetchMyUsername();
+      account = account?.withUsername(u);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> sendSignInCode(String email) => sync.sendEmailCode(email.trim());
+
+  /// Verify the emailed code. Returns true if a username still needs to be chosen.
+  Future<bool> verifySignInCode(String email, String code) async {
+    await sync.verifyEmailCode(email.trim(), code);
+    final u = await sync.fetchMyUsername();
+    account = sync.currentAccount?.withUsername(u);
+    notifyListeners();
+    return u == null;
+  }
+
+  Future<bool> usernameAvailable(String handle) => sync.isUsernameAvailable(handle);
+
+  Future<void> claimUsername(String handle) async {
+    await sync.claimUsername(handle);
+    account = account?.withUsername(handle.trim().toLowerCase());
+    notifyListeners();
+  }
+
+  Future<void> signOutAccount() async {
+    await sync.signOut();
+    account = null;
     notifyListeners();
   }
 
@@ -641,6 +696,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _connSub?.cancel();
+    _acctSub?.cancel();
     super.dispose();
   }
 

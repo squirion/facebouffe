@@ -11,6 +11,7 @@ import 'screens/ai_import_settings_screen.dart';
 import 'screens/recently_deleted_screen.dart';
 import 'screens/adventure_screen.dart';
 import 'screens/gallery_viewer.dart';
+import 'screens/account_screens.dart';
 
 /// Thin navigation layer over the root Navigator. Uses platform-default page
 /// transitions (Material fade-through / Cupertino slide) per the brief.
@@ -53,6 +54,12 @@ class Nav {
 
   static Future<void> openMutation(BuildContext context, String baseId) =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => AdventureScreen(baseId: baseId)));
+
+  static Future<void> openSignIn(BuildContext context) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const SignInScreen()));
+
+  static Future<void> openAccount(BuildContext context) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountScreen()));
 
   /// Fullscreen swipeable gallery viewer, opened from a recipe's gallery tiles.
   static Future<void> openGallery(BuildContext context, List<String> images, int index) =>

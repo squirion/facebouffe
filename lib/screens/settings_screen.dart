@@ -92,6 +92,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ]),
                   ),
+                  SettingsGroup(label: app.t('account'), children: [
+                    app.signedIn
+                        ? _NavRow(icon: 'user', label: app.t('account'), sub: '@${app.account?.username ?? '…'}', onTap: () => Nav.openAccount(context), last: true)
+                        : _NavRow(icon: 'user', label: app.t('signin'), sub: app.t('signin_local_note'), onTap: () => Nav.openSignIn(context), last: true),
+                  ]),
                   SettingsGroup(label: app.t('set_language'), children: [
                     _SettingsRow(label: app.t('set_language'), width: 178, child: Segmented(value: lang, onChange: app.setLanguage, options: const [('fr', 'Français'), ('en', 'English')])),
                   ]),
