@@ -425,6 +425,7 @@ class ShoppingItem {
 class TipsSeen {
   bool sousChef, variants, shoppingAdd, pdfExport, variantChips, cookStack;
   bool customTags, ingredientAliases, apiKeys, preferredAi; // advanced / AI-import sub-pages
+  bool firstFriend, shareRecipe, stolenRecipe; // social firsts (Phase 7)
   TipsSeen({
     this.sousChef = false,
     this.variants = false,
@@ -436,6 +437,9 @@ class TipsSeen {
     this.ingredientAliases = false,
     this.apiKeys = false,
     this.preferredAi = false,
+    this.firstFriend = false,
+    this.shareRecipe = false,
+    this.stolenRecipe = false,
   });
 
   bool seen(String key) => toMap()[key] ?? false;
@@ -451,6 +455,9 @@ class TipsSeen {
         'ingredientAliases': ingredientAliases,
         'apiKeys': apiKeys,
         'preferredAi': preferredAi,
+        'firstFriend': firstFriend,
+        'shareRecipe': shareRecipe,
+        'stolenRecipe': stolenRecipe,
       };
 
   factory TipsSeen.fromMap(Map<String, dynamic> m) => TipsSeen(
@@ -464,5 +471,8 @@ class TipsSeen {
         ingredientAliases: m['ingredientAliases'] == true,
         apiKeys: m['apiKeys'] == true,
         preferredAi: m['preferredAi'] == true,
+        firstFriend: m['firstFriend'] == true,
+        shareRecipe: m['shareRecipe'] == true,
+        stolenRecipe: m['stolenRecipe'] == true,
       );
 }

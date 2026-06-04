@@ -155,7 +155,13 @@ class _RecipeScreenState extends State<RecipeScreen> {
                       ),
                       if (owned) ...[
                         const SizedBox(height: 16),
-                        _VisibilityControl(recipe: recipe),
+                        Coach(
+                          feature: 'shareRecipe',
+                          active: activeTip.isEmpty,
+                          text: app.t('coach_share'),
+                          below: true,
+                          child: _VisibilityControl(recipe: recipe),
+                        ),
                       ],
                       const SizedBox(height: 16),
                       // cook mode CTA
@@ -325,7 +331,13 @@ class _RecipeScreenState extends State<RecipeScreen> {
                       // linked-recipe controls (update banner + lock/fork menu)
                       if (linkedMode) ...[
                         const SizedBox(height: 18),
-                        LinkedControls(recipeId: recipe.id),
+                        Coach(
+                          feature: 'stolenRecipe',
+                          active: activeTip.isEmpty,
+                          text: app.t('coach_stolen'),
+                          below: true,
+                          child: LinkedControls(recipeId: recipe.id),
+                        ),
                       ],
                       // steal action when visiting a friend's recipe
                       if (visiting) ...[

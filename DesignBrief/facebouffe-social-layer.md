@@ -268,7 +268,7 @@ grant execute on function lookup_username(text) to authenticated;
 
 ## 5. Images — content-addressed + ref-counted GC
 - Upload: hash bytes (sha-256) → if `images.hash` exists, reuse; else PUT to R2 + insert. Recipe content stores hashes; on each recipe upsert, reconcile `recipe_images` rows to match the hashes in content.
-- **Orphan = a hash with zero `recipe_images` rows.** A periodic job deletes orphaned R2 objects + `images` rows.
+- **Orphan = a hash with zero `recipe_images` rows AND not used as a `profiles.avatar_hash`.** A daily Edge Function (`supabase/functions/gc-images`, see `supabase/README-gc.md`) tombstones orphans (`images.orphaned_at`) and hard-deletes storage objects + `images` rows once they've stayed orphaned past a 7-day grace period.
 - **Why this survives owner-delete-while-stealers-offline:** forks re-register the same hashes (dedup → usually no new bytes), and because each stealer **cached the image bytes locally at steal time**, a fork can **re-upload from cache** if the blob was already GC'd. Optional belt-and-suspenders: a **tombstone grace period** (e.g. keep orphaned blobs N days) before hard delete.
 - Cost control levers for later (not v1): per-user storage quotas; stricter downscale; lazy image pull on linked recipes.
 

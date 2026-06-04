@@ -727,6 +727,15 @@ class AppState extends ChangeNotifier {
       case 'preferredAi':
         tipsSeen.preferredAi = true;
         break;
+      case 'firstFriend':
+        tipsSeen.firstFriend = true;
+        break;
+      case 'shareRecipe':
+        tipsSeen.shareRecipe = true;
+        break;
+      case 'stolenRecipe':
+        tipsSeen.stolenRecipe = true;
+        break;
     }
     _prefs?.setString('fb_tips', jsonEncode(tipsSeen.toMap()));
     notifyListeners();

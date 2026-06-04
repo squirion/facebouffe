@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../nav.dart';
 import '../widgets/avatar.dart';
 import '../widgets/chrome.dart';
+import '../widgets/coach.dart';
 import '../widgets/fb_icon.dart';
 import 'settings_screen.dart' show SettingsGroup;
 
@@ -178,20 +179,26 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         child: Text(app.t('friends_empty'), textAlign: TextAlign.center, style: fb.ui(size: 14, color: fb.inkSoft, height: 1.5)),
                       )
                     else
-                      GridView.count(
-                        crossAxisCount: 2,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        children: [
-                          for (final f in accepted)
-                            _FriendTile(
-                              edge: f,
-                              onTap: f.username == null ? null : () => Nav.openFriendCookbook(context, f.userId, f.username!),
-                              onMenu: () => _friendMenu(app, f),
-                            ),
-                        ],
+                      Coach(
+                        feature: 'firstFriend',
+                        active: accepted.isNotEmpty,
+                        text: app.t('coach_firstfriend'),
+                        below: true,
+                        child: GridView.count(
+                          crossAxisCount: 2,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          children: [
+                            for (final f in accepted)
+                              _FriendTile(
+                                edge: f,
+                                onTap: f.username == null ? null : () => Nav.openFriendCookbook(context, f.userId, f.username!),
+                                onMenu: () => _friendMenu(app, f),
+                              ),
+                          ],
+                        ),
                       ),
                     const SizedBox(height: 8),
                   ],

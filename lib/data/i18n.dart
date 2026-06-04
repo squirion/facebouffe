@@ -233,6 +233,9 @@ const Map<String, Map<String, String>> kI18n = {
     'remove_from_book': 'Retirer de mon carnet',
     'steal_preview_title': 'Voler cette recette', 'steal_bundles': 'entraîne aussi',
     'steal_n_linked': 'recettes liées', 'steal_all': 'Tout ajouter', 'steal_already': 'déjà présent',
+    'coach_firstfriend': 'Touchez un ami pour parcourir son carnet et voler ses recettes.',
+    'coach_share': 'Activez le partage pour qu\'un ami puisse voir et voler cette recette.',
+    'coach_stolen': 'Recette liée : modifiez-la en créant une variante ou en la détachant. Vos notes privées restent éditables.',
   },
   'en': {
     'tab_home': 'Home', 'tab_search': 'Search', 'tab_list': 'Groceries', 'tab_settings': 'Settings',
@@ -466,6 +469,9 @@ const Map<String, Map<String, String>> kI18n = {
     'remove_from_book': 'Remove from my book',
     'steal_preview_title': 'Steal this recipe', 'steal_bundles': 'also brings in',
     'steal_n_linked': 'linked recipes', 'steal_all': 'Add all', 'steal_already': 'already present',
+    'coach_firstfriend': 'Tap a friend to browse their cookbook and steal their recipes.',
+    'coach_share': 'Turn on sharing so a friend can see and steal this recipe.',
+    'coach_stolen': 'Linked recipe: edit it by creating a variant or unlinking. Your private notes stay editable.',
   },
 };
 
