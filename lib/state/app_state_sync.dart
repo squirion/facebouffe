@@ -181,15 +181,23 @@ extension CloudSync on AppState {
       final ih = c.content['imageHashes'];
       if (ih is Map) imgs[c.id] = Map<String, dynamic>.from(ih);
     }
-    // reconstruct variant groups from the shared members present (base = first)
+    // reconstruct variant groups from the shared members present; the real base
+    // travels in content['variantBaseId'] (owner's library isn't readable).
     visitingGroups.clear();
     final byGroup = <String, List<String>>{};
-    for (final r in out) {
-      final gid = r.variantGroupId;
-      if (gid != null && _isUuid(gid)) byGroup.putIfAbsent(gid, () => []).add(r.id);
+    final groupBase = <String, String?>{};
+    for (final c in cloud) {
+      final gid = c.variantGroupId ?? c.content['variantGroupId'] as String?;
+      if (gid != null && _isUuid(gid)) {
+        byGroup.putIfAbsent(gid, () => []).add(c.id);
+        groupBase[gid] ??= c.content['variantBaseId'] as String?;
+      }
     }
     byGroup.forEach((gid, members) {
-      if (members.length >= 2) visitingGroups[gid] = VariantGroup(groupId: gid, memberIds: members, baseId: members.first);
+      if (members.length < 2) return;
+      final declared = groupBase[gid];
+      final base = (declared != null && members.contains(declared)) ? declared : members.first;
+      visitingGroups[gid] = VariantGroup(groupId: gid, memberIds: members, baseId: base);
     });
     notify();
     unawaited(_downloadImages(imgs, persist: false)); // visiting images aren't persisted
@@ -360,7 +368,14 @@ extension CloudSync on AppState {
       if (entry.value.length < 2) continue; // not a real group
       final existing = getVariantGroup(entry.key);
       if (existing == null) {
-        final base = entry.value.contains(mainId) ? mainId : entry.value.first;
+        // prefer the owner's declared base (denormalized in content), else main/first
+        String? declared;
+        for (final id in entry.value) {
+          declared ??= _stealCache[id]?.content['variantBaseId'] as String?;
+        }
+        final base = (declared != null && entry.value.contains(declared))
+            ? declared
+            : (entry.value.contains(mainId) ? mainId : entry.value.first);
         variantGroups.add(VariantGroup(groupId: entry.key, memberIds: entry.value, baseId: base));
       } else {
         for (final m in entry.value) {
@@ -734,12 +749,15 @@ extension CloudSync on AppState {
     // Heal any local recipe that still has a legacy non-uuid id (e.g. created
     // before id-generation was fixed) so it can live in the uuid-keyed pool.
     if (recipes.any((r) => !_isUuid(r.id))) _remintAllIds();
-    // Heal legacy variant-group ids → uuids, then re-push affected owned recipes
-    // so recipes.variant_group_id populates in the cloud.
-    if (_remintVariantGroupIds()) {
+    // Heal legacy variant-group ids → uuids and backfill content.variantBaseId,
+    // re-pushing affected owned grouped recipes so the cloud has both (one-time).
+    final vbaseKey = 'fb_vbase_${account!.id}';
+    final needBackfill = !(_prefs?.getBool(vbaseKey) ?? false);
+    if (_remintVariantGroupIds() || needBackfill) {
       for (final r in recipes.where((r) => !r.isLinked && r.variantGroupId != null)) {
         await _pushRecipeFull(r);
       }
+      _prefs?.setBool(vbaseKey, true);
     }
     final cloud = await sync.fetchOwnedRecipes();
     final overlays = await sync.fetchOverlays();
@@ -929,6 +947,11 @@ extension CloudSync on AppState {
   // ── mapping helpers ──
   CloudRecipe _cloudRecipeOf(Recipe r) {
     final content = r.toJson()..remove('personal'); // overlay syncs separately
+    // denormalize the group's base so a viewer (who can't read my library) knows it
+    if (r.variantGroupId != null) {
+      final g = getVariantGroup(r.variantGroupId);
+      if (g != null) content['variantBaseId'] = g.baseId;
+    }
     return CloudRecipe(
       id: r.id,
       visibility: r.visibility,
