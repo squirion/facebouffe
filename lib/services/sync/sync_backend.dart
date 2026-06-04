@@ -159,6 +159,10 @@ abstract class SyncBackend {
   /// Download the bytes for a content hash, or null if missing.
   Future<Uint8List?> downloadImage(String hash);
 
+  /// A time-limited signed URL for an image hash (used on web, where we can't
+  /// cache bytes to a file). Null if missing.
+  Future<String?> imageUrl(String hash);
+
   /// Replace the set of image hashes linked to a recipe (drives ref-count GC).
   Future<void> setRecipeImages(String recipeId, List<String> hashes);
 

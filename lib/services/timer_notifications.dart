@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import 'web_notif_stub.dart' if (dart.library.js_interop) 'web_notif_web.dart' as webnotif;
 
 /// OS-scheduled cooking-timer alerts. A timer's chime is a `zonedSchedule`d
 /// local notification fired at an absolute wall-clock time on an alarm-usage
@@ -26,6 +28,7 @@ class TimerNotifications {
   // The device's default alarm tone, used when the user hasn't picked a specific one.
   static const String defaultAlarmUri = 'content://settings/system/alarm_alert';
   final Set<String> _ensured = {};
+  final Map<int, Timer> _webTimers = {}; // web: in-page timers → Web Notifications
 
   String _alarmChannelId(String? uri) => '$_alarmPrefix${(uri ?? 'default').hashCode}';
 
@@ -99,7 +102,10 @@ class TimerNotifications {
   /// Ask for POST_NOTIFICATIONS (Android 13+). Exact-alarm is auto-granted via
   /// the USE_EXACT_ALARM manifest permission, so no runtime request is needed.
   Future<bool> requestPermissions() async {
-    if (kIsWeb) return false;
+    if (kIsWeb) {
+      await webnotif.requestWebNotif();
+      return true;
+    }
     await init();
     final a = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     return await a?.requestNotificationsPermission() ?? false;
@@ -137,7 +143,16 @@ class TimerNotifications {
   }
 
   Future<void> schedule(int id, int fireDelaySeconds, {required String title, required String body, required bool isAlarm, String? alarmUri}) async {
-    if (kIsWeb || fireDelaySeconds <= 0) return;
+    if (fireDelaySeconds <= 0) return;
+    if (kIsWeb) {
+      // web: an in-page timer fires a Web Notification (foreground/tab-alive only)
+      _webTimers.remove(id)?.cancel();
+      _webTimers[id] = Timer(Duration(seconds: fireDelaySeconds), () {
+        webnotif.showWebNotif(title, body);
+        _webTimers.remove(id);
+      });
+      return;
+    }
     await init(); // idempotent; guards against scheduling before init completes
     if (!_ready) return;
     final when = tz.TZDateTime.now(tz.local).add(Duration(seconds: fireDelaySeconds));
@@ -165,7 +180,11 @@ class TimerNotifications {
   /// Immediately post a sample notification so the user can hear a sound when
   /// choosing one in Settings. Auto-dismisses shortly after.
   Future<void> preview({required bool isAlarm, String? alarmUri, required String title, required String body}) async {
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      await requestPermissions();
+      webnotif.showWebNotif(title, body);
+      return;
+    }
     await requestPermissions();
     if (!_ready) return;
     final base = (await _details(isAlarm: isAlarm, alarmUri: alarmUri)).android!;
@@ -185,12 +204,21 @@ class TimerNotifications {
   }
 
   Future<void> cancel(int id) async {
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      _webTimers.remove(id)?.cancel();
+      return;
+    }
     await _plugin.cancel(id: id);
   }
 
   Future<void> cancelAll() async {
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      for (final t in _webTimers.values) {
+        t.cancel();
+      }
+      _webTimers.clear();
+      return;
+    }
     await _plugin.cancelAll();
   }
 }

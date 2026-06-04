@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
 import '../data/models.dart';
+import '../config/supabase_config.dart';
 
 /// Thrown when an import can't be completed (network blocked, no recipe data…).
 /// [detail] carries a verbose, developer-facing reason (surfaced in the UI while
@@ -215,7 +216,23 @@ class RecipeImport {
   static const _uaDesktop = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
   static const _uaBot = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 
+  // Web routes page fetches through a CORS proxy edge function (browsers can't
+  // fetch arbitrary cross-origin recipe pages). Native fetches directly.
+  static String _proxyUrl(String target) => '${SupabaseConfig.url}/functions/v1/fetch-url?url=${Uri.encodeComponent(target)}';
+  static Future<http.Response> _proxyGet(String target, {Duration timeout = const Duration(seconds: 25)}) =>
+      http.get(Uri.parse(_proxyUrl(target)), headers: {'apikey': SupabaseConfig.publishableKey}).timeout(timeout);
+
   static Future<String> _fetch(String url) async {
+    if (kIsWeb) {
+      final http.Response res;
+      try {
+        res = await _proxyGet(url);
+      } catch (_) {
+        throw ImportException('network');
+      }
+      if (res.statusCode == 200) return res.body;
+      throw ImportException('http_${res.statusCode}');
+    }
     final uri = Uri.parse(url);
     http.Response? res;
     for (final ua in [_uaDesktop, _uaBot]) {
@@ -560,7 +577,7 @@ class RecipeImport {
   // ── hero image download (best-effort) ──
   static Future<String?> downloadImage(String url) async {
     try {
-      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 20));
+      final res = kIsWeb ? await _proxyGet(url, timeout: const Duration(seconds: 20)) : await http.get(Uri.parse(url)).timeout(const Duration(seconds: 20));
       if (res.statusCode != 200) return null;
       final bytes = res.bodyBytes;
       if (kIsWeb) {

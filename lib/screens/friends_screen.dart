@@ -310,8 +310,10 @@ class _FriendTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (path != null && !kIsWeb)
-              Image.file(File(path), fit: BoxFit.cover, gaplessPlayback: true)
+            if (path != null)
+              (kIsWeb
+                  ? Image.network(path, fit: BoxFit.cover, gaplessPlayback: true)
+                  : Image.file(File(path), fit: BoxFit.cover, gaplessPlayback: true))
             else
               Container(color: fb.accent, alignment: Alignment.center, child: Text(letter, style: fb.display(size: 52, weight: FontWeight.w600, color: Colors.white))),
             Positioned(

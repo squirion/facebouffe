@@ -22,8 +22,11 @@ class Avatar extends StatelessWidget {
     final fb = context.fb;
     final app = context.watch<AppState>();
     final path = app.avatarFor(hash);
-    if (path != null && !kIsWeb) {
-      return ClipOval(child: Image.file(File(path), width: size, height: size, fit: BoxFit.cover, gaplessPlayback: true));
+    if (path != null) {
+      final img = kIsWeb
+          ? Image.network(path, width: size, height: size, fit: BoxFit.cover, gaplessPlayback: true)
+          : Image.file(File(path), width: size, height: size, fit: BoxFit.cover, gaplessPlayback: true);
+      return ClipOval(child: img);
     }
     return Container(
       width: size,

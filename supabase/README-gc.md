@@ -1,3 +1,20 @@
+# Supabase edge functions — deploy guide
+
+This project has two edge functions in `supabase/functions/`:
+
+- **`fetch-url`** — CORS proxy so **URL recipe import works on the web build**
+  (browsers can't fetch arbitrary cross-origin pages; native fetches directly).
+  Deploy it public:
+  ```bash
+  supabase functions deploy fetch-url --no-verify-jwt
+  ```
+  No SQL, no secrets. It's a generic GET passthrough; if you want to limit abuse,
+  tighten `Access-Control-Allow-Origin` in `index.ts` to `https://squirion.github.io`.
+
+- **`gc-images`** — image garbage collection (below).
+
+---
+
 # Image garbage collection — deploy guide
 
 Orphaned image blobs (no `recipe_images` ref and not used as an avatar) are

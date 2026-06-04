@@ -216,9 +216,17 @@ extension CloudSync on AppState {
   }
 
   Future<void> _ensureAvatar(String hash) async {
-    if (kIsWeb || avatarCache.containsKey(hash) || _avatarLoading.contains(hash)) return;
+    if (avatarCache.containsKey(hash) || _avatarLoading.contains(hash)) return;
     _avatarLoading.add(hash);
     try {
+      if (kIsWeb) {
+        final u = await sync.imageUrl(hash); // web: signed URL, no file cache
+        if (u != null) {
+          avatarCache[hash] = u;
+          notify();
+        }
+        return;
+      }
       final dir = await getApplicationDocumentsDirectory();
       final f = File('${dir.path}/avatar_$hash.jpg');
       if (!await f.exists()) {
@@ -877,7 +885,8 @@ extension CloudSync on AppState {
   /// Download + cache any cloud images referenced by pulled recipes, then map
   /// them back into recipePhotos / recipeGallery. Runs in the background.
   Future<void> _downloadImages(Map<String, Map<String, dynamic>> byRecipe, {bool persist = true}) async {
-    if (byRecipe.isEmpty || kIsWeb) return;
+    if (byRecipe.isEmpty) return;
+    if (kIsWeb) return _resolveImageUrls(byRecipe); // web: signed URLs, no file cache
     Directory dir;
     try {
       dir = await getApplicationDocumentsDirectory();
@@ -934,6 +943,43 @@ extension CloudSync on AppState {
     }
     _imgHashCache[f.path] = hash;
     return f.path;
+  }
+
+  // Web: resolve hashes to signed Storage URLs (no file cache) and store them as
+  // the photo paths, so the Image.network display path renders them.
+  Future<void> _resolveImageUrls(Map<String, Map<String, dynamic>> byRecipe) async {
+    var changed = false;
+    for (final entry in byRecipe.entries) {
+      final id = entry.key;
+      final ih = entry.value;
+      final hero = ih['hero'] as String?;
+      final curHero = recipePhotos[id];
+      // re-resolve when missing or when it's a (possibly-expired) signed URL;
+      // keep data: URLs (web-added photos are stable).
+      final heroStale = curHero == null || curHero.isEmpty || curHero.startsWith('http');
+      if (hero != null && heroStale) {
+        final u = await sync.imageUrl(hero);
+        if (u != null) {
+          recipePhotos[id] = u;
+          changed = true;
+        }
+      }
+      final galleryHashes = (ih['gallery'] as List?)?.map((e) => e as String).toList() ?? const [];
+      final curGallery = recipeGallery[id];
+      final galleryStale = curGallery == null || curGallery.isEmpty || curGallery.any((p) => p.startsWith('http'));
+      if (galleryHashes.isNotEmpty && galleryStale) {
+        final urls = <String>[];
+        for (final h in galleryHashes) {
+          final u = await sync.imageUrl(h);
+          if (u != null) urls.add(u);
+        }
+        if (urls.isNotEmpty) {
+          recipeGallery[id] = urls;
+          changed = true;
+        }
+      }
+    }
+    if (changed) notify(); // in-memory only — signed URLs expire, don't persist
   }
 
   bool _listEq(List<String> a, List<String> b) {

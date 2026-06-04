@@ -200,6 +200,15 @@ class SupabaseSyncBackend implements SyncBackend {
   }
 
   @override
+  Future<String?> imageUrl(String hash) async {
+    try {
+      return await _c.storage.from(_bucket).createSignedUrl(hash, 3600);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
   Future<void> setRecipeImages(String recipeId, List<String> hashes) async {
     await _c.from('recipe_images').delete().eq('recipe_id', recipeId);
     final unique = hashes.toSet().toList();
