@@ -225,6 +225,14 @@ const Map<String, Map<String, String>> kI18n = {
     'reviews': 'Avis', 'your_review': 'Votre avis', 'add_review': 'Laisser un avis',
     'review_ph': 'Écrivez un mot sur cette recette…', 'save_review': 'Publier', 'edit_review': 'Modifier',
     'no_reviews': 'Aucun avis pour l\'instant.', 'moderate_delete': 'Supprimer (modération)',
+    // ── steal / link / fork ──
+    'steal_recipe': 'Voler cette recette', 'already_stolen': 'Déjà dans votre carnet',
+    'locked_readonly': 'Recette liée · lecture seule', 'from_owner': 'de',
+    'refresh': 'Actualiser',
+    'make_variant': 'Créer une variante', 'unlink_source': 'Détacher de la source',
+    'remove_from_book': 'Retirer de mon carnet',
+    'steal_preview_title': 'Voler cette recette', 'steal_bundles': 'entraîne aussi',
+    'steal_n_linked': 'recettes liées', 'steal_all': 'Tout ajouter', 'steal_already': 'déjà présent',
   },
   'en': {
     'tab_home': 'Home', 'tab_search': 'Search', 'tab_list': 'Groceries', 'tab_settings': 'Settings',
@@ -450,6 +458,14 @@ const Map<String, Map<String, String>> kI18n = {
     'reviews': 'Reviews', 'your_review': 'Your review', 'add_review': 'Leave a review',
     'review_ph': 'Write a note about this recipe…', 'save_review': 'Post', 'edit_review': 'Edit',
     'no_reviews': 'No reviews yet.', 'moderate_delete': 'Delete (moderation)',
+    // ── steal / link / fork ──
+    'steal_recipe': 'Steal this recipe', 'already_stolen': 'Already in your book',
+    'locked_readonly': 'Linked recipe · read-only', 'from_owner': 'from',
+    'refresh': 'Refresh',
+    'make_variant': 'Create a variant', 'unlink_source': 'Unlink from source',
+    'remove_from_book': 'Remove from my book',
+    'steal_preview_title': 'Steal this recipe', 'steal_bundles': 'also brings in',
+    'steal_n_linked': 'linked recipes', 'steal_all': 'Add all', 'steal_already': 'already present',
   },
 };
 

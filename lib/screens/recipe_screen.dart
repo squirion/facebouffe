@@ -14,6 +14,7 @@ import '../widgets/common.dart';
 import '../widgets/fb_icon.dart';
 import '../widgets/nutrition.dart';
 import '../widgets/reviews.dart';
+import '../widgets/linked_controls.dart';
 import 'settings_screen.dart' show Segmented;
 
 class RecipeScreen extends StatefulWidget {
@@ -36,9 +37,17 @@ class _RecipeScreenState extends State<RecipeScreen> {
     final fb = context.fb;
     final lang = app.lang;
     final recipe = app.getRecipe(widget.id);
-    if (recipe == null) return Scaffold(backgroundColor: fb.canvas, body: const SizedBox());
+    if (recipe == null) {
+      // the recipe vanished from under us (e.g. a background auto-fork changed
+      // its id) — return to the previous screen instead of a blank page.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).maybePop();
+      });
+      return Scaffold(backgroundColor: fb.canvas, body: const SizedBox());
+    }
     final visiting = widget.visiting;
-    final owned = !visiting && app.signedIn; // can toggle sharing on your own recipes
+    final linkedMode = !visiting && recipe.isLinked; // a stolen, read-only copy in my library
+    final owned = !visiting && !linkedMode && app.signedIn; // my own recipes
 
     final servings = _servings ??= recipe.servings;
     final ratio = servings / recipe.servings;
@@ -109,6 +118,11 @@ class _RecipeScreenState extends State<RecipeScreen> {
                               Padding(
                                 padding: const EdgeInsets.only(top: 7),
                                 child: Text(recipe.source!, style: fb.ui(size: 13.5, color: fb.inkSoft, fontStyle: FontStyle.italic)),
+                              ),
+                            if (linkedMode)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 10),
+                                child: Align(alignment: Alignment.centerLeft, child: LinkedOwnerChip(recipe: recipe)),
                               ),
                             if (members.length > 1) ...[
                               const SizedBox(height: 16),
@@ -308,16 +322,29 @@ class _RecipeScreenState extends State<RecipeScreen> {
                       ],
                       // nutrition label (estimate)
                       NutritionCard(recipe: recipe),
-                      // reviews — your editor when visiting a friend's recipe;
+                      // linked-recipe controls (update banner + lock/fork menu)
+                      if (linkedMode) ...[
+                        const SizedBox(height: 18),
+                        LinkedControls(recipeId: recipe.id),
+                      ],
+                      // steal action when visiting a friend's recipe
+                      if (visiting) ...[
+                        const SizedBox(height: 18),
+                        StealAction(recipeId: recipe.id, ownerName: widget.ownerName),
+                      ],
+                      // reviews — your editor when visiting or on a linked recipe;
                       // moderation list on your own shared recipe
-                      if (visiting)
+                      if (visiting || linkedMode)
                         ReviewsSection(recipeId: recipe.id, canReview: true)
                       else if (owned && recipe.visibility == 'friends')
                         ReviewsSection(recipeId: recipe.id, canModerate: true),
-                      // personal journal + owner actions (hidden when visiting a friend's recipe)
+                      // personal journal (your overlay) — own + linked, not while visiting
                       if (!visiting) ...[
                         const SizedBox(height: 30),
                         _Journal(recipe: recipe),
+                      ],
+                      // owner action row — owned recipes only
+                      if (owned) ...[
                         const SizedBox(height: 18),
                         Row(
                           children: [
@@ -365,7 +392,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 RoundBtn(icon: 'back', onTap: () => Navigator.pop(context)),
-                if (!visiting)
+                if (owned)
                   Row(children: [
                     _PopStar(active: fav, onTap: () => app.toggleFav(recipe.id)),
                     const SizedBox(width: 8),

@@ -301,6 +301,7 @@ class SupabaseSyncBackend implements SyncBackend {
       final m = r as Map<String, dynamic>;
       return CloudRecipe(
         id: m['id'] as String,
+        ownerId: friendId,
         visibility: m['visibility'] as String? ?? 'friends',
         version: (m['version'] as num?)?.toInt() ?? 1,
         dateModified: DateTime.tryParse(m['date_modified'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
@@ -308,6 +309,63 @@ class SupabaseSyncBackend implements SyncBackend {
         linkIds: (m['link_ids'] as List?)?.map((e) => e as String).toList() ?? const [],
       );
     }).toList();
+  }
+
+  // ── Phase 6: steal / link / fork ──
+
+  @override
+  Future<CloudRecipe?> pullRecipe(String id) async {
+    final m = await _c.from('recipes').select('id,owner_id,visibility,version,date_modified,content,link_ids').eq('id', id).maybeSingle();
+    if (m == null) return null;
+    return CloudRecipe(
+      id: m['id'] as String,
+      ownerId: m['owner_id'] as String?,
+      visibility: m['visibility'] as String? ?? 'private',
+      version: (m['version'] as num?)?.toInt() ?? 1,
+      dateModified: DateTime.tryParse(m['date_modified'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+      content: Map<String, dynamic>.from(m['content'] as Map),
+      linkIds: (m['link_ids'] as List?)?.map((e) => e as String).toList() ?? const [],
+    );
+  }
+
+  @override
+  Future<void> linkRecipe(String recipeId, String ownerId, int version) async {
+    final me = _c.auth.currentUser?.id;
+    if (me == null) throw StateError('not signed in');
+    await _c.from('linked_recipes').upsert({
+      'user_id': me,
+      'recipe_id': recipeId,
+      'source_owner_id': ownerId,
+      'linked_version': version,
+    }, onConflict: 'user_id,recipe_id');
+  }
+
+  @override
+  Future<void> unlinkRecipe(String recipeId) async {
+    final me = _c.auth.currentUser?.id;
+    if (me == null) return;
+    await _c.from('linked_recipes').delete().eq('user_id', me).eq('recipe_id', recipeId);
+  }
+
+  @override
+  Future<List<({String recipeId, String ownerId, int linkedVersion})>> fetchMyLinks() async {
+    final me = _c.auth.currentUser?.id;
+    if (me == null) return [];
+    final rows = await _c.from('linked_recipes').select('recipe_id,source_owner_id,linked_version').eq('user_id', me);
+    return (rows as List).map((r) {
+      final m = r as Map<String, dynamic>;
+      return (recipeId: m['recipe_id'] as String, ownerId: m['source_owner_id'] as String, linkedVersion: (m['linked_version'] as num?)?.toInt() ?? 0);
+    }).toList();
+  }
+
+  @override
+  Future<Map<String, DateTime>> checkReadable(List<String> ids) async {
+    if (ids.isEmpty) return {};
+    final rows = await _c.from('recipes').select('id,date_modified').inFilter('id', ids);
+    return {
+      for (final r in (rows as List))
+        (r as Map)['id'] as String: DateTime.tryParse(r['date_modified'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+    };
   }
 
   // ── Phase 5: reviews ──

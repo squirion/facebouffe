@@ -55,6 +55,7 @@ extension CloudSync on AppState {
       } else {
         await _reconcile();
       }
+      await _reconcileLinks();
       _prefs?.setString('fb_local_owner', account!.id);
       await refreshFriends();
       _setSyncStatus(SyncStatus.synced);
@@ -244,6 +245,199 @@ extension CloudSync on AppState {
     }
   }
 
+  // ── steal / link / fork (Phase 6) ──
+  bool alreadyStolen(String id) => recipes.any((r) => r.id == id);
+  bool updateAvailable(String id) => updatableLinks.contains(id);
+
+  String? _resolveOwnerName(String ownerId, String? hint) {
+    if (ownerId == account?.id) return account?.username;
+    for (final f in friends) {
+      if (f.userId == ownerId) return f.username;
+    }
+    return hint;
+  }
+
+  /// Resolve the recursive steal bundle (main recipe + its linked dependencies),
+  /// caching pulled content for the commit. Skips deps you already have and
+  /// unreadable ones. Returns null when offline / unreadable.
+  Future<StealBundle?> resolveStealBundle(String rootId, String? ownerNameHint) async {
+    if (!_canSync) return null;
+    final order = <String>[];
+    final visited = <String>{};
+    final queue = <String>[rootId];
+    while (queue.isNotEmpty) {
+      final id = queue.removeAt(0);
+      if (visited.contains(id)) continue;
+      visited.add(id);
+      List<String> links;
+      if (alreadyStolen(id)) {
+        links = getRecipe(id)?.links ?? const [];
+      } else {
+        final c = _stealCache[id] ?? await sync.pullRecipe(id);
+        if (c == null) continue; // unreadable dependency → skip (transitive fork is 6B)
+        _stealCache[id] = c;
+        links = c.linkIds;
+      }
+      order.add(id);
+      queue.addAll(links);
+    }
+    if (!order.contains(rootId)) return null;
+    String titleOf(String id) => _stealCache[id]?.content['title'] as String? ?? getRecipe(id)?.title ?? '…';
+    return StealBundle(
+      mainId: rootId,
+      mainTitle: titleOf(rootId),
+      extras: [for (final id in order.where((x) => x != rootId)) StealItem(id: id, title: titleOf(id), already: alreadyStolen(id))],
+    );
+  }
+
+  /// Commit the steal: link + cache the main recipe and all new dependencies.
+  Future<void> doSteal(String rootId, String? ownerNameHint) async {
+    if (!_canSync) return;
+    _setSyncStatus(SyncStatus.syncing);
+    try {
+      final bundle = await resolveStealBundle(rootId, ownerNameHint);
+      if (bundle == null) {
+        _setSyncStatus(SyncStatus.error);
+        return;
+      }
+      for (final id in [bundle.mainId, ...bundle.extras.map((e) => e.id)]) {
+        if (alreadyStolen(id)) continue;
+        final c = _stealCache[id];
+        if (c == null || c.ownerId == null) continue;
+        final r = _recipeFromCloud(c)
+          ..linkedOwnerId = c.ownerId
+          ..linkedOwnerName = _resolveOwnerName(c.ownerId!, ownerNameHint)
+          ..linkedVersion = c.version;
+        recipes.insert(0, r);
+        await sync.linkRecipe(id, c.ownerId!, c.version);
+        final ih = c.content['imageHashes'];
+        if (ih is Map) await _downloadImages({id: Map<String, dynamic>.from(ih)});
+      }
+      _stealCache.clear();
+      _persistDb();
+      notify();
+      _setSyncStatus(SyncStatus.synced);
+    } catch (_) {
+      _setSyncStatus(online ? SyncStatus.error : SyncStatus.offline);
+    }
+  }
+
+  /// Pull the owner's latest into a linked recipe (keeps your overlay + review).
+  Future<void> pullUpdate(String recipeId) async {
+    if (!_canSync) return;
+    final local = getRecipe(recipeId);
+    if (local == null || !local.isLinked) return;
+    try {
+      final c = await sync.pullRecipe(recipeId);
+      if (c == null) {
+        await _forkLocal(local, deleteSub: true); // owner deleted → fork from cache
+        return;
+      }
+      _replaceContent(local, c); // owner content (incl. dateModified); keeps personal + linked meta
+      local.linkedVersion = c.version;
+      updatableLinks.remove(recipeId);
+      final ih = c.content['imageHashes'];
+      if (ih is Map) await _downloadImages({recipeId: Map<String, dynamic>.from(ih)});
+      _persistDb();
+      notify();
+    } catch (_) {
+      _setSyncStatus(online ? SyncStatus.error : SyncStatus.offline);
+    }
+  }
+
+  /// Detach (unlink) a linked recipe → fork it into an editable owned copy.
+  /// Returns the new owned recipe id (the recipe's id changes on fork).
+  Future<String?> detachLinked(String recipeId) async {
+    final r = getRecipe(recipeId);
+    if (r == null || !r.isLinked) return null;
+    return _forkLocal(r, deleteSub: true);
+  }
+
+  // Convert a linked recipe (in place) into a new owned recipe from its cache,
+  // remapping referrers' links/{{link}} tokens and pushing it as mine. Returns
+  // the new id.
+  Future<String> _forkLocal(Recipe linked, {required bool deleteSub}) async {
+    final oldId = linked.id;
+    final newId = _uuidV4();
+    for (final r in recipes) {
+      if (r.id == oldId) continue;
+      if (r.links.contains(oldId)) r.links = r.links.map((l) => l == oldId ? newId : l).toList();
+      r.description = _remapDescription(r.description, {oldId: newId});
+    }
+    linked
+      ..id = newId
+      ..linkedOwnerId = null
+      ..linkedOwnerName = null
+      ..linkedVersion = 0
+      ..createdBy = account?.username ?? ''
+      ..visibility = 'private'
+      ..dateModified = DateTime.now().toIso8601String();
+    final p = recipePhotos.remove(oldId);
+    if (p != null) recipePhotos[newId] = p;
+    final g = recipeGallery.remove(oldId);
+    if (g != null) recipeGallery[newId] = g;
+    updatableLinks.remove(oldId);
+    if (deleteSub) {
+      try {
+        await sync.unlinkRecipe(oldId);
+      } catch (_) {}
+    }
+    _persistDb();
+    _persistPhotos();
+    _persistGallery();
+    cloudPushRecipe(linked); // owned now → uploads content + re-registers images from cache
+    notify();
+    return newId;
+  }
+
+  // Reconcile link subscriptions. Decisions are based on the LOCAL linked copy +
+  // readability (not on the subscription surviving), so owner-delete auto-forks
+  // even if the linked_recipes row was cascade-deleted.
+  Future<void> _reconcileLinks() async {
+    if (!_canSync) return;
+    final subs = await sync.fetchMyLinks();
+    final subIds = subs.map((s) => s.recipeId).toSet();
+    final localLinked = recipes.where((r) => r.isLinked).toList();
+    final allIds = {...localLinked.map((r) => r.id), ...subIds}.toList();
+    final readable = await sync.checkReadable(allIds);
+
+    // 1) each local linked recipe: fork if unreadable, drop if unlinked
+    //    elsewhere, flag if the owner has a newer version.
+    for (final r in localLinked) {
+      if (!readable.containsKey(r.id)) {
+        await _forkLocal(r, deleteSub: true); // owner deleted / unfriended → fork from cache
+      } else if (!subIds.contains(r.id)) {
+        // readable but no subscription → unlinked on another device → drop
+        recipes.removeWhere((x) => x.id == r.id);
+        recipePhotos.remove(r.id);
+        recipeGallery.remove(r.id);
+        updatableLinks.remove(r.id);
+      } else if (readable[r.id]!.isAfter(_parse(r.dateModified))) {
+        updatableLinks.add(r.id);
+      }
+    }
+
+    // 2) subscriptions with no local copy → materialize (linked on another device)
+    for (final s in subs) {
+      if (recipes.any((r) => r.id == s.recipeId)) continue;
+      if (!readable.containsKey(s.recipeId)) continue;
+      final c = await sync.pullRecipe(s.recipeId);
+      if (c != null && c.ownerId != null) {
+        final r = _recipeFromCloud(c)
+          ..linkedOwnerId = c.ownerId
+          ..linkedOwnerName = _resolveOwnerName(c.ownerId!, null)
+          ..linkedVersion = c.version;
+        recipes.insert(0, r);
+        final ih = c.content['imageHashes'];
+        if (ih is Map) await _downloadImages({c.id: Map<String, dynamic>.from(ih)});
+      }
+    }
+    _persistDb();
+    _persistPhotos();
+    _persistGallery();
+    notify();
+  }
+
   // ── reviews (Phase 5) ──
   List<Review> reviewsFor(String recipeId) => _reviewsCache[recipeId] ?? const [];
 
@@ -288,6 +482,11 @@ extension CloudSync on AppState {
   // ── fire-and-forget push hooks (called from mutators) ──
   void cloudPushRecipe(Recipe r) {
     if (!_canSync || !_migrated || _localOnlyIds.contains(r.id)) return;
+    if (r.isLinked) {
+      // a stolen recipe isn't mine to push — but my overlay (rating/notes) is
+      unawaited(_safe(() => sync.upsertOverlay(_overlayOf(r))));
+      return;
+    }
     if (!_isUuid(r.id)) return; // legacy non-uuid id — the reconcile sweep re-mints + pushes it
     unawaited(_safe(() async {
       await _pushRecipeFull(r);
@@ -326,6 +525,13 @@ extension CloudSync on AppState {
     unawaited(_safe(() => sync.upsertLibrary(_libraryData(), DateTime.now())));
   }
 
+  /// Drop a link subscription (deleting a stolen recipe just unlinks it).
+  void cloudUnlink(String id) {
+    updatableLinks.remove(id);
+    if (!_canSync || !_migrated) return;
+    unawaited(_safe(() => sync.unlinkRecipe(id)));
+  }
+
   // ── account ownership of the local store (shared-device safety) ──
   //
   // The local cookbook belongs to one account (or anonymous) at a time. If a
@@ -361,6 +567,8 @@ extension CloudSync on AppState {
     recipePhotos.clear();
     recipeGallery.clear();
     _reviewsCache.clear();
+    updatableLinks.clear();
+    _stealCache.clear();
     friends = [];
     clearVisiting();
     _persistDb();
@@ -445,6 +653,7 @@ extension CloudSync on AppState {
 
   Future<void> _pushEverything() async {
     for (final r in recipes) {
+      if (r.isLinked) continue;
       await _pushRecipeFull(r);
     }
     await sync.upsertLibrary(_libraryData(), DateTime.now());
@@ -490,6 +699,7 @@ extension CloudSync on AppState {
 
     // 2) handle local recipes absent from the cloud
     for (final r in List<Recipe>.from(recipes)) {
+      if (r.isLinked) continue; // linked recipes are reconciled separately
       if (cloudById.containsKey(r.id) || _localOnlyIds.contains(r.id)) continue;
       if (_syncedIds.contains(r.id)) {
         // was synced, now gone from cloud → deleted on another device
@@ -513,7 +723,7 @@ extension CloudSync on AppState {
 
     _syncedIds
       ..clear()
-      ..addAll(recipes.where((r) => !_localOnlyIds.contains(r.id)).map((r) => r.id));
+      ..addAll(recipes.where((r) => !_localOnlyIds.contains(r.id) && !r.isLinked).map((r) => r.id));
     await sync.upsertLibrary(_libraryData(), DateTime.now());
     _persistSyncState();
     _persistDb();

@@ -64,6 +64,7 @@ class CloudRecipe {
   final DateTime dateModified;
   final Map<String, dynamic> content;
   final List<String> linkIds;
+  final String? ownerId; // set when reading someone else's recipe (steal/browse)
   const CloudRecipe({
     required this.id,
     required this.visibility,
@@ -71,6 +72,7 @@ class CloudRecipe {
     required this.dateModified,
     required this.content,
     required this.linkIds,
+    this.ownerId,
   });
 }
 
@@ -184,6 +186,26 @@ abstract class SyncBackend {
 
   /// A friend's recipes that are shared with friends (RLS enforces access).
   Future<List<CloudRecipe>> fetchFriendRecipes(String friendId);
+
+  // ── Phase 6: steal / link / fork ──
+
+  /// Fetch one recipe by id (RLS-gated). Null if you can't read it (private,
+  /// not a friend, or owner deleted it). Includes ownerId.
+  Future<CloudRecipe?> pullRecipe(String id);
+
+  /// Subscribe to (link) a recipe: record it in linked_recipes.
+  Future<void> linkRecipe(String recipeId, String ownerId, int version);
+
+  /// Drop a link subscription (on fork/unlink).
+  Future<void> unlinkRecipe(String recipeId);
+
+  /// This user's link subscriptions: recipe id → (owner id, version we pulled).
+  Future<List<({String recipeId, String ownerId, int linkedVersion})>> fetchMyLinks();
+
+  /// Current `date_modified` of the given recipe ids that you can still read;
+  /// ids you can't read are absent (owner deleted / unfriended → caller
+  /// auto-forks). Used to detect "update available" on linked recipes.
+  Future<Map<String, DateTime>> checkReadable(List<String> ids);
 
   // ── Phase 5: reviews ──
 

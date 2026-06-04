@@ -27,6 +27,23 @@ enum SyncStatus { idle, syncing, synced, offline, error }
 /// Outcome of trying to add a friend by username.
 enum AddFriendResult { sent, notFound, self, already, error }
 
+/// One recipe pulled into a steal bundle (the main recipe's linked dependencies).
+class StealItem {
+  final String id;
+  final String title;
+  final bool already; // already owned/linked locally
+  const StealItem({required this.id, required this.title, required this.already});
+}
+
+/// The recursive set a steal would bring in: the main recipe + linked extras.
+class StealBundle {
+  final String mainId;
+  final String mainTitle;
+  final List<StealItem> extras;
+  const StealBundle({required this.mainId, required this.mainTitle, required this.extras});
+  int get newCount => extras.where((e) => !e.already).length;
+}
+
 /// Single source of truth for the whole app. Holds the recipe database, tags,
 /// variant groups, profile/settings, shopping list, coach-mark flags and the
 /// per-recipe photo store. Mutations notify listeners and persist locally.
@@ -94,6 +111,8 @@ class AppState extends ChangeNotifier {
   final Map<String, List<Review>> _reviewsCache = {}; // recipe id -> reviews (Phase 5)
   final Map<String, String> avatarCache = {}; // avatar hash -> local cached file path
   final Set<String> _avatarLoading = {}; // avatar hashes currently downloading
+  final Map<String, CloudRecipe> _stealCache = {}; // recipe id -> pulled content while resolving a steal bundle
+  final Set<String> updatableLinks = {}; // linked recipe ids with an owner update available
 
   // ── lookups ──
   Map<String, Tag> get tagsById => {for (final t in tags) t.id: t};
@@ -240,6 +259,8 @@ class AppState extends ChangeNotifier {
     _syncedIds.clear();
     _pendingLocalOnly = [];
     friends = [];
+    updatableLinks.clear();
+    _stealCache.clear();
     migrationPending = false;
     syncStatus = SyncStatus.idle;
     notifyListeners();
@@ -453,7 +474,11 @@ class AppState extends ChangeNotifier {
     if (photo != null) _persistPhotos();
     if (gallery != null) _persistGallery();
     _persistDb();
-    cloudDeleteRecipe(id);
+    if (r != null && r.isLinked) {
+      cloudUnlink(id); // drop the subscription, not the owner's recipe
+    } else {
+      cloudDeleteRecipe(id);
+    }
     notifyListeners();
   }
 
@@ -567,6 +592,12 @@ class AppState extends ChangeNotifier {
     copy.heroImage = null;
     copy.gallery = [];
     copy.links = [];
+    // a variant is always your own editable recipe (even off a linked one)
+    copy.linkedOwnerId = null;
+    copy.linkedOwnerName = null;
+    copy.linkedVersion = 0;
+    copy.visibility = 'private';
+    copy.createdBy = account?.username ?? '';
     recipes.insert(0, copy);
     _persistDb();
     cloudPushRecipe(base); // base may have gained a variantGroupId

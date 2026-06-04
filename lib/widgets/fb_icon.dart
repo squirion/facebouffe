@@ -31,6 +31,7 @@ class FbIcon extends StatelessWidget {
     'timer': Icons.timer_outlined,
     'play': Icons.play_arrow_rounded,
     'link': Icons.link,
+    'lock': Icons.lock_outline,
     'more': Icons.more_horiz,
     'camera': Icons.photo_camera_outlined,
     'arrowL': Icons.arrow_back,

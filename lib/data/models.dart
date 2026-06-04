@@ -205,6 +205,11 @@ class Recipe {
   String? variantGroupId;
   List<String> links;
   String visibility; // 'private' | 'friends' — who can see it once synced (§4)
+  // Linked ("stolen") copy metadata — null on owned recipes. A linked recipe is
+  // a read-only, locally-cached subscription to someone else's recipe (§4).
+  String? linkedOwnerId;
+  String? linkedOwnerName;
+  int linkedVersion; // owner's version we last pulled (compare for "update available")
   List<Ingredient> ingredients;
   List<Step> steps;
   Personal personal;
@@ -227,6 +232,9 @@ class Recipe {
     this.variantGroupId,
     List<String>? links,
     this.visibility = 'private',
+    this.linkedOwnerId,
+    this.linkedOwnerName,
+    this.linkedVersion = 0,
     List<Ingredient>? ingredients,
     List<Step>? steps,
     Personal? personal,
@@ -255,6 +263,9 @@ class Recipe {
         variantGroupId: j['variantGroupId'] as String?,
         links: (j['links'] as List?)?.map((e) => e as String).toList() ?? [],
         visibility: j['visibility'] as String? ?? 'private',
+        linkedOwnerId: j['linkedOwnerId'] as String?,
+        linkedOwnerName: j['linkedOwnerName'] as String?,
+        linkedVersion: (j['linkedVersion'] as num?)?.toInt() ?? 0,
         ingredients: (j['ingredients'] as List?)?.map((e) => Ingredient.fromJson(e as Map<String, dynamic>)).toList() ?? [],
         steps: (j['steps'] as List?)?.map((e) => Step.fromJson(e as Map<String, dynamic>)).toList() ?? [],
         personal: j['personal'] != null ? Personal.fromJson(j['personal'] as Map<String, dynamic>) : Personal(),
@@ -278,6 +289,9 @@ class Recipe {
         'variantGroupId': variantGroupId,
         'links': links,
         'visibility': visibility,
+        if (linkedOwnerId != null) 'linkedOwnerId': linkedOwnerId,
+        if (linkedOwnerName != null) 'linkedOwnerName': linkedOwnerName,
+        if (linkedVersion != 0) 'linkedVersion': linkedVersion,
         'ingredients': ingredients.map((e) => e.toJson()).toList(),
         'steps': steps.map((e) => e.toJson()).toList(),
         'personal': personal.toJson(),
@@ -287,6 +301,7 @@ class Recipe {
   Recipe deepCopy() => Recipe.fromJson(toJson());
 
   bool get isFav => tags.contains('tag-fav');
+  bool get isLinked => linkedOwnerId != null; // a stolen, read-only copy
   int get totalTime => prepTimeMinutes + cookTimeMinutes;
 }
 

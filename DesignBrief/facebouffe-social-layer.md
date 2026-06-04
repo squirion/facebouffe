@@ -78,7 +78,7 @@ create index on recipes (variant_group_id);
 -- Each user's "stolen" read-only subscriptions (owned recipes are not listed here).
 create table linked_recipes (
   user_id         uuid not null references profiles(id) on delete cascade,
-  recipe_id       uuid not null references recipes(id) on delete cascade,
+  recipe_id       uuid not null,                          -- NOT an FK: the row must survive owner-delete so the stealer can detect it (unreadable) and auto-fork from cache (§4)
   source_owner_id uuid not null references profiles(id),
   linked_version  int  not null,                     -- version we last pulled (compare to recipes.version)
   added_at        timestamptz not null default now(),
