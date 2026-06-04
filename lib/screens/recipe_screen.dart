@@ -131,7 +131,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
                                 active: activeTip == 'variantChips',
                                 text: app.t('coach_chips'),
                                 below: true,
-                                child: _VariantChips(members: members, current: recipe, group: group!),
+                                child: _VariantChips(members: members, current: recipe, group: group!, visiting: visiting, ownerName: widget.ownerName),
                               ),
                             ],
                             const SizedBox(height: 16),
@@ -522,7 +522,9 @@ class _VariantChips extends StatelessWidget {
   final List<Recipe> members;
   final Recipe current;
   final VariantGroup group;
-  const _VariantChips({required this.members, required this.current, required this.group});
+  final bool visiting;
+  final String? ownerName;
+  const _VariantChips({required this.members, required this.current, required this.group, this.visiting = false, this.ownerName});
 
   @override
   Widget build(BuildContext context) {
@@ -543,7 +545,7 @@ class _VariantChips extends StatelessWidget {
               final m = members[i];
               final active = m.id == current.id;
               return GestureDetector(
-                onTap: active ? null : () => Nav.openRecipe(context, m.id, replace: true),
+                onTap: active ? null : () => Nav.openRecipe(context, m.id, replace: true, visiting: visiting, ownerName: ownerName),
                 child: Container(
                   constraints: const BoxConstraints(maxWidth: 220),
                   padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),

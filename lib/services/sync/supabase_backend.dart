@@ -75,19 +75,21 @@ class SupabaseSyncBackend implements SyncBackend {
   Future<List<CloudRecipe>> fetchOwnedRecipes() async {
     final uid = _c.auth.currentUser?.id;
     if (uid == null) return [];
-    final rows = await _c.from('recipes').select('id,visibility,version,date_modified,content,link_ids').eq('owner_id', uid);
-    return (rows as List).map((r) {
-      final m = r as Map<String, dynamic>;
-      return CloudRecipe(
+    final rows = await _c.from('recipes').select('id,visibility,version,date_modified,content,link_ids,variant_group_id').eq('owner_id', uid);
+    return (rows as List).map((r) => _cloudRecipe(r as Map<String, dynamic>)).toList();
+  }
+
+  // Map a recipes row → CloudRecipe.
+  CloudRecipe _cloudRecipe(Map<String, dynamic> m, {String? ownerId}) => CloudRecipe(
         id: m['id'] as String,
+        ownerId: ownerId ?? m['owner_id'] as String?,
         visibility: m['visibility'] as String? ?? 'private',
         version: (m['version'] as num?)?.toInt() ?? 1,
         dateModified: DateTime.tryParse(m['date_modified'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
         content: Map<String, dynamic>.from(m['content'] as Map),
         linkIds: (m['link_ids'] as List?)?.map((e) => e as String).toList() ?? const [],
+        variantGroupId: m['variant_group_id'] as String?,
       );
-    }).toList();
-  }
 
   @override
   Future<void> upsertRecipe(CloudRecipe r) async {
@@ -101,6 +103,7 @@ class SupabaseSyncBackend implements SyncBackend {
       'date_modified': r.dateModified.toUtc().toIso8601String(),
       'content': r.content,
       'link_ids': r.linkIds,
+      'variant_group_id': r.variantGroupId,
     });
   }
 
@@ -294,38 +297,25 @@ class SupabaseSyncBackend implements SyncBackend {
   Future<List<CloudRecipe>> fetchFriendRecipes(String friendId) async {
     final rows = await _c
         .from('recipes')
-        .select('id,visibility,version,date_modified,content,link_ids')
+        .select('id,owner_id,visibility,version,date_modified,content,link_ids,variant_group_id')
         .eq('owner_id', friendId)
         .eq('visibility', 'friends');
-    return (rows as List).map((r) {
-      final m = r as Map<String, dynamic>;
-      return CloudRecipe(
-        id: m['id'] as String,
-        ownerId: friendId,
-        visibility: m['visibility'] as String? ?? 'friends',
-        version: (m['version'] as num?)?.toInt() ?? 1,
-        dateModified: DateTime.tryParse(m['date_modified'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
-        content: Map<String, dynamic>.from(m['content'] as Map),
-        linkIds: (m['link_ids'] as List?)?.map((e) => e as String).toList() ?? const [],
-      );
-    }).toList();
+    return (rows as List).map((r) => _cloudRecipe(r as Map<String, dynamic>, ownerId: friendId)).toList();
   }
 
   // ── Phase 6: steal / link / fork ──
 
   @override
   Future<CloudRecipe?> pullRecipe(String id) async {
-    final m = await _c.from('recipes').select('id,owner_id,visibility,version,date_modified,content,link_ids').eq('id', id).maybeSingle();
+    final m = await _c.from('recipes').select('id,owner_id,visibility,version,date_modified,content,link_ids,variant_group_id').eq('id', id).maybeSingle();
     if (m == null) return null;
-    return CloudRecipe(
-      id: m['id'] as String,
-      ownerId: m['owner_id'] as String?,
-      visibility: m['visibility'] as String? ?? 'private',
-      version: (m['version'] as num?)?.toInt() ?? 1,
-      dateModified: DateTime.tryParse(m['date_modified'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
-      content: Map<String, dynamic>.from(m['content'] as Map),
-      linkIds: (m['link_ids'] as List?)?.map((e) => e as String).toList() ?? const [],
-    );
+    return _cloudRecipe(m);
+  }
+
+  @override
+  Future<List<CloudRecipe>> fetchVariantGroup(String groupId) async {
+    final rows = await _c.from('recipes').select('id,owner_id,visibility,version,date_modified,content,link_ids,variant_group_id').eq('variant_group_id', groupId);
+    return (rows as List).map((r) => _cloudRecipe(r as Map<String, dynamic>)).toList();
   }
 
   @override

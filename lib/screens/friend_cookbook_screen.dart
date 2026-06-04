@@ -135,16 +135,22 @@ class _FriendCookbookScreenState extends State<FriendCookbookScreen> {
         ),
       );
     }
+    // one card per variant group (show its base), like the home library
+    final shown = _recipes.where((r) {
+      final g = app.getVariantGroup(r.variantGroupId);
+      return g == null || g.baseId == r.id;
+    }).toList();
     return ScreenScroll(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       children: [
-        for (final r in _recipes)
+        for (final r in shown)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: ListCard(
               recipe: r,
               tagsById: app.tagsById,
               lang: app.lang,
+              variantCount: app.getVariantGroup(r.variantGroupId)?.memberIds.length ?? 0,
               onOpen: () => Nav.openRecipe(context, r.id, visiting: true, ownerName: widget.username),
             ),
           ),

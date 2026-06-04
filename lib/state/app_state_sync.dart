@@ -181,6 +181,16 @@ extension CloudSync on AppState {
       final ih = c.content['imageHashes'];
       if (ih is Map) imgs[c.id] = Map<String, dynamic>.from(ih);
     }
+    // reconstruct variant groups from the shared members present (base = first)
+    visitingGroups.clear();
+    final byGroup = <String, List<String>>{};
+    for (final r in out) {
+      final gid = r.variantGroupId;
+      if (gid != null && _isUuid(gid)) byGroup.putIfAbsent(gid, () => []).add(r.id);
+    }
+    byGroup.forEach((gid, members) {
+      if (members.length >= 2) visitingGroups[gid] = VariantGroup(groupId: gid, memberIds: members, baseId: members.first);
+    });
     notify();
     unawaited(_downloadImages(imgs, persist: false)); // visiting images aren't persisted
     return out;
@@ -264,22 +274,37 @@ extension CloudSync on AppState {
     if (!_canSync) return null;
     final order = <String>[];
     final visited = <String>{};
+    final visitedGroups = <String>{};
     final queue = <String>[rootId];
     while (queue.isNotEmpty) {
       final id = queue.removeAt(0);
       if (visited.contains(id)) continue;
       visited.add(id);
       List<String> links;
+      String? gid;
       if (alreadyStolen(id)) {
-        links = getRecipe(id)?.links ?? const [];
+        final local = getRecipe(id);
+        links = local?.links ?? const [];
+        gid = local?.variantGroupId;
       } else {
         final c = _stealCache[id] ?? await sync.pullRecipe(id);
-        if (c == null) continue; // unreadable dependency → skip (transitive fork is 6B)
+        if (c == null) continue; // unreadable dependency → skip
         _stealCache[id] = c;
         links = c.linkIds;
+        gid = c.variantGroupId ?? c.content['variantGroupId'] as String?;
       }
       order.add(id);
       queue.addAll(links);
+      // pull in readable variant siblings of this recipe
+      if (gid != null && _isUuid(gid) && !visitedGroups.contains(gid)) {
+        visitedGroups.add(gid);
+        try {
+          for (final m in await sync.fetchVariantGroup(gid)) {
+            _stealCache.putIfAbsent(m.id, () => m);
+            queue.add(m.id);
+          }
+        } catch (_) {}
+      }
     }
     if (!order.contains(rootId)) return null;
     String titleOf(String id) => _stealCache[id]?.content['title'] as String? ?? getRecipe(id)?.title ?? '…';
@@ -313,12 +338,35 @@ extension CloudSync on AppState {
         final ih = c.content['imageHashes'];
         if (ih is Map) await _downloadImages({id: Map<String, dynamic>.from(ih)});
       }
+      _rebuildStolenVariantGroups(bundle.mainId);
       _stealCache.clear();
       _persistDb();
       notify();
       _setSyncStatus(SyncStatus.synced);
     } catch (_) {
       _setSyncStatus(online ? SyncStatus.error : SyncStatus.offline);
+    }
+  }
+
+  // After a steal, recreate the local VariantGroup(s) for any stolen recipes
+  // that carry a variantGroupId, so the variant chips work (mixed linked/owned).
+  void _rebuildStolenVariantGroups(String mainId) {
+    final byGroup = <String, List<String>>{};
+    for (final r in recipes) {
+      final gid = r.variantGroupId;
+      if (gid != null && _isUuid(gid)) byGroup.putIfAbsent(gid, () => []).add(r.id);
+    }
+    for (final entry in byGroup.entries) {
+      if (entry.value.length < 2) continue; // not a real group
+      final existing = getVariantGroup(entry.key);
+      if (existing == null) {
+        final base = entry.value.contains(mainId) ? mainId : entry.value.first;
+        variantGroups.add(VariantGroup(groupId: entry.key, memberIds: entry.value, baseId: base));
+      } else {
+        for (final m in entry.value) {
+          if (!existing.memberIds.contains(m)) existing.memberIds.add(m);
+        }
+      }
     }
   }
 
@@ -477,6 +525,7 @@ extension CloudSync on AppState {
       recipeGallery.remove(id);
     }
     visitingRecipes.clear();
+    visitingGroups.clear();
   }
 
   // ── fire-and-forget push hooks (called from mutators) ──
@@ -652,6 +701,7 @@ extension CloudSync on AppState {
   }
 
   Future<void> _pushEverything() async {
+    _remintVariantGroupIds();
     for (final r in recipes) {
       if (r.isLinked) continue;
       await _pushRecipeFull(r);
@@ -659,11 +709,38 @@ extension CloudSync on AppState {
     await sync.upsertLibrary(_libraryData(), DateTime.now());
   }
 
+  // Re-mint legacy 'vg-…' variant-group ids to real UUIDs so they can populate
+  // the uuid `recipes.variant_group_id` column (needed to steal variant siblings).
+  bool _remintVariantGroupIds() {
+    final map = <String, String>{};
+    for (final g in variantGroups) {
+      if (!_isUuid(g.groupId)) map[g.groupId] = _uuidV4();
+    }
+    if (map.isEmpty) return false;
+    for (final g in variantGroups) {
+      final n = map[g.groupId];
+      if (n != null) g.groupId = n;
+    }
+    for (final r in recipes) {
+      final vg = r.variantGroupId;
+      if (vg != null && map.containsKey(vg)) r.variantGroupId = map[vg];
+    }
+    _persistDb();
+    return true;
+  }
+
   // ── steady-state reconcile (pull-on-open + push local changes, LWW) ──
   Future<void> _reconcile() async {
     // Heal any local recipe that still has a legacy non-uuid id (e.g. created
     // before id-generation was fixed) so it can live in the uuid-keyed pool.
     if (recipes.any((r) => !_isUuid(r.id))) _remintAllIds();
+    // Heal legacy variant-group ids → uuids, then re-push affected owned recipes
+    // so recipes.variant_group_id populates in the cloud.
+    if (_remintVariantGroupIds()) {
+      for (final r in recipes.where((r) => !r.isLinked && r.variantGroupId != null)) {
+        await _pushRecipeFull(r);
+      }
+    }
     final cloud = await sync.fetchOwnedRecipes();
     final overlays = await sync.fetchOverlays();
     final lib = await sync.fetchLibrary();
@@ -859,6 +936,7 @@ extension CloudSync on AppState {
       dateModified: _parse(r.dateModified),
       content: content,
       linkIds: r.links.where(_isUuid).toList(), // uuid[] column; non-uuid links live in content
+      variantGroupId: (r.variantGroupId != null && _isUuid(r.variantGroupId!)) ? r.variantGroupId : null,
     );
   }
 

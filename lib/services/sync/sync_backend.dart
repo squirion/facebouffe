@@ -65,6 +65,7 @@ class CloudRecipe {
   final Map<String, dynamic> content;
   final List<String> linkIds;
   final String? ownerId; // set when reading someone else's recipe (steal/browse)
+  final String? variantGroupId; // denormalized group id (uuid) for sibling traversal
   const CloudRecipe({
     required this.id,
     required this.visibility,
@@ -73,6 +74,7 @@ class CloudRecipe {
     required this.content,
     required this.linkIds,
     this.ownerId,
+    this.variantGroupId,
   });
 }
 
@@ -201,6 +203,9 @@ abstract class SyncBackend {
 
   /// This user's link subscriptions: recipe id → (owner id, version we pulled).
   Future<List<({String recipeId, String ownerId, int linkedVersion})>> fetchMyLinks();
+
+  /// Readable recipes in a variant group (for stealing variant siblings).
+  Future<List<CloudRecipe>> fetchVariantGroup(String groupId);
 
   /// Current `date_modified` of the given recipe ids that you can still read;
   /// ids you can't read are absent (owner deleted / unfriended → caller

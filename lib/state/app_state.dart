@@ -108,6 +108,7 @@ class AppState extends ChangeNotifier {
   // not in your library). getRecipe() falls through to these so the existing recipe
   // page / Sous-chef work by id without persisting anything.
   final Map<String, Recipe> visitingRecipes = {};
+  final Map<String, VariantGroup> visitingGroups = {}; // friend's variant groups while browsing
   final Map<String, List<Review>> _reviewsCache = {}; // recipe id -> reviews (Phase 5)
   final Map<String, String> avatarCache = {}; // avatar hash -> local cached file path
   final Set<String> _avatarLoading = {}; // avatar hashes currently downloading
@@ -128,6 +129,7 @@ class AppState extends ChangeNotifier {
     for (final g in variantGroups) {
       if (g.groupId == gid) return g;
     }
+    if (gid != null) return visitingGroups[gid]; // friend's cookbook (transient)
     return null;
   }
 
@@ -576,7 +578,7 @@ class AppState extends ChangeNotifier {
       final g = getVariantGroup(gid);
       g?.memberIds.add(newId);
     } else {
-      gid = 'vg-${uuid()}';
+      gid = _uuidV4(); // uuid so it can populate recipes.variant_group_id (steal siblings)
       variantGroups.add(VariantGroup(groupId: gid, memberIds: [id, newId], baseId: id));
       base.variantGroupId = gid;
     }
@@ -618,7 +620,7 @@ class AppState extends ChangeNotifier {
       gid = base.variantGroupId!;
       getVariantGroup(gid)?.memberIds.add(newId);
     } else {
-      gid = 'vg-${uuid()}';
+      gid = _uuidV4();
       variantGroups.add(VariantGroup(groupId: gid, memberIds: [baseId, newId], baseId: baseId));
       base.variantGroupId = gid;
     }
