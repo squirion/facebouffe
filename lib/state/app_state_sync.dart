@@ -787,16 +787,16 @@ extension CloudSync on AppState {
         final o = overlayById[c.id];
         if (o != null) _applyOverlayTo(r, o);
         recipes.insert(0, r);
-        noteImages(c);
       } else {
         final lm = _parse(local.dateModified);
         if (c.dateModified.isAfter(lm)) {
           _replaceContent(local, c);
           final o = overlayById[c.id];
           if (o != null) _applyOverlayTo(local, o);
-          noteImages(c);
         }
       }
+      noteImages(c); // every recipe — so web re-mints signed image URLs each sync
+                     // (native skips already-cached files inside _downloadImages)
     }
     if (lib != null) _applyLibraryIfAny(lib);
 
