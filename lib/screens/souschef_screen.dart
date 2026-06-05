@@ -742,10 +742,11 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
     return Stack(
       fit: StackFit.expand,
       children: [
-        // current step number, en filigrane — same display font as the editor, larger
+        // current step number, en filigrane — same display font as the editor,
+        // larger and fully framed in the lower-left (above the nav buttons)
         Positioned(
-          top: -34,
-          right: 8,
+          left: 14,
+          bottom: 92,
           child: IgnorePointer(
             child: Text('${_s.stepIdx + 1}', style: fb.display(size: 200, weight: FontWeight.w800, color: fb.accent.withValues(alpha: 0.13), height: 1)),
           ),
