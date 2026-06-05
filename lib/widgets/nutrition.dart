@@ -146,7 +146,8 @@ class CnfPicker extends StatefulWidget {
   final bool remember;
   final ValueChanged<bool> setRemember;
   final String? ingredientName;
-  const CnfPicker({super.key, required this.onPick, required this.onClose, required this.remember, required this.setRemember, this.ingredientName});
+  final String? currentCode;
+  const CnfPicker({super.key, required this.onPick, required this.onClose, required this.remember, required this.setRemember, this.ingredientName, this.currentCode});
 
   @override
   State<CnfPicker> createState() => _CnfPickerState();
@@ -159,6 +160,12 @@ class _CnfPickerState extends State<CnfPicker> {
     final fb = context.fb;
     final app = context.read<AppState>();
     final list = Cnf.instance.search(q);
+    // Always keep the current match pinned as the first option.
+    final current = Cnf.instance.byCode(widget.currentCode);
+    if (current != null) {
+      list.removeWhere((f) => f.code == current.code);
+      list.insert(0, current);
+    }
     return Container(
       margin: const EdgeInsets.only(top: 8),
       decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: fb.line)),
@@ -432,6 +439,7 @@ class _NutritionPanelState extends State<NutritionPanel> {
           if (editingIdx == i)
             CnfPicker(
               ingredientName: ing.name,
+              currentCode: ing.nutritionRef?.foodCode,
               remember: remember,
               setRemember: (v) => setState(() => remember = v),
               onPick: (food) => _pickFood(i, food),

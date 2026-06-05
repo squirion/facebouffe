@@ -80,16 +80,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _SettingsRow(label: app.t('set_weight'), width: 178, last: true, child: Segmented(value: app.profile.weight, onChange: app.setWeight, options: [('metric', app.t('metric')), ('imperial', app.t('imperial'))])),
                   ]),
                   SettingsGroup(label: app.t('set_textsize'), children: [
-                    _SettingsRow(label: app.t('set_textsize'), width: 150, last: true, child: Segmented(value: app.profile.fontSize, onChange: app.setFontSize, options: const [('small', 'A'), ('medium', 'A'), ('large', 'A')])),
+                    _SettingsRow(label: app.t('set_textsize'), width: 150, last: true, child: Segmented(value: app.profile.fontSize, onChange: app.setFontSize, options: const [('small', 'A'), ('medium', 'A'), ('large', 'A')], labelSizes: const [13, 17, 22])),
                   ]),
                   SettingsGroup(label: app.t('appearance'), children: [
                     _SettingsRow(label: app.t('dark_mode'), last: true, child: _Toggle(on: app.dark, onTap: () => app.setDark(!app.dark))),
                   ]),
-                  SettingsGroup(label: app.t('timer_sound'), children: const [
-                    _SoundRow(alarm: true),
-                    _SoundRow(alarm: false),
-                    _SoundHint(),
-                  ]),
+                  // timer sound has no effect on web (no background/notification
+                  // audio), so the picker is hidden there
+                  if (!kIsWeb)
+                    SettingsGroup(label: app.t('timer_sound'), children: const [
+                      _SoundRow(alarm: true),
+                      _SoundRow(alarm: false),
+                      _SoundHint(),
+                    ]),
                   SettingsGroup(label: app.t('import_export'), children: [
                     _ActionRow(icon: 'note', label: app.t('save_recipes'), onTap: () => _exportJson(app)),
                     _ActionRow(icon: 'basket', label: app.t('load_recipes'), onTap: () => _import(app)),
@@ -228,7 +231,10 @@ class Segmented extends StatelessWidget {
   final String value;
   final List<(String, String)> options;
   final ValueChanged<String> onChange;
-  const Segmented({super.key, required this.value, required this.options, required this.onChange});
+  // Optional per-option label sizes (e.g. the A/A/A text-size toggle, so the
+  // letters actually look small / medium / large).
+  final List<double>? labelSizes;
+  const Segmented({super.key, required this.value, required this.options, required this.onChange, this.labelSizes});
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +244,7 @@ class Segmented extends StatelessWidget {
       decoration: BoxDecoration(color: fb.dark ? Colors.white.withValues(alpha: 0.06) : fb.canvas2, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          for (final o in options)
+          for (final (i, o) in options.indexed)
             Expanded(
               child: GestureDetector(
                 onTap: () => onChange(o.$1),
@@ -246,7 +252,7 @@ class Segmented extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(color: value == o.$1 ? fb.card : Colors.transparent, borderRadius: BorderRadius.circular(9), boxShadow: value == o.$1 ? fb.shadow : null),
                   alignment: Alignment.center,
-                  child: Text(o.$2, style: fb.ui(size: 14, weight: value == o.$1 ? FontWeight.w700 : FontWeight.w600, color: value == o.$1 ? fb.ink : fb.inkSoft)),
+                  child: Text(o.$2, style: fb.ui(size: labelSizes != null ? labelSizes![i] : 14, weight: value == o.$1 ? FontWeight.w700 : FontWeight.w600, color: value == o.$1 ? fb.ink : fb.inkSoft)),
                 ),
               ),
             ),

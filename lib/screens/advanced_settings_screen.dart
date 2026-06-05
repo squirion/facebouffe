@@ -130,6 +130,7 @@ class _AliasManagerState extends State<AliasManager> {
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     child: CnfPicker(
                       ingredientName: entries[i].key,
+                      currentCode: entries[i].value,
                       remember: remember,
                       setRemember: (v) => setState(() => remember = v),
                       onPick: (food) { app.addAlias(entries[i].key, food.code); setState(() => editKey = null); },

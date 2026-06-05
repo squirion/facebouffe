@@ -96,7 +96,7 @@ class HelpScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(padding: const EdgeInsets.fromLTRB(6, 0, 6, 8), child: Text(label.toUpperCase(), style: fb.ui(size: 12, weight: FontWeight.w700, color: fb.inkFaint, letterSpacing: 0.5))),
-          Container(decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(18), boxShadow: fb.shadow), clipBehavior: Clip.antiAlias, child: Column(children: children)),
+          Container(decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(18), boxShadow: fb.shadow), clipBehavior: Clip.antiAlias, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children)),
         ],
       );
 

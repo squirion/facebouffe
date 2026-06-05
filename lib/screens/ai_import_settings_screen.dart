@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -48,7 +49,9 @@ class AIImportAssistantScreen extends StatelessWidget {
             child: ScreenScroll(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               children: [
-                SettingsGroup(label: app.t('ondevice_model'), children: const [OnDeviceModelManager()]),
+                // on-device model + preferred-AI are native-only (web has no
+                // on-device model; online API is the only/always-preferred engine)
+                if (!kIsWeb) SettingsGroup(label: app.t('ondevice_model'), children: const [OnDeviceModelManager()]),
                 Coach(
                   feature: 'apiKeys',
                   active: _activeTip(app) == 'apiKeys',
@@ -56,13 +59,14 @@ class AIImportAssistantScreen extends StatelessWidget {
                   below: true,
                   child: SettingsGroup(label: app.t('api_keys'), children: const [ApiKeyManager()]),
                 ),
-                Coach(
-                  feature: 'preferredAi',
-                  active: _activeTip(app) == 'preferredAi',
-                  text: app.t('coach_preferred_ai'),
-                  below: true,
-                  child: SettingsGroup(label: app.t('preferred_ai'), children: const [PreferredAiSelector()]),
-                ),
+                if (!kIsWeb)
+                  Coach(
+                    feature: 'preferredAi',
+                    active: _activeTip(app) == 'preferredAi',
+                    text: app.t('coach_preferred_ai'),
+                    below: true,
+                    child: SettingsGroup(label: app.t('preferred_ai'), children: const [PreferredAiSelector()]),
+                  ),
               ],
             ),
           ),

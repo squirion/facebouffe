@@ -166,6 +166,73 @@ class _RecipeScreenState extends State<RecipeScreen> {
       ],
     ];
 
+    // Trailing sections — nutrition on one side, reviews + journal on the
+    // other, so they sit in two columns (like ingredients|steps) on wide
+    // screens instead of stretching the full width.
+    final nutritionBlock = <Widget>[
+      NutritionCard(recipe: recipe),
+      // linked-recipe controls (update banner + lock/fork menu)
+      if (linkedMode) ...[
+        const SizedBox(height: 18),
+        Coach(
+          feature: 'stolenRecipe',
+          active: activeTip.isEmpty,
+          text: app.t('coach_stolen'),
+          below: true,
+          child: LinkedControls(recipeId: recipe.id),
+        ),
+      ],
+      // steal action when visiting a friend's recipe
+      if (visiting) ...[
+        const SizedBox(height: 18),
+        StealAction(recipeId: recipe.id, ownerName: widget.ownerName),
+      ],
+    ];
+    final feedbackBlock = <Widget>[
+      // reviews — your editor when visiting or on a linked recipe;
+      // moderation list on your own shared recipe
+      if (visiting || linkedMode)
+        ReviewsSection(recipeId: recipe.id, canReview: true)
+      else if (owned && recipe.visibility == 'friends')
+        ReviewsSection(recipeId: recipe.id, canModerate: true),
+      // personal journal (your overlay) — own + linked, not while visiting
+      if (!visiting) ...[
+        const SizedBox(height: 30),
+        _Journal(recipe: recipe),
+      ],
+    ];
+    // owner action row — owned recipes only
+    final ownerActions = Row(
+      children: [
+        Expanded(
+          child: Coach(
+            feature: 'variants',
+            active: activeTip == 'variants',
+            text: app.t('coach_variants'),
+            child: GestureDetector(
+              // easter egg: long-press to generate an AI "mutation" (BYOK only)
+              onLongPress: app.hasAnyImportKey ? () => Nav.openMutation(context, recipe.id) : null,
+              child: _SecondaryAction(icon: 'plus', label: app.t('add_variant'), onTap: () async {
+                final id = app.addVariant(recipe.id);
+                if (context.mounted) Nav.editRecipe(context, id);
+              }),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Coach(
+            feature: 'pdfExport',
+            active: activeTip == 'pdfExport',
+            text: app.t('coach_pdf'),
+            child: _SecondaryAction(icon: 'note', label: app.t('export_pdf'), onTap: () => exportRecipesPdf(context, [recipe])),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: _SecondaryAction(icon: 'pencil', label: app.t('edit'), onTap: () => Nav.editRecipe(context, recipe.id))),
+      ],
+    );
+
     return Scaffold(
       backgroundColor: fb.canvas,
       body: MaxW(
@@ -342,68 +409,32 @@ class _RecipeScreenState extends State<RecipeScreen> {
                             ),
                           ),
                       ],
-                      // nutrition label (estimate)
-                      NutritionCard(recipe: recipe),
-                      // linked-recipe controls (update banner + lock/fork menu)
-                      if (linkedMode) ...[
-                        const SizedBox(height: 18),
-                        Coach(
-                          feature: 'stolenRecipe',
-                          active: activeTip.isEmpty,
-                          text: app.t('coach_stolen'),
-                          below: true,
-                          child: LinkedControls(recipeId: recipe.id),
-                        ),
+                      // nutrition + reviews/journal — two columns on wide screens
+                      const SizedBox(height: 4),
+                      if (twoPane)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: nutritionBlock)),
+                            const SizedBox(width: 28),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: feedbackBlock)),
+                          ],
+                        )
+                      else ...[
+                        ...nutritionBlock,
+                        ...feedbackBlock,
                       ],
-                      // steal action when visiting a friend's recipe
-                      if (visiting) ...[
-                        const SizedBox(height: 18),
-                        StealAction(recipeId: recipe.id, ownerName: widget.ownerName),
-                      ],
-                      // reviews — your editor when visiting or on a linked recipe;
-                      // moderation list on your own shared recipe
-                      if (visiting || linkedMode)
-                        ReviewsSection(recipeId: recipe.id, canReview: true)
-                      else if (owned && recipe.visibility == 'friends')
-                        ReviewsSection(recipeId: recipe.id, canModerate: true),
-                      // personal journal (your overlay) — own + linked, not while visiting
-                      if (!visiting) ...[
-                        const SizedBox(height: 30),
-                        _Journal(recipe: recipe),
-                      ],
-                      // owner action row — owned recipes only
+                      // owner action row — owned recipes only; capped so the
+                      // three buttons don't stretch across a wide screen
                       if (owned) ...[
                         const SizedBox(height: 18),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Coach(
-                                feature: 'variants',
-                                active: activeTip == 'variants',
-                                text: app.t('coach_variants'),
-                                child: GestureDetector(
-                                  // easter egg: long-press to generate an AI "mutation" (BYOK only)
-                                  onLongPress: app.hasAnyImportKey ? () => Nav.openMutation(context, recipe.id) : null,
-                                  child: _SecondaryAction(icon: 'plus', label: app.t('add_variant'), onTap: () async {
-                                    final id = app.addVariant(recipe.id);
-                                    if (context.mounted) Nav.editRecipe(context, id);
-                                  }),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Coach(
-                                feature: 'pdfExport',
-                                active: activeTip == 'pdfExport',
-                                text: app.t('coach_pdf'),
-                                child: _SecondaryAction(icon: 'note', label: app.t('export_pdf'), onTap: () => exportRecipesPdf(context, [recipe])),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(child: _SecondaryAction(icon: 'pencil', label: app.t('edit'), onTap: () => Nav.editRecipe(context, recipe.id))),
-                          ],
-                        ),
+                        if (twoPane)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 460), child: ownerActions),
+                          )
+                        else
+                          ownerActions,
                       ],
                     ],
                   ),

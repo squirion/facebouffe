@@ -32,6 +32,22 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
     setState(() {});
   }
 
+  Future<void> _confirmClearAll(BuildContext context, AppState app) async {
+    final fb = context.fb;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: fb.card,
+        title: Text(app.t('clear_list_confirm'), style: fb.display(size: 19, weight: FontWeight.w600)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(app.t('cancel'), style: fb.ui(size: 14, weight: FontWeight.w600, color: fb.inkSoft))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('clear_list'), style: fb.ui(size: 14, weight: FontWeight.w700, color: const Color(0xFFC0563B)))),
+        ],
+      ),
+    );
+    if (go == true) app.shoppingClearAll();
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
@@ -52,6 +68,10 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
                 const Spacer(),
                 if (inCart.isNotEmpty)
                   GestureDetector(onTap: () => app.shoppingClearChecked(), child: Text(app.t('clear_checked'), style: fb.ui(size: 13.5, weight: FontWeight.w600, color: fb.accent))),
+                if (items.isNotEmpty) ...[
+                  const SizedBox(width: 14),
+                  GestureDetector(onTap: () => _confirmClearAll(context, app), child: FbIcon('trash', size: fb.fs(20), color: fb.inkSoft)),
+                ],
               ],
             ),
           ),

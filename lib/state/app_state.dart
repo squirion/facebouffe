@@ -906,6 +906,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void shoppingClearAll() {
+    shopping.clear();
+    notifyListeners();
+  }
+
   int get shoppingUncheckedCount => shopping.where((x) => !x.checked).length;
 
   // ── import ──
@@ -958,8 +963,14 @@ class AppState extends ChangeNotifier {
 }
 
 final _rand = Random();
+int _uuidSeq = 0;
 String uuid() {
-  final a = _rand.nextInt(1 << 32).toRadixString(36);
+  // Two 16-bit draws: web bitwise ops are 32-bit, so `1 << 32` would wrap to 1
+  // (making nextInt always return 0). 1 << 16 is safe on every platform.
+  final a = (_rand.nextInt(1 << 16) * (1 << 16) + _rand.nextInt(1 << 16)).toRadixString(36);
   final b = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
-  return 'id-$a$b';
+  // A monotonic counter guarantees uniqueness for ids minted within the same
+  // microsecond (e.g. a batch add loop on fast web JS).
+  final c = (_uuidSeq++).toRadixString(36);
+  return 'id-$a$b$c';
 }
