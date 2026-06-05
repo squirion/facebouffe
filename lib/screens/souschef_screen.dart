@@ -739,11 +739,22 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
     }
     final step = steps[_s.stepIdx];
     final myTimer = _timers.where((t) => t.recipeId == _s.recipeId && t.stepIdx == _s.stepIdx).firstOrNull;
-    return Column(
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+        // current step number, en filigrane — same display font as the editor, larger
+        Positioned(
+          top: -34,
+          right: 8,
+          child: IgnorePointer(
+            child: Text('${_s.stepIdx + 1}', style: fb.display(size: 200, weight: FontWeight.w800, color: fb.accent.withValues(alpha: 0.13), height: 1)),
+          ),
+        ),
+        Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
             children: [
               Text('${app.t('sc_step')} ${_s.stepIdx + 1} ${app.t('sc_of')} ${steps.length}', style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent, letterSpacing: 0.6)),
               if (_g(step.group) != null) ...[
@@ -827,6 +838,8 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
               ),
             ],
           ),
+        ),
+      ],
         ),
       ],
     );
