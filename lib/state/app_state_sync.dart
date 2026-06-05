@@ -594,6 +594,8 @@ extension CloudSync on AppState {
       content: content,
       linkIds: base.linkIds,
     ));
+    // After the recipe row exists, register its image refs (FK to recipes.id).
+    await _registerRecipeImages(r.id, hashes);
     await sync.upsertOverlay(_overlayOf(r));
   }
 
@@ -851,8 +853,11 @@ extension CloudSync on AppState {
 
   // ── images (Phase 2B) ──
 
-  /// Upload a recipe's hero + gallery photos (content-addressed dedup) and
-  /// register them for ref-count GC. Returns `{hero: hash?, gallery: [hash,…]}`.
+  /// Upload a recipe's hero + gallery photo bytes (content-addressed dedup).
+  /// Returns `{hero: hash?, gallery: [hash,…]}`. Does NOT touch recipe_images —
+  /// that ref-count registration runs in [_registerRecipeImages] AFTER the
+  /// recipe row exists (recipe_images.recipe_id FKs recipes.id, so a brand-new
+  /// recipe must be upserted first).
   Future<Map<String, dynamic>> _uploadImagesFor(Recipe r) async {
     String? heroHash;
     final hero = recipePhotos[r.id];
@@ -862,13 +867,20 @@ extension CloudSync on AppState {
       final h = await _hashAndUpload(p);
       if (h != null) galleryHashes.add(h);
     }
-    final all = [?heroHash, ...galleryHashes];
-    final prev = _recipeImgHashes[r.id];
-    if (prev == null || !_listEq(prev, all)) {
-      await sync.setRecipeImages(r.id, all);
-      _recipeImgHashes[r.id] = all;
-    }
     return {'hero': heroHash, 'gallery': galleryHashes};
+  }
+
+  /// Reconcile the recipe→image ref-count rows (drives image GC). Must run after
+  /// the recipe row exists, since recipe_images.recipe_id FKs recipes.id.
+  Future<void> _registerRecipeImages(String recipeId, Map<String, dynamic> hashes) async {
+    final hero = hashes['hero'] as String?;
+    final gallery = (hashes['gallery'] as List?)?.map((e) => e as String).toList() ?? const [];
+    final all = [?hero, ...gallery];
+    final prev = _recipeImgHashes[recipeId];
+    if (prev == null || !_listEq(prev, all)) {
+      await sync.setRecipeImages(recipeId, all);
+      _recipeImgHashes[recipeId] = all;
+    }
   }
 
   Future<String?> _hashAndUpload(String path) async {
