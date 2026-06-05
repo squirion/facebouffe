@@ -503,6 +503,19 @@ extension CloudSync on AppState {
         if (ih is Map) await _downloadImages({c.id: Map<String, dynamic>.from(ih)});
       }
     }
+
+    // 3) refresh images for all existing linked recipes — signed URLs expire
+    //    between sessions (web) and files may be missing (new device). One batch
+    //    DB call; _downloadImages skips files already cached on native.
+    final existingIds = recipes
+        .where((r) => r.isLinked && readable.containsKey(r.id))
+        .map((r) => r.id)
+        .toList();
+    if (existingIds.isNotEmpty) {
+      final imgByRecipe = await sync.fetchImageHashes(existingIds);
+      unawaited(_downloadImages(imgByRecipe));
+    }
+
     _persistDb();
     _persistPhotos();
     _persistGallery();

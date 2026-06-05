@@ -367,6 +367,20 @@ class SupabaseSyncBackend implements SyncBackend {
     };
   }
 
+  @override
+  Future<Map<String, Map<String, dynamic>>> fetchImageHashes(List<String> ids) async {
+    if (ids.isEmpty) return {};
+    final rows = await _c.from('recipes').select('id,content').inFilter('id', ids);
+    final out = <String, Map<String, dynamic>>{};
+    for (final r in (rows as List)) {
+      final id = (r as Map)['id'] as String;
+      final content = r['content'];
+      final ih = content is Map ? content['imageHashes'] : null;
+      if (ih is Map) out[id] = Map<String, dynamic>.from(ih);
+    }
+    return out;
+  }
+
   // ── Phase 5: reviews ──
 
   @override

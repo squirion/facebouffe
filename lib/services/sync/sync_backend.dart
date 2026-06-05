@@ -216,6 +216,10 @@ abstract class SyncBackend {
   /// auto-forks). Used to detect "update available" on linked recipes.
   Future<Map<String, DateTime>> checkReadable(List<String> ids);
 
+  /// Image-hash maps for a batch of recipe ids — one DB call used to refresh
+  /// signed URLs for linked recipes without fetching full content each time.
+  Future<Map<String, Map<String, dynamic>>> fetchImageHashes(List<String> ids);
+
   // ── Phase 5: reviews ──
 
   /// All reviews on a recipe you can access (RLS-gated).
