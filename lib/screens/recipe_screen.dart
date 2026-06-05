@@ -48,7 +48,8 @@ class _RecipeScreenState extends State<RecipeScreen> {
     }
     final visiting = widget.visiting;
     final linkedMode = !visiting && recipe.isLinked; // a stolen, read-only copy in my library
-    final owned = !visiting && !linkedMode && app.signedIn; // my own recipes
+    final owned = !visiting && !linkedMode && app.signedIn; // my own recipe
+    final twoPane = context.layout.twoPane; // ingredients | steps side-by-side when wides
 
     final servings = _servings ??= recipe.servings;
     final ratio = servings / recipe.servings;
@@ -77,6 +78,93 @@ class _RecipeScreenState extends State<RecipeScreen> {
         if (mounted) setState(() => _addedFlash = false);
       });
     }
+
+    // Ingredients + steps as blocks so they can stack (narrow) or sit
+    // side-by-side (wide / two-pane).
+    final ingredientsBlock = <Widget>[
+      Row(
+        children: [
+          Text(app.t('ingredients'), style: fb.display(size: 22, weight: FontWeight.w600)),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(999), border: Border.all(color: fb.line), boxShadow: fb.shadow),
+            child: Row(
+              children: [
+                _StepperBtn(icon: 'minus', disabled: servings <= 1, onTap: () => setState(() => _servings = (servings - 1).clamp(1, 999))),
+                SizedBox(
+                  width: 58,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('$servings', style: fb.ui(size: 16, weight: FontWeight.w700, height: 1)),
+                      Text(servings == 1 ? app.t('serving_one') : app.t('servings'), style: fb.ui(size: 10, weight: FontWeight.w600, color: fb.inkFaint)),
+                    ],
+                  ),
+                ),
+                _StepperBtn(icon: 'plus', onTap: () => setState(() => _servings = servings + 1)),
+              ],
+            ),
+          ),
+        ],
+      ),
+      if (servings != recipe.servings)
+        GestureDetector(
+          onTap: () => setState(() => _servings = recipe.servings),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text('↺ ${app.t('scale_reset')}', style: fb.ui(size: 13, weight: FontWeight.w600, color: fb.accent)),
+          ),
+        ),
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+        decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(20), boxShadow: fb.shadow),
+        child: Column(
+          children: [
+            for (final (s, sec) in groupedSections(recipe.ingredients, (i) => i.group).indexed) ...[
+              if (sec.hasHeader) _SectionHeader(name: sec.name!, first: s == 0),
+              for (int k = 0; k < sec.items.length; k++)
+                _IngredientRow(ing: sec.items[k], ratio: ratio, prefs: app.prefs, lang: lang, last: sec.indices[k] == recipe.ingredients.length - 1),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+      Coach(
+        feature: 'shoppingAdd',
+        active: activeTip == 'shoppingAdd',
+        text: app.t('coach_shopping'),
+        child: GestureDetector(
+          onTap: addAll,
+          child: Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: _addedFlash ? const Color(0xFF6BA368).withValues(alpha: 0.09) : fb.accentSoft,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _addedFlash ? const Color(0xFF6BA368) : fb.accent, width: 1.5),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FbIcon(_addedFlash ? 'check' : 'basket', size: fb.fs(19), color: _addedFlash ? const Color(0xFF4F7D4C) : fb.accent),
+                const SizedBox(width: 8),
+                Text(_addedFlash ? app.t('added') : app.t('add_to_list'), style: fb.ui(size: 15, weight: FontWeight.w700, color: _addedFlash ? const Color(0xFF4F7D4C) : fb.accent)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ];
+    final stepsBlock = <Widget>[
+      Text(app.t('steps'), style: fb.display(size: 22, weight: FontWeight.w600)),
+      const SizedBox(height: 14),
+      for (final (s, sec) in groupedSections(recipe.steps, (st) => st.group).indexed) ...[
+        if (sec.hasHeader) _SectionHeader(name: sec.name!, first: s == 0, step: true),
+        for (int k = 0; k < sec.items.length; k++)
+          _StepRow(index: sec.indices[k], step: sec.items[k], onLink: (id) => Nav.openRecipe(context, id)),
+      ],
+    ];
 
     return Scaffold(
       backgroundColor: fb.canvas,
@@ -189,96 +277,21 @@ class _RecipeScreenState extends State<RecipeScreen> {
                           ),
                         ),
                       ),
-                      // servings stepper
+                      // ingredients + steps — side-by-side on wide screens
                       const SizedBox(height: 22),
-                      Row(
-                        children: [
-                          Text(app.t('ingredients'), style: fb.display(size: 22, weight: FontWeight.w600)),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(999), border: Border.all(color: fb.line), boxShadow: fb.shadow),
-                            child: Row(
-                              children: [
-                                _StepperBtn(icon: 'minus', disabled: servings <= 1, onTap: () => setState(() => _servings = (servings - 1).clamp(1, 999))),
-                                SizedBox(
-                                  width: 58,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text('$servings', style: fb.ui(size: 16, weight: FontWeight.w700, height: 1)),
-                                      Text(servings == 1 ? app.t('serving_one') : app.t('servings'), style: fb.ui(size: 10, weight: FontWeight.w600, color: fb.inkFaint)),
-                                    ],
-                                  ),
-                                ),
-                                _StepperBtn(icon: 'plus', onTap: () => setState(() => _servings = servings + 1)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (servings != recipe.servings)
-                        GestureDetector(
-                          onTap: () => setState(() => _servings = recipe.servings),
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text('↺ ${app.t('scale_reset')}', style: fb.ui(size: 13, weight: FontWeight.w600, color: fb.accent)),
-                          ),
-                        ),
-                      const SizedBox(height: 12),
-                      // ingredients
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-                        decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(20), boxShadow: fb.shadow),
-                        child: Column(
+                      if (twoPane)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            for (final (s, sec) in groupedSections(recipe.ingredients, (i) => i.group).indexed) ...[
-                              if (sec.hasHeader) _SectionHeader(name: sec.name!, first: s == 0),
-                              for (int k = 0; k < sec.items.length; k++)
-                                _IngredientRow(
-                                  ing: sec.items[k],
-                                  ratio: ratio,
-                                  prefs: app.prefs,
-                                  lang: lang,
-                                  last: sec.indices[k] == recipe.ingredients.length - 1,
-                                ),
-                            ],
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: ingredientsBlock)),
+                            const SizedBox(width: 28),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: stepsBlock)),
                           ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Coach(
-                        feature: 'shoppingAdd',
-                        active: activeTip == 'shoppingAdd',
-                        text: app.t('coach_shopping'),
-                        child: GestureDetector(
-                          onTap: addAll,
-                          child: Container(
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: _addedFlash ? const Color(0xFF6BA368).withValues(alpha: 0.09) : fb.accentSoft,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: _addedFlash ? const Color(0xFF6BA368) : fb.accent, width: 1.5),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                FbIcon(_addedFlash ? 'check' : 'basket', size: fb.fs(19), color: _addedFlash ? const Color(0xFF4F7D4C) : fb.accent),
-                                const SizedBox(width: 8),
-                                Text(_addedFlash ? app.t('added') : app.t('add_to_list'), style: fb.ui(size: 15, weight: FontWeight.w700, color: _addedFlash ? const Color(0xFF4F7D4C) : fb.accent)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      // steps
-                      const SizedBox(height: 30),
-                      Text(app.t('steps'), style: fb.display(size: 22, weight: FontWeight.w600)),
-                      const SizedBox(height: 14),
-                      for (final (s, sec) in groupedSections(recipe.steps, (st) => st.group).indexed) ...[
-                        if (sec.hasHeader) _SectionHeader(name: sec.name!, first: s == 0, step: true),
-                        for (int k = 0; k < sec.items.length; k++)
-                          _StepRow(index: sec.indices[k], step: sec.items[k], onLink: (id) => Nav.openRecipe(context, id)),
+                        )
+                      else ...[
+                        ...ingredientsBlock,
+                        const SizedBox(height: 30),
+                        ...stepsBlock,
                       ],
                       // gallery — user-added photos if any, else seed placeholders
                       if (app.galleryOf(recipe.id).isNotEmpty || recipe.gallery.isNotEmpty) ...[

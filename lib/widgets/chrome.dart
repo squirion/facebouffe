@@ -48,6 +48,40 @@ class FbHeader extends StatelessWidget {
   }
 }
 
+/// Lay variable-height cards into responsive columns: a single full-width column
+/// on narrow screens, else a wrap of fixed-width cards (each keeps its intrinsic
+/// height). Use for vertical card lists (search results, the home library).
+class CardColumns extends StatelessWidget {
+  final List<Widget> children;
+  final int columns;
+  final double spacing;
+  final EdgeInsets padding;
+  const CardColumns({super.key, required this.children, required this.columns, this.spacing = 14, this.padding = const EdgeInsets.symmetric(horizontal: 20)});
+
+  @override
+  Widget build(BuildContext context) {
+    if (columns <= 1) {
+      return Padding(
+        padding: padding,
+        child: Column(children: [for (final c in children) Padding(padding: EdgeInsets.only(bottom: spacing), child: c)]),
+      );
+    }
+    return Padding(
+      padding: padding,
+      child: LayoutBuilder(
+        builder: (context, cons) {
+          final w = (cons.maxWidth - spacing * (columns - 1)) / columns;
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [for (final c in children) SizedBox(width: w, child: c)],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class SectionLabel extends StatelessWidget {
   final Widget child;
   final String? action;

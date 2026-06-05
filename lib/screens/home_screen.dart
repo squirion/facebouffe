@@ -168,7 +168,7 @@ class HomeScreen extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: GridView.count(
-                    crossAxisCount: 2,
+                    crossAxisCount: context.layout.gridCols + 1, // 2 phone, 3 tablet-P, 4 wide
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     crossAxisSpacing: 14,
@@ -178,17 +178,12 @@ class HomeScreen extends StatelessWidget {
                   ),
                 )
               else
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    children: [
-                      for (final r in all)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 18),
-                          child: FeatureCard(recipe: r, tagsById: tagsById, lang: lang, isFav: app.isFav(r), onOpen: () => Nav.openRecipe(context, r.id)),
-                        ),
-                    ],
-                  ),
+                CardColumns(
+                  columns: context.layout.compact ? 1 : 2, // big editorial cards: 2-up max
+                  spacing: 18,
+                  children: [
+                    for (final r in all) FeatureCard(recipe: r, tagsById: tagsById, lang: lang, isFav: app.isFav(r), onOpen: () => Nav.openRecipe(context, r.id)),
+                  ],
                 ),
             ],
           ),

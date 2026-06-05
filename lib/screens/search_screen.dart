@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../data/i18n.dart';
 import '../theme.dart';
+import '../responsive.dart';
 import '../nav.dart';
 import '../widgets/cards.dart';
 import '../widgets/chrome.dart';
@@ -140,17 +141,22 @@ class _SearchScreenState extends State<SearchScreen> {
           child: matches.isEmpty
               ? ListView(children: [EmptyState(icon: 'search', title: app.t('no_results'), hint: app.t('search_hint'))])
               : ScreenScroll(
+                  wide: true,
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
                   children: [
                     Padding(
                       padding: const EdgeInsets.only(left: 4, bottom: 12),
                       child: Text('${matches.length} ${matches.length == 1 ? tr(lang, "result") : tr(lang, "results")}', style: fb.ui(size: 13, weight: FontWeight.w600, color: fb.inkSoft)),
                     ),
-                    for (final r in matches)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: ListCard(recipe: r, tagsById: app.tagsById, lang: lang, isFav: app.isFav(r), variantCount: vcount(r), onOpen: () => Nav.openRecipe(context, r.id)),
-                      ),
+                    CardColumns(
+                      columns: context.layout.gridCols,
+                      padding: EdgeInsets.zero,
+                      spacing: 12,
+                      children: [
+                        for (final r in matches)
+                          ListCard(recipe: r, tagsById: app.tagsById, lang: lang, isFav: app.isFav(r), variantCount: vcount(r), onOpen: () => Nav.openRecipe(context, r.id)),
+                      ],
+                    ),
                   ],
                 ),
         ),
