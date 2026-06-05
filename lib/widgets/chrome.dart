@@ -1,22 +1,29 @@
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import '../responsive.dart';
 import 'fb_icon.dart';
 
 /// A scrollable screen body with sensible bottom padding (clears the tab bar).
+/// On wide screens the content is capped + centered ([wide] uses the roomier
+/// browse cap for grids; the default uses the narrower reading cap).
 class ScreenScroll extends StatelessWidget {
   final List<Widget> children;
   final double padBottom;
   final EdgeInsets? padding;
-  const ScreenScroll({super.key, required this.children, this.padBottom = 96, this.padding});
+  final bool wide;
+  const ScreenScroll({super.key, required this.children, this.padBottom = 96, this.padding, this.wide = false});
 
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    return ListView(
+    final list = ListView(
       padding: (padding ?? EdgeInsets.zero).copyWith(bottom: padBottom + bottomInset),
       children: children,
     );
+    final cap = wide ? context.layout.browseMax : context.layout.readMax;
+    if (cap == null) return list;
+    return Align(alignment: Alignment.topCenter, child: ConstrainedBox(constraints: BoxConstraints(maxWidth: cap), child: list));
   }
 }
 

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' hide Step;
+
+import '../responsive.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -582,7 +584,8 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                     ],
                   ),
                 ),
-              // pane toggle + dots
+              // pane toggle + dots (hidden when both panes show side-by-side)
+              if (!context.layout.twoPane)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
                 child: Column(
@@ -626,16 +629,25 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
                   ],
                 ),
               ),
-              // panes
+              // panes — side-by-side on wide screens, else a swipeable PageView
               Expanded(
-                child: PageView(
-                  controller: _pager,
-                  onPageChanged: (i) => setState(() => _s.pane = i),
-                  children: [
-                    _ingredientsPane(context, recipe, ratio, app, fb, line, faint, good, navInset),
-                    _stepsPane(context, recipe, steps, app, fb, surface, line, dimC, good, navInset),
-                  ],
-                ),
+                child: context.layout.twoPane
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: _ingredientsPane(context, recipe, ratio, app, fb, line, faint, good, navInset)),
+                          Container(width: 1, color: line),
+                          Expanded(flex: 1, child: _stepsPane(context, recipe, steps, app, fb, surface, line, dimC, good, navInset)),
+                        ],
+                      )
+                    : PageView(
+                        controller: _pager,
+                        onPageChanged: (i) => setState(() => _s.pane = i),
+                        children: [
+                          _ingredientsPane(context, recipe, ratio, app, fb, line, faint, good, navInset),
+                          _stepsPane(context, recipe, steps, app, fb, surface, line, dimC, good, navInset),
+                        ],
+                      ),
               ),
               if (barShown) _tabBar(app, fb, surface, line, bottomInset),
             ],

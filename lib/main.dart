@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'state/app_state.dart';
 import 'theme.dart';
+import 'responsive.dart';
 import 'screens/shell.dart';
 import 'services/timer_notifications.dart';
 import 'services/sync/supabase_backend.dart';
@@ -54,10 +55,15 @@ class FacebouffeApp extends StatelessWidget {
         // so this only fires on empty space; scrolling is unaffected.
         return FbThemeScope(
           theme: theme,
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-            child: child!,
+          child: PortraitLock(
+            child: AppWidthCap(
+              background: theme.canvas,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+                child: child!,
+              ),
+            ),
           ),
         );
       },

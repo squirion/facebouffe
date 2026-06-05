@@ -5,6 +5,7 @@ import '../state/app_state.dart';
 import '../data/models.dart';
 import '../data/format.dart';
 import '../theme.dart';
+import '../responsive.dart';
 import '../nav.dart';
 import '../services/pdf_export.dart';
 import '../widgets/cards.dart';
@@ -79,7 +80,9 @@ class _RecipeScreenState extends State<RecipeScreen> {
 
     return Scaffold(
       backgroundColor: fb.canvas,
-      body: Stack(
+      body: MaxW(
+        max: context.layout.recipeMax,
+        child: Stack(
         children: [
           ListView(
             padding: EdgeInsets.only(bottom: 32 + MediaQuery.of(context).padding.bottom),
@@ -427,6 +430,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
               ),
             ),
         ],
+      ),
       ),
     );
   }

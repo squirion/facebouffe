@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../responsive.dart';
 import '../widgets/fb_icon.dart';
 import '../services/import/share_import.dart';
 import '../nav.dart';
@@ -67,12 +68,24 @@ class _RootShellState extends State<RootShell> {
       });
     }
 
+    const screens = [HomeScreen(), SearchScreen(), ShoppingScreen(), SettingsScreen()];
+
+    // Wide layouts: a left navigation rail replaces the bottom bar + FAB.
+    if (context.layout.useRail) {
+      return Scaffold(
+        backgroundColor: fb.canvas,
+        body: Row(
+          children: [
+            _NavRail(index: index, app: app, onTap: tab.go),
+            Expanded(child: IndexedStack(index: index, children: screens)),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: fb.canvas,
-      body: IndexedStack(
-        index: index,
-        children: const [HomeScreen(), SearchScreen(), ShoppingScreen(), SettingsScreen()],
-      ),
+      body: IndexedStack(index: index, children: screens),
       floatingActionButton: showFab
           ? Padding(
               padding: const EdgeInsets.only(bottom: 8, right: 2),
@@ -93,6 +106,107 @@ class _RootShellState extends State<RootShell> {
             )
           : null,
       bottomNavigationBar: _TabBar(index: index, app: app, onTap: tab.go),
+    );
+  }
+}
+
+/// Left navigation rail for tablet/desktop widths: brand, a "+" add button (the
+/// FAB's role), and the four tabs. Replaces the bottom tab bar.
+class _NavRail extends StatelessWidget {
+  final int index;
+  final AppState app;
+  final ValueChanged<int> onTap;
+  const _NavRail({required this.index, required this.app, required this.onTap});
+
+  static const _items = [
+    ('home', 'tab_home'),
+    ('search', 'tab_search'),
+    ('basket', 'tab_list'),
+    ('sliders', 'tab_settings'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final fb = context.fb;
+    final topInset = MediaQuery.of(context).padding.top;
+    return Container(
+      width: 88,
+      padding: EdgeInsets.fromLTRB(0, topInset + 16, 0, MediaQuery.of(context).padding.bottom + 14),
+      decoration: BoxDecoration(color: fb.card, border: Border(right: BorderSide(color: fb.line))),
+      child: Column(
+        children: [
+          Image.asset('assets/logo_mark.png', height: 34, filterQuality: FilterQuality.medium),
+          const SizedBox(height: 14),
+          // add (the rail's "+", same as the phone FAB)
+          GestureDetector(
+            onTap: () => showImportSheet(context),
+            onLongPress: app.hasAnyImportKey ? () => Nav.openAdventure(context) : null,
+            child: Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(color: fb.accent, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: fb.accent.withValues(alpha: 0.4), blurRadius: 20, offset: const Offset(0, 8))]),
+              child: const Center(child: FbIcon('plus', size: 26, color: Colors.white)),
+            ),
+          ),
+          const SizedBox(height: 14),
+          for (int i = 0; i < _items.length; i++)
+            _RailItem(
+              icon: _items[i].$1,
+              label: app.t(_items[i].$2),
+              active: index == i,
+              badge: i == 2 ? app.shoppingUncheckedCount : 0,
+              onTap: () => onTap(i),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RailItem extends StatelessWidget {
+  final String icon, label;
+  final bool active;
+  final int badge;
+  final VoidCallback onTap;
+  const _RailItem({required this.icon, required this.label, required this.active, required this.badge, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final fb = context.fb;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 64,
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        decoration: BoxDecoration(color: active ? fb.accentSoft : Colors.transparent, borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                FbIcon(icon, size: 25, fill: active && icon == 'home', color: active ? fb.accent : fb.inkFaint),
+                if (badge > 0)
+                  Positioned(
+                    top: -5,
+                    right: -9,
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 16),
+                      height: 16,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(color: fb.accent, borderRadius: BorderRadius.circular(999), border: Border.all(color: fb.card, width: 2)),
+                      alignment: Alignment.center,
+                      child: Text('$badge', style: fb.ui(size: 10, weight: FontWeight.w700, color: Colors.white)),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(label, style: fb.ui(size: 10.5, weight: active ? FontWeight.w700 : FontWeight.w600, color: active ? fb.accent : fb.inkFaint)),
+          ],
+        ),
+      ),
     );
   }
 }

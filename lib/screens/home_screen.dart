@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../responsive.dart';
 import '../nav.dart';
 import '../widgets/avatar.dart';
 import '../widgets/banners.dart';
@@ -77,6 +78,7 @@ class HomeScreen extends StatelessWidget {
         ),
         Expanded(
           child: ScreenScroll(
+            wide: true,
             children: [
               // deployment banners (update available / install app) — self-hide
               const UpdateBanner(),
@@ -116,7 +118,7 @@ class HomeScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
                 child: GridView.count(
-                  crossAxisCount: 2,
+                  crossAxisCount: context.layout.gridCols + 1, // 2 phone, 3 tablet-P, 4 wide
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 10,
