@@ -1023,6 +1023,19 @@ extension CloudSync on AppState {
       final g = getVariantGroup(r.variantGroupId);
       if (g != null) content['variantBaseId'] = g.baseId;
     }
+    // refresh embedded sub-recipe snapshots from the live sub-recipes so a friend
+    // who can't read them still sees current nutrition/weight (operate on the
+    // json copy so the in-memory recipe isn't mutated by a push)
+    final ings = content['ingredients'];
+    if (ings is List) {
+      for (final e in ings) {
+        if (e is Map && e['recipeRef'] is Map) {
+          final subId = (e['recipeRef'] as Map)['recipeId'] as String?;
+          final b = subId == null ? null : getRecipe(subId);
+          if (b != null) e['recipeRef'] = buildRecipeRefSnapshot(b).toJson();
+        }
+      }
+    }
     return CloudRecipe(
       id: r.id,
       visibility: r.visibility,
@@ -1073,7 +1086,8 @@ extension CloudSync on AppState {
       ..links = f.links
       ..ingredients = f.ingredients
       ..steps = f.steps
-      ..nutrition = f.nutrition;
+      ..nutrition = f.nutrition
+      ..finishedWeightG = f.finishedWeightG;
   }
 
   Map<String, dynamic> _libraryData() => {

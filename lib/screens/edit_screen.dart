@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../data/models.dart';
 import '../data/format.dart';
+import '../nav.dart';
 import '../theme.dart';
 import '../services/image_pick.dart';
 import '../widgets/common.dart';
@@ -12,6 +13,8 @@ import '../widgets/fb_icon.dart';
 import '../widgets/nutrition.dart';
 
 const _units = [null, 'g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'oz', 'lb', 'pinch'];
+// Units offered for an embedded sub-recipe (weight + volume only — no count/pinch).
+const _embedUnits = ['g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'oz', 'lb'];
 const _sections = [('infos', 'sec_infos'), ('ing', 'ingredients'), ('steps', 'steps'), ('desc', 'f_desc')];
 
 class EditScreen extends StatefulWidget {
@@ -338,6 +341,7 @@ class _EditScreenState extends State<EditScreen> {
             child: Wrap(spacing: 10, runSpacing: 10, children: [
               _addBtn(fb, app.t('f_add_ing'), () => setState(() { _ingRows.add(_EditRow.item(Ingredient(name: ''))); _syncIng(); })),
               _addBtn(fb, app.t('f_add_section'), () => setState(() => _ingRows.add(_EditRow.header(''))), icon: 'note'),
+              _addBtn(fb, app.t('embed_recipe'), () => _openEmbedPicker(app), icon: 'link'),
             ]),
           ),
           Padding(padding: const EdgeInsets.only(top: 24), child: Divider(height: 1, color: fb.line)),
@@ -364,6 +368,7 @@ class _EditScreenState extends State<EditScreen> {
 
   Widget _ingredientCard(AppState app, FbTheme fb, _EditRow row, int displayIndex) {
     final ing = row.item as Ingredient;
+    if (ing.recipeRef != null) return _embedCard(app, fb, row, ing, displayIndex);
     return Padding(
       key: ObjectKey(row),
       padding: const EdgeInsets.only(bottom: 12),
@@ -376,7 +381,7 @@ class _EditScreenState extends State<EditScreen> {
               children: [
                 _dragHandle(displayIndex),
                 const SizedBox(width: 4),
-                SizedBox(width: 50, child: _input(fb, ing.quantity?.toString() ?? '', app.t('f_qty'), (v) => ing.quantity = v.isEmpty ? null : num.tryParse(v), number: true, center: true)),
+                SizedBox(width: 54, child: _input(fb, fmtQty(ing.quantity), app.t('f_qty'), (v) => ing.quantity = v.trim().isEmpty ? null : (parseQty(v) ?? ing.quantity), number: true, center: true, fractions: true)),
                 const SizedBox(width: 6),
                 SizedBox(
                   width: 82,
@@ -398,6 +403,111 @@ class _EditScreenState extends State<EditScreen> {
         ),
       ),
     );
+  }
+
+  // An embedded sub-recipe ingredient: qty + unit + a tappable title chip
+  // (opens B). Name isn't editable (it mirrors B's title) and there's no CNF
+  // match — nutrition comes from B.
+  Widget _embedCard(AppState app, FbTheme fb, _EditRow row, Ingredient ing, int displayIndex) {
+    final rr = ing.recipeRef!;
+    return Padding(
+      key: ObjectKey(row),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: fb.accentSoft.withValues(alpha: fb.dark ? 0.18 : 0.5), borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.accent.withValues(alpha: 0.4))),
+        child: Row(
+          children: [
+            _dragHandle(displayIndex),
+            const SizedBox(width: 4),
+            SizedBox(width: 54, child: _input(fb, fmtQty(ing.quantity), app.t('f_qty'), (v) => ing.quantity = v.trim().isEmpty ? null : (parseQty(v) ?? ing.quantity), number: true, center: true, fractions: true)),
+            const SizedBox(width: 6),
+            SizedBox(width: 82, child: _UnitDropdown(value: ing.unit, lang: app.lang, units: _embedUnits, onChange: (u) => setState(() => ing.unit = u))),
+            const SizedBox(width: 6),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => Nav.openRecipe(context, rr.recipeId),
+                child: Container(
+                  height: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 11),
+                  decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(13), border: Border.all(color: fb.accent.withValues(alpha: 0.45))),
+                  child: Row(children: [
+                    FbIcon('link', size: 14, color: fb.accent),
+                    const SizedBox(width: 7),
+                    Expanded(child: Text(rr.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 14.5, weight: FontWeight.w600, color: fb.accent))),
+                  ]),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            _miniBtn(fb, 'trash', false, () => setState(() { _ingRows.remove(row); _syncIng(); })),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Pick one of your own recipes to embed as an ingredient. Excludes the recipe
+  // being edited, linked (stolen) recipes, and any candidate that would create a
+  // cycle (B already embeds A, transitively).
+  Future<void> _openEmbedPicker(AppState app) async {
+    final fb = context.fb;
+    final editingId = form.id;
+    var q = '';
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: fb.card,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                  child: Align(alignment: Alignment.centerLeft, child: Text(app.t('embed_recipe'), style: fb.display(size: 18, weight: FontWeight.w600))),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(children: [
+                    FbIcon('search', size: 16, color: fb.inkFaint),
+                    const SizedBox(width: 8),
+                    Expanded(child: TextField(autofocus: true, onChanged: (v) => setSheet(() => q = v), style: fb.ui(size: 14.5), decoration: InputDecoration.collapsed(hintText: app.lang == 'fr' ? 'Rechercher une recette' : 'Search a recipe', hintStyle: fb.ui(size: 14.5, color: fb.inkFaint)))),
+                  ]),
+                ),
+                const SizedBox(height: 8),
+                Divider(height: 1, color: fb.line),
+                _LinkResults(
+                  query: q,
+                  currentId: editingId,
+                  exclude: (id) {
+                    final r = app.getRecipe(id);
+                    return r == null || r.isLinked || app.wouldCreateCycle(editingId, id);
+                  },
+                  onPick: (id) {
+                    Navigator.pop(ctx);
+                    _addEmbed(app, id);
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _addEmbed(AppState app, String id) {
+    final b = app.getRecipe(id);
+    if (b == null) return;
+    setState(() {
+      _ingRows.add(_EditRow.item(Ingredient(name: b.title, quantity: 100, unit: 'g', recipeRef: app.buildRecipeRefSnapshot(b))));
+      _syncIng();
+    });
   }
 
   /// A draggable section-header row (editable name) used in both editors.
@@ -749,8 +859,8 @@ class _EditScreenState extends State<EditScreen> {
         ),
       );
 
-  Widget _input(FbTheme fb, String value, String hint, ValueChanged<String> onChange, {bool number = false, bool center = false, bool italic = false, bool small = false, int rows = 1}) {
-    return _TextField(value: value, hint: hint, onChange: onChange, number: number, center: center, italic: italic, small: small, rows: rows);
+  Widget _input(FbTheme fb, String value, String hint, ValueChanged<String> onChange, {bool number = false, bool center = false, bool italic = false, bool small = false, bool fractions = false, int rows = 1}) {
+    return _TextField(value: value, hint: hint, onChange: onChange, number: number, center: center, italic: italic, small: small, fractions: fractions, rows: rows);
   }
 
   Widget _numInput(FbTheme fb, int value, ValueChanged<int> onChange) {
@@ -829,9 +939,9 @@ class _TextField extends StatefulWidget {
   final String value;
   final String hint;
   final ValueChanged<String> onChange;
-  final bool number, center, italic, small, bold;
+  final bool number, center, italic, small, bold, fractions;
   final int rows;
-  const _TextField({required this.value, required this.hint, required this.onChange, this.number = false, this.center = false, this.italic = false, this.small = false, this.bold = false, this.rows = 1});
+  const _TextField({required this.value, required this.hint, required this.onChange, this.number = false, this.center = false, this.italic = false, this.small = false, this.bold = false, this.fractions = false, this.rows = 1});
 
   @override
   State<_TextField> createState() => _TextFieldState();
@@ -868,7 +978,7 @@ class _TextFieldState extends State<_TextField> {
     return TextField(
       controller: _c,
       onChanged: widget.onChange,
-      keyboardType: widget.number ? TextInputType.number : (widget.rows > 1 ? TextInputType.multiline : TextInputType.text),
+      keyboardType: widget.fractions ? TextInputType.text : (widget.number ? TextInputType.number : (widget.rows > 1 ? TextInputType.multiline : TextInputType.text)),
       maxLines: widget.rows,
       minLines: widget.rows > 1 ? widget.rows : 1,
       textAlign: widget.center ? TextAlign.center : TextAlign.start,
@@ -892,7 +1002,8 @@ class _UnitDropdown extends StatelessWidget {
   final String? value;
   final String lang;
   final ValueChanged<String?> onChange;
-  const _UnitDropdown({required this.value, required this.lang, required this.onChange});
+  final List<String?> units;
+  const _UnitDropdown({required this.value, required this.lang, required this.onChange, this.units = _units});
 
   @override
   Widget build(BuildContext context) {
@@ -908,7 +1019,7 @@ class _UnitDropdown extends StatelessWidget {
           isDense: true,
           dropdownColor: fb.card,
           style: fb.ui(size: 14),
-          items: [for (final u in _units) DropdownMenuItem<String?>(value: u, child: Text(u == null ? '—' : unitLabel(u, lang), style: fb.ui(size: 14)))],
+          items: [for (final u in units) DropdownMenuItem<String?>(value: u, child: Text(u == null ? '—' : unitLabel(u, lang), style: fb.ui(size: 14)))],
           onChanged: onChange,
         ),
       ),
@@ -1124,14 +1235,15 @@ class _LinkResults extends StatelessWidget {
   final String query;
   final String? currentId;
   final ValueChanged<String> onPick;
-  const _LinkResults({required this.query, required this.currentId, required this.onPick});
+  final bool Function(String id)? exclude;
+  const _LinkResults({required this.query, required this.currentId, required this.onPick, this.exclude});
 
   @override
   Widget build(BuildContext context) {
     final fb = context.fb;
     final app = context.read<AppState>();
     final qq = query.trim().toLowerCase();
-    var matches = app.recipes.where((r) => r.id != currentId && r.title.toLowerCase().contains(qq)).toList();
+    var matches = app.recipes.where((r) => r.id != currentId && !(exclude?.call(r.id) ?? false) && r.title.toLowerCase().contains(qq)).toList();
     if (qq.isEmpty) {
       matches.sort((a, b) => b.dateModified.compareTo(a.dateModified));
     }

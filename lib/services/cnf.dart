@@ -396,37 +396,171 @@ class Cnf {
     return null;
   }
 
-  /// Estimate nutrition for a recipe's ingredients at [servings].
-  Nutrition compute(List<Ingredient> ingredients, int servings, {required String computedAt}) {
-    final total = {for (final k in nutrientOrder) k: 0.0};
-    var hasUnmatched = false;
-    for (final ing in ingredients) {
+  /// Grams for an embedded sub-recipe amount, using the sub-recipe's overall
+  /// density (its total weight / total volume) for volume units. Returns null
+  /// for countable/unknown units (not supported for sub-recipes).
+  double? embedGramsFor(num? quantity, String? unit, num subWeightG, num? subVolumeMl) {
+    if (quantity == null || unit == null) return null;
+    final q = quantity.toDouble();
+    if (_gPer.containsKey(unit)) return q * _gPer[unit]!;
+    if (_mlPer.containsKey(unit)) {
+      final gml = (subVolumeMl != null && subVolumeMl > 0) ? subWeightG / subVolumeMl : 1.0;
+      return q * _mlPer[unit]! * gml;
+    }
+    return null;
+  }
+
+  /// Total physical weight (grams) of a recipe's ingredients — the basis for
+  /// portion weight. Only counts ingredients meant to be eaten (matched &
+  /// included, or an embedded sub-recipe); [complete] is false when something
+  /// couldn't be resolved. Used as a fallback where [Nutrition.autoTotalWeightG]
+  /// isn't available.
+  ({double grams, bool complete}) totalWeight(List<Ingredient> ings, {Recipe? Function(String id)? resolve}) {
+    double g = 0;
+    var complete = true;
+    for (final ing in ings) {
+      if (ing.recipeRef != null) {
+        final rr = ing.recipeRef!;
+        num? subW = rr.totalWeightG;
+        num? subV = rr.totalVolumeMl;
+        final liveB = resolve?.call(rr.recipeId);
+        final liveW = liveB?.finishedWeightG ?? liveB?.nutrition?.autoTotalWeightG;
+        if (liveB != null && liveW != null && liveW > 0) {
+          subW = liveW;
+          subV = totalVolume(liveB.ingredients).ml;
+        }
+        if (subW == null || subW <= 0) {
+          complete = false;
+          continue;
+        }
+        final used = embedGramsFor(ing.quantity, ing.unit, subW, subV);
+        if (used != null) {
+          g += used;
+        } else {
+          complete = false;
+        }
+        continue;
+      }
       if (ing.name.trim().isEmpty) continue;
       final ref = ing.nutritionRef;
-      if (ref == null || !ref.matched || !ref.includeInCalc) {
-        hasUnmatched = true;
+      if (ref != null && !ref.includeInCalc) continue; // intentionally excluded
+      if (ref != null && ref.matched) {
+        final food = byCode(ref.foodCode);
+        final grams = food != null ? gramsFor(ing.quantity, ing.unit, food) : null;
+        if (grams != null) {
+          g += grams;
+          continue;
+        }
+      }
+      complete = false;
+    }
+    return (grams: g, complete: complete);
+  }
+
+  /// Total volume (ml) summed from volume-unit ingredients only — advisory, used
+  /// to derive a sub-recipe's density for volume-specified embeds.
+  ({double ml, bool complete}) totalVolume(List<Ingredient> ings) {
+    double ml = 0;
+    var complete = true;
+    for (final ing in ings) {
+      if (ing.recipeRef != null) {
+        complete = false;
         continue;
       }
-      final food = byCode(ref.foodCode);
-      if (food == null) {
-        hasUnmatched = true;
+      if (ing.name.trim().isEmpty) continue;
+      final u = ing.unit;
+      if (u != null && _mlPer.containsKey(u) && ing.quantity != null) {
+        ml += ing.quantity!.toDouble() * _mlPer[u]!;
+      } else {
+        complete = false;
+      }
+    }
+    return (ml: ml, complete: complete);
+  }
+
+  /// Estimate nutrition for a recipe's ingredients at [servings]. Also sums the
+  /// total weight (grams) and includes embedded sub-recipe contributions:
+  /// fraction = gramsUsed / subTotalWeight, added as fraction × the sub-recipe's
+  /// total nutrients. [resolveRecipe] resolves an embedded recipe by id to its
+  /// live values; when absent or the sub-recipe has no computed nutrition, the
+  /// embed's stored snapshot is used (and a missing one flags hasUnmatched).
+  Nutrition compute(List<Ingredient> ingredients, int servings, {required String computedAt, Recipe? Function(String id)? resolveRecipe}) {
+    final total = {for (final k in nutrientOrder) k: 0.0};
+    var hasUnmatched = false;
+    double totalGrams = 0;
+    var weightComplete = true;
+    for (final ing in ingredients) {
+      // ── embedded sub-recipe ──
+      if (ing.recipeRef != null) {
+        final rr = ing.recipeRef!;
+        Map<String, num>? subTotal;
+        num? subW;
+        num? subV;
+        final liveB = resolveRecipe?.call(rr.recipeId);
+        final liveW = liveB?.finishedWeightG ?? liveB?.nutrition?.autoTotalWeightG;
+        if (liveB?.nutrition != null && liveW != null && liveW > 0 && liveB!.nutrition!.total.isNotEmpty) {
+          subTotal = liveB.nutrition!.total;
+          subW = liveW;
+          subV = totalVolume(liveB.ingredients).ml;
+        } else if (rr.totalWeightG != null && rr.totalWeightG! > 0 && rr.total.isNotEmpty) {
+          subTotal = rr.total;
+          subW = rr.totalWeightG;
+          subV = rr.totalVolumeMl;
+        }
+        if (subTotal == null || subW == null || subW <= 0) {
+          hasUnmatched = true;
+          weightComplete = false;
+          continue;
+        }
+        final used = embedGramsFor(ing.quantity, ing.unit, subW, subV);
+        if (used == null) {
+          hasUnmatched = true;
+          weightComplete = false;
+          continue;
+        }
+        final fraction = used / subW;
+        for (final k in nutrientOrder) {
+          total[k] = total[k]! + (subTotal[k] ?? 0) * fraction;
+        }
+        totalGrams += used;
         continue;
       }
-      final grams = gramsFor(ing.quantity, ing.unit, food);
-      if (grams == null) {
+      // ── plain ingredient ──
+      if (ing.name.trim().isEmpty) continue;
+      final ref = ing.nutritionRef;
+      final excluded = ref != null && !ref.includeInCalc;
+      double? grams;
+      if (ref != null && ref.matched && ref.includeInCalc) {
+        final food = byCode(ref.foodCode);
+        if (food != null) {
+          grams = gramsFor(ing.quantity, ing.unit, food);
+          if (grams != null) {
+            final factor = grams / 100.0;
+            for (final k in nutrientOrder) {
+              total[k] = total[k]! + _nutrient(food, k) * factor;
+            }
+          } else {
+            hasUnmatched = true;
+          }
+        } else {
+          hasUnmatched = true;
+        }
+      } else {
         hasUnmatched = true;
-        continue;
       }
-      final factor = grams / 100.0;
-      for (final k in nutrientOrder) {
-        total[k] = total[k]! + _nutrient(food, k) * factor;
+      if (!excluded) {
+        if (grams != null) {
+          totalGrams += grams;
+        } else {
+          weightComplete = false;
+        }
       }
     }
     final basis = servings < 1 ? 1 : servings;
     num r2(num v) => (v * 100).round() / 100;
     final per = {for (final k in nutrientOrder) k: r2(total[k]! / basis)};
     final tot = {for (final k in nutrientOrder) k: r2(total[k]!)};
-    return Nutrition(perServing: per, total: tot, isEstimate: true, hasUnmatched: hasUnmatched, computedAt: computedAt, servingsBasis: basis);
+    return Nutrition(perServing: per, total: tot, isEstimate: true, hasUnmatched: hasUnmatched, computedAt: computedAt, servingsBasis: basis, autoTotalWeightG: r2(totalGrams), weightComplete: weightComplete);
   }
 }
 

@@ -2,6 +2,73 @@
 // the shape of facebouffe-seed.json. All structures round-trip to/from JSON so
 // import/export and local persistence share one serialization path.
 
+/// Coerce a json value into a `Map<String, num>` (drops non-numeric entries).
+/// Shared by [Nutrition] and [RecipeRef] so the snapshot nutrient maps decode
+/// the same way.
+Map<String, num> numMapFromJson(dynamic v) {
+  final out = <String, num>{};
+  if (v is Map) {
+    v.forEach((k, val) {
+      if (val is num) out[k.toString()] = val;
+    });
+  }
+  return out;
+}
+
+/// An embedded sub-recipe used as an ingredient (recipe B inside recipe A).
+/// Carries a snapshot of B's title + nutrition + weight so a viewer who can't
+/// read B (a friend the recipe was shared with) still sees propagated values.
+/// The owner recomputes from the live B; the snapshot is the fallback.
+class RecipeRef {
+  String recipeId; // B's id (own recipe only)
+  String title; // snapshot of B.title at embed/refresh time
+  num? totalWeightG; // snapshot of B's finished/auto total weight (grams)
+  num? totalVolumeMl; // snapshot of B's total volume (for density on volume embeds)
+  Map<String, num> total; // snapshot of B.nutrition.total (per whole recipe)
+  int servings; // snapshot of B.servings (display only)
+  bool weightComplete; // B's weight was fully determinable when snapshotted
+
+  RecipeRef({
+    required this.recipeId,
+    this.title = '',
+    this.totalWeightG,
+    this.totalVolumeMl,
+    Map<String, num>? total,
+    this.servings = 1,
+    this.weightComplete = false,
+  }) : total = total ?? {};
+
+  factory RecipeRef.fromJson(Map<String, dynamic> j) => RecipeRef(
+        recipeId: j['recipeId'] as String? ?? '',
+        title: j['title'] as String? ?? '',
+        totalWeightG: j['totalWeightG'] as num?,
+        totalVolumeMl: j['totalVolumeMl'] as num?,
+        total: numMapFromJson(j['total']),
+        servings: (j['servings'] as num?)?.toInt() ?? 1,
+        weightComplete: j['weightComplete'] as bool? ?? false,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'recipeId': recipeId,
+        'title': title,
+        if (totalWeightG != null) 'totalWeightG': totalWeightG,
+        if (totalVolumeMl != null) 'totalVolumeMl': totalVolumeMl,
+        'total': total,
+        'servings': servings,
+        'weightComplete': weightComplete,
+      };
+
+  RecipeRef copy() => RecipeRef(
+        recipeId: recipeId,
+        title: title,
+        totalWeightG: totalWeightG,
+        totalVolumeMl: totalVolumeMl,
+        total: Map<String, num>.from(total),
+        servings: servings,
+        weightComplete: weightComplete,
+      );
+}
+
 /// Phase 1.5 — per-ingredient resolved CNF match, persisted on the recipe.
 class NutritionRef {
   String? foodCode; // CNF food code
@@ -40,8 +107,12 @@ class Ingredient {
   String? note;
   String? group; // optional section heading (e.g. "Pâte"); null/empty = ungrouped
   NutritionRef? nutritionRef; // Phase 1.5 CNF match
+  RecipeRef? recipeRef; // when set, this ingredient is an embedded sub-recipe (name = its title)
 
-  Ingredient({this.quantity, this.unit, required this.name, this.note, this.group, this.nutritionRef});
+  Ingredient({this.quantity, this.unit, required this.name, this.note, this.group, this.nutritionRef, this.recipeRef});
+
+  /// True when this ingredient is an embedded sub-recipe rather than a CNF food.
+  bool get isSubRecipe => recipeRef != null;
 
   factory Ingredient.fromJson(Map<String, dynamic> j) => Ingredient(
         quantity: j['quantity'] as num?,
@@ -50,6 +121,7 @@ class Ingredient {
         note: j['note'] as String?,
         group: j['group'] as String?,
         nutritionRef: j['nutritionRef'] != null ? NutritionRef.fromJson(j['nutritionRef'] as Map<String, dynamic>) : null,
+        recipeRef: j['recipeRef'] != null ? RecipeRef.fromJson(j['recipeRef'] as Map<String, dynamic>) : null,
       );
 
   Map<String, dynamic> toJson() => {
@@ -59,9 +131,10 @@ class Ingredient {
         if (note != null && note!.isNotEmpty) 'note': note,
         if (group != null && group!.isNotEmpty) 'group': group,
         if (nutritionRef != null) 'nutritionRef': nutritionRef!.toJson(),
+        if (recipeRef != null) 'recipeRef': recipeRef!.toJson(),
       };
 
-  Ingredient copy() => Ingredient(quantity: quantity, unit: unit, name: name, note: note, group: group, nutritionRef: nutritionRef?.copy());
+  Ingredient copy() => Ingredient(quantity: quantity, unit: unit, name: name, note: note, group: group, nutritionRef: nutritionRef?.copy(), recipeRef: recipeRef?.copy());
 }
 
 /// Phase 1.5 — computed nutrition label, stored on the recipe. Always an estimate.
@@ -72,26 +145,20 @@ class Nutrition {
   bool hasUnmatched;
   String computedAt; // ISO
   int servingsBasis;
+  num autoTotalWeightG; // raw sum of ingredient grams the engine could resolve (0 = unknown)
+  bool weightComplete; // true when every included ingredient yielded grams
 
-  Nutrition({required this.perServing, required this.total, this.isEstimate = true, this.hasUnmatched = false, this.computedAt = '', this.servingsBasis = 1});
-
-  static Map<String, num> _numMap(dynamic v) {
-    final out = <String, num>{};
-    if (v is Map) {
-      v.forEach((k, val) {
-        if (val is num) out[k.toString()] = val;
-      });
-    }
-    return out;
-  }
+  Nutrition({required this.perServing, required this.total, this.isEstimate = true, this.hasUnmatched = false, this.computedAt = '', this.servingsBasis = 1, this.autoTotalWeightG = 0, this.weightComplete = false});
 
   factory Nutrition.fromJson(Map<String, dynamic> j) => Nutrition(
-        perServing: _numMap(j['perServing']),
-        total: _numMap(j['total']),
+        perServing: numMapFromJson(j['perServing']),
+        total: numMapFromJson(j['total']),
         isEstimate: j['isEstimate'] as bool? ?? true,
         hasUnmatched: j['hasUnmatched'] as bool? ?? false,
         computedAt: j['computedAt'] as String? ?? '',
         servingsBasis: (j['servingsBasis'] as num?)?.toInt() ?? 1,
+        autoTotalWeightG: (j['autoTotalWeightG'] as num?) ?? 0,
+        weightComplete: j['weightComplete'] as bool? ?? false,
       );
 
   Map<String, dynamic> toJson() => {
@@ -101,6 +168,8 @@ class Nutrition {
         'hasUnmatched': hasUnmatched,
         'computedAt': computedAt,
         'servingsBasis': servingsBasis,
+        'autoTotalWeightG': autoTotalWeightG,
+        'weightComplete': weightComplete,
       };
 
   Nutrition copy() => Nutrition.fromJson(toJson());
@@ -214,6 +283,7 @@ class Recipe {
   List<Step> steps;
   Personal personal;
   Nutrition? nutrition; // Phase 1.5 — computed estimate, null until generated
+  num? finishedWeightG; // user override of the finished total weight (null = use auto estimate)
 
   Recipe({
     required this.id,
@@ -239,6 +309,7 @@ class Recipe {
     List<Step>? steps,
     Personal? personal,
     this.nutrition,
+    this.finishedWeightG,
   })  : gallery = gallery ?? [],
         tags = tags ?? [],
         links = links ?? [],
@@ -270,6 +341,7 @@ class Recipe {
         steps: (j['steps'] as List?)?.map((e) => Step.fromJson(e as Map<String, dynamic>)).toList() ?? [],
         personal: j['personal'] != null ? Personal.fromJson(j['personal'] as Map<String, dynamic>) : Personal(),
         nutrition: j['nutrition'] != null ? Nutrition.fromJson(j['nutrition'] as Map<String, dynamic>) : null,
+        finishedWeightG: j['finishedWeightG'] as num?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -296,6 +368,7 @@ class Recipe {
         'steps': steps.map((e) => e.toJson()).toList(),
         'personal': personal.toJson(),
         if (nutrition != null) 'nutrition': nutrition!.toJson(),
+        if (finishedWeightG != null) 'finishedWeightG': finishedWeightG,
       };
 
   Recipe deepCopy() => Recipe.fromJson(toJson());
@@ -373,6 +446,7 @@ class Profile {
   String temperature; // celsius | fahrenheit
   String volume; // metric | imperial
   String weight; // metric | imperial
+  bool keepCups; // when true, amounts authored in cups never convert to ml
   String fontSize; // small | medium | large
 
   Profile({
@@ -381,6 +455,7 @@ class Profile {
     this.temperature = 'celsius',
     this.volume = 'metric',
     this.weight = 'metric',
+    this.keepCups = false,
     this.fontSize = 'medium',
   });
 
@@ -392,6 +467,7 @@ class Profile {
       temperature: units['temperature'] as String? ?? 'celsius',
       volume: units['volume'] as String? ?? 'metric',
       weight: units['weight'] as String? ?? 'metric',
+      keepCups: units['keepCups'] as bool? ?? false,
       fontSize: j['fontSize'] as String? ?? 'medium',
     );
   }
@@ -399,7 +475,7 @@ class Profile {
   Map<String, dynamic> toJson() => {
         'username': username,
         'language': language,
-        'units': {'temperature': temperature, 'volume': volume, 'weight': weight},
+        'units': {'temperature': temperature, 'volume': volume, 'weight': weight, 'keepCups': keepCups},
         'fontSize': fontSize,
       };
 }
@@ -411,6 +487,8 @@ class ShoppingItem {
   String? unit;
   bool checked;
   String? sourceRecipeId; // null = manually added
+  String? subRecipeId; // set when this line is an embedded sub-recipe (B's id) — expandable
+  num? subAmountG; // grams of B used by this line (for expand scaling)
 
   ShoppingItem({
     required this.id,
@@ -419,6 +497,8 @@ class ShoppingItem {
     this.unit,
     this.checked = false,
     this.sourceRecipeId,
+    this.subRecipeId,
+    this.subAmountG,
   });
 }
 

@@ -14,6 +14,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/import/ondevice_ai.dart';
 import '../services/sync/sync_backend.dart';
 import '../services/sync/supabase_backend.dart';
+import '../services/cnf.dart';
 
 import '../data/models.dart';
 import '../data/i18n.dart';
@@ -133,13 +134,51 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  // ── recipe-as-ingredient (embedded sub-recipes) ──
+
+  /// Build a snapshot of recipe [b] for embedding it as an ingredient. Captures
+  /// its title + nutrition + weight + volume so a viewer who can't read B still
+  /// sees propagated values; the owner recomputes from the live B.
+  RecipeRef buildRecipeRefSnapshot(Recipe b) {
+    final n = b.nutrition;
+    return RecipeRef(
+      recipeId: b.id,
+      title: b.title,
+      totalWeightG: b.finishedWeightG ?? n?.autoTotalWeightG,
+      totalVolumeMl: Cnf.instance.totalVolume(b.ingredients).ml,
+      total: n != null ? Map<String, num>.from(n.total) : {},
+      servings: b.servings,
+      weightComplete: n?.weightComplete ?? false,
+    );
+  }
+
+  /// True if embedding [candidateId] inside the recipe being edited ([editingId])
+  /// would create a cycle — self, or candidate transitively embeds editing.
+  bool wouldCreateCycle(String? editingId, String candidateId) {
+    if (candidateId == editingId) return true;
+    final seen = <String>{};
+    bool reaches(String id) {
+      if (id == editingId) return true;
+      if (!seen.add(id)) return false;
+      final r = getRecipe(id);
+      if (r == null) return false;
+      for (final ing in r.ingredients) {
+        final sub = ing.recipeRef?.recipeId;
+        if (sub != null && reaches(sub)) return true;
+      }
+      return false;
+    }
+
+    return reaches(candidateId);
+  }
+
   /// Public passthrough so the cloud-sync extension (a separate part) can poke
   /// listeners — `notifyListeners` itself is protected to ChangeNotifier.
   void notify() => notifyListeners();
 
   String t(String key) => tr(profile.language, key);
   String get lang => profile.language;
-  UnitPrefs get prefs => UnitPrefs(temperature: profile.temperature, volume: profile.volume, weight: profile.weight);
+  UnitPrefs get prefs => UnitPrefs(temperature: profile.temperature, volume: profile.volume, weight: profile.weight, keepCups: profile.keepCups);
 
   // ── init / persistence ──
   Future<void> init() async {
@@ -160,6 +199,7 @@ class AppState extends ChangeNotifier {
     profile.temperature = _prefs!.getString('fb_temp') ?? profile.temperature;
     profile.volume = _prefs!.getString('fb_vol') ?? profile.volume;
     profile.weight = _prefs!.getString('fb_weight') ?? profile.weight;
+    profile.keepCups = _prefs!.getBool('fb_keepcups') ?? profile.keepCups;
     dark = _prefs!.getBool('fb_dark') ?? false;
     accentHex = _prefs!.getString('fb_accent') ?? accentHex;
     homeLayout = _prefs!.getString('fb_home') ?? homeLayout;
@@ -300,6 +340,7 @@ class AppState extends ChangeNotifier {
     p.setString('fb_temp', profile.temperature);
     p.setString('fb_vol', profile.volume);
     p.setString('fb_weight', profile.weight);
+    p.setBool('fb_keepcups', profile.keepCups);
     p.setBool('fb_dark', dark);
     p.setString('fb_accent', accentHex);
     p.setString('fb_home', homeLayout);
@@ -343,6 +384,12 @@ class AppState extends ChangeNotifier {
 
   void setWeight(String v) {
     profile.weight = v;
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void setKeepCups(bool v) {
+    profile.keepCups = v;
     _persistSettings();
     notifyListeners();
   }
@@ -909,6 +956,48 @@ class AppState extends ChangeNotifier {
   void shoppingClearAll() {
     shopping.clear();
     notifyListeners();
+  }
+
+  /// Replace an embedded sub-recipe shopping line with its sub-recipe's actual
+  /// ingredients, scaled to the amount used (fraction = gramsUsed / B's weight).
+  /// No-op if B is unresolvable or has no usable weight.
+  void shoppingExpandSubRecipe(String itemId) {
+    final idx = shopping.indexWhere((x) => x.id == itemId);
+    if (idx < 0) return;
+    final item = shopping[idx];
+    final subId = item.subRecipeId;
+    if (subId == null) return;
+    final b = getRecipe(subId);
+    if (b == null) return;
+    final subW = b.finishedWeightG ?? b.nutrition?.autoTotalWeightG ?? Cnf.instance.totalWeight(b.ingredients, resolve: getRecipe).grams;
+    if (subW <= 0) return;
+    final fraction = (item.subAmountG ?? 0) / subW;
+    if (fraction <= 0) return;
+    final scaled = <ShoppingItem>[];
+    for (final ing in b.ingredients) {
+      if (ing.name.trim().isEmpty) continue;
+      // Nested sub-recipes stay a single line (can be expanded again).
+      if (ing.recipeRef != null) {
+        scaled.add(ShoppingItem(
+          id: uuid(),
+          name: ing.recipeRef!.title,
+          quantity: ing.quantity == null ? null : ing.quantity! * fraction,
+          unit: ing.unit,
+          sourceRecipeId: b.id,
+          subRecipeId: ing.recipeRef!.recipeId,
+          subAmountG: ing.recipeRef!.totalWeightG == null
+              ? null
+              : (Cnf.instance.totalWeight([ing], resolve: getRecipe).grams) * fraction,
+        ));
+        continue;
+      }
+      final conv = ing.quantity != null && ing.unit != null
+          ? convertIngredientUnit(ing.quantity! * fraction, ing.unit, prefs)
+          : QtyUnit(ing.quantity == null ? null : ing.quantity! * fraction, ing.unit);
+      scaled.add(ShoppingItem(id: uuid(), name: ing.name, quantity: conv.quantity, unit: conv.unit, sourceRecipeId: b.id));
+    }
+    shopping.removeAt(idx);
+    shoppingAddMany(scaled);
   }
 
   int get shoppingUncheckedCount => shopping.where((x) => !x.checked).length;

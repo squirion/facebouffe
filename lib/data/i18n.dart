@@ -118,6 +118,9 @@ const Map<String, Map<String, String>> kI18n = {
     'aliases_hint': 'Appariements appris : nom d\'ingrédient → aliment préféré.',
     // Nutrition label (§2e)
     'nutrition_section': 'Valeur nutritive', 'nutrition_estimate': 'Estimation',
+    'set_keep_cups': 'Toujours en tasses', 'embed_recipe': 'Intégrer une recette', 'embed_subrecipe': 'Sous-recette',
+    'embed_needs_nutrition': 'Générez d\'abord la valeur nutritive de « {title} »',
+    'portion_weight': 'Poids par portion', 'finished_weight': 'Poids total cuit (optionnel)', 'expand_subrecipe': 'Détailler',
     'nutrition_gen': 'Générer l\'étiquette nutritionnelle', 'nutrition_regen': 'Recalculer l\'étiquette',
     'nutrition_view': 'Voir la valeur nutritive', 'nutrition_hide': 'Masquer',
     'nutrition_per_serving': 'par portion', 'nutrition_amount_total': 'Recette entière',
@@ -354,6 +357,9 @@ const Map<String, Map<String, String>> kI18n = {
     'aliases_hint': 'Learned matches: ingredient name → preferred food.',
     // Nutrition label (§2e)
     'nutrition_section': 'Nutrition', 'nutrition_estimate': 'Estimate',
+    'set_keep_cups': 'Never convert cups', 'embed_recipe': 'Embed a recipe', 'embed_subrecipe': 'Sub-recipe',
+    'embed_needs_nutrition': 'Generate {title}\'s nutrition first',
+    'portion_weight': 'Per-portion weight', 'finished_weight': 'Finished total weight (optional)', 'expand_subrecipe': 'Expand',
     'nutrition_gen': 'Generate nutrition label', 'nutrition_regen': 'Recalculate label',
     'nutrition_view': 'View nutrition', 'nutrition_hide': 'Hide',
     'nutrition_per_serving': 'per serving', 'nutrition_amount_total': 'Whole recipe',

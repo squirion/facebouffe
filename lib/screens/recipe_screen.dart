@@ -7,6 +7,7 @@ import '../data/format.dart';
 import '../theme.dart';
 import '../responsive.dart';
 import '../nav.dart';
+import '../services/cnf.dart';
 import '../services/pdf_export.dart';
 import '../widgets/cards.dart';
 import '../widgets/chrome.dart';
@@ -67,12 +68,23 @@ class _RecipeScreenState extends State<RecipeScreen> {
     final activeTip = tipOrder.firstWhere((f) => !app.tipsSeen.seen(f), orElse: () => '');
 
     void addAll() {
-      app.shoppingAddMany(recipe.ingredients.map((ing) {
-        final conv = ing.quantity != null && ing.unit != null
-            ? convertIngredientUnit(ing.quantity! * ratio, ing.unit, app.prefs)
-            : QtyUnit(ing.quantity == null ? null : ing.quantity! * ratio, ing.unit);
-        return ShoppingItem(id: uuid(), name: ing.name, quantity: conv.quantity, unit: conv.unit, sourceRecipeId: recipe.id);
-      }).toList());
+      final items = <ShoppingItem>[];
+      for (final ing in recipe.ingredients) {
+        final scaledQty = ing.quantity == null ? null : ing.quantity! * ratio;
+        final conv = scaledQty != null && ing.unit != null ? convertIngredientUnit(scaledQty, ing.unit, app.prefs) : QtyUnit(scaledQty, ing.unit);
+        if (ing.recipeRef != null) {
+          // an embedded sub-recipe → one expandable line carrying its grams used
+          final rr = ing.recipeRef!;
+          final b = app.getRecipe(rr.recipeId);
+          final subW = b?.finishedWeightG ?? b?.nutrition?.autoTotalWeightG ?? rr.totalWeightG;
+          final subV = b != null ? Cnf.instance.totalVolume(b.ingredients).ml : rr.totalVolumeMl;
+          final grams = (scaledQty != null && subW != null && subW > 0) ? Cnf.instance.embedGramsFor(scaledQty, ing.unit, subW, subV) : null;
+          items.add(ShoppingItem(id: uuid(), name: rr.title, quantity: conv.quantity, unit: conv.unit, sourceRecipeId: recipe.id, subRecipeId: rr.recipeId, subAmountG: grams));
+          continue;
+        }
+        items.add(ShoppingItem(id: uuid(), name: ing.name, quantity: conv.quantity, unit: conv.unit, sourceRecipeId: recipe.id));
+      }
+      app.shoppingAddMany(items);
       setState(() => _addedFlash = true);
       Future.delayed(const Duration(milliseconds: 1600), () {
         if (mounted) setState(() => _addedFlash = false);
@@ -713,6 +725,7 @@ class _IngredientRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final fb = context.fb;
     final d = displayIngredient(ing.quantity, ing.unit, ing.name, ing.note, ratio, prefs, lang);
+    final rr = ing.recipeRef;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: last ? null : BoxDecoration(border: Border(bottom: BorderSide(color: fb.line))),
@@ -725,13 +738,34 @@ class _IngredientRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text.rich(TextSpan(children: [
-              TextSpan(text: d.name, style: fb.ui(size: 15.5, color: fb.ink)),
-              if (d.note != null) TextSpan(text: ' · ${d.note}', style: fb.ui(size: 13.5, color: fb.inkFaint, fontStyle: FontStyle.italic)),
-            ])),
+            child: rr != null
+                ? _subChip(context, fb, rr)
+                : Text.rich(TextSpan(children: [
+                    TextSpan(text: d.name, style: fb.ui(size: 15.5, color: fb.ink)),
+                    if (d.note != null) TextSpan(text: ' · ${d.note}', style: fb.ui(size: 13.5, color: fb.inkFaint, fontStyle: FontStyle.italic)),
+                  ])),
           ),
         ],
       ),
+    );
+  }
+
+  // An embedded sub-recipe renders as a tappable link chip opening B (or a plain
+  // chip if B isn't available locally, e.g. a shared recipe whose source isn't).
+  Widget _subChip(BuildContext context, FbTheme fb, RecipeRef rr) {
+    final exists = context.read<AppState>().getRecipe(rr.recipeId) != null;
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(8)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        FbIcon('link', size: 13, color: fb.accent),
+        const SizedBox(width: 5),
+        Flexible(child: Text(rr.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 14.5, weight: FontWeight.w600, color: fb.accent))),
+      ]),
+    );
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: exists ? GestureDetector(onTap: () => Nav.openRecipe(context, rr.recipeId), child: chip) : chip,
     );
   }
 }

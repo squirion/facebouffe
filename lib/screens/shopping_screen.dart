@@ -163,6 +163,19 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
               ],
             ),
           ),
+          if (it.subRecipeId != null && app.getRecipe(it.subRecipeId) != null)
+            GestureDetector(
+              onTap: () => app.shoppingExpandSubRecipe(it.id),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  FbIcon('chevD', size: fb.fs(15), color: fb.accent),
+                  const SizedBox(width: 5),
+                  Text(app.t('expand_subrecipe'), style: fb.ui(size: 12.5, weight: FontWeight.w700, color: fb.accent)),
+                ]),
+              ),
+            ),
           GestureDetector(onTap: () => app.shoppingRemove(it.id), child: Padding(padding: const EdgeInsets.all(6), child: FbIcon('x', size: fb.fs(17), color: fb.inkFaint))),
         ],
       ),

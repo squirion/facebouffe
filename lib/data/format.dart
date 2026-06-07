@@ -8,7 +8,8 @@ class UnitPrefs {
   final String temperature; // celsius | fahrenheit
   final String volume; // metric | imperial
   final String weight; // metric | imperial
-  const UnitPrefs({required this.temperature, required this.volume, required this.weight});
+  final bool keepCups; // when true, cups never convert to ml (pass-through like tsp/tbsp)
+  const UnitPrefs({required this.temperature, required this.volume, required this.weight, this.keepCups = false});
 }
 
 // ── Friendly fractions ──────────────────────────────────────────
@@ -16,6 +17,45 @@ const List<List<dynamic>> _fractions = [
   [1 / 8, '⅛'], [1 / 4, '¼'], [1 / 3, '⅓'], [3 / 8, '⅜'], [1 / 2, '½'],
   [5 / 8, '⅝'], [2 / 3, '⅔'], [3 / 4, '¾'], [7 / 8, '⅞'],
 ];
+
+// Reverse of [_fractions]: unicode glyph → "n/d" ratio string, for parsing input.
+const Map<String, String> _glyphToRatio = {
+  '⅛': '1/8', '¼': '1/4', '⅓': '1/3', '⅜': '3/8', '½': '1/2',
+  '⅝': '5/8', '⅔': '2/3', '¾': '3/4', '⅞': '7/8',
+};
+
+/// Parse a user-typed quantity into a number. Accepts decimals ("1.5", "1,5"),
+/// fractions ("1/2", "3 / 4"), mixed numbers ("1 1/2"), and unicode vulgar
+/// fractions ("½", "1½", "1 ½"). Returns null when the input is empty/garbage.
+num? parseQty(String raw) {
+  var s = raw.trim();
+  if (s.isEmpty) return null;
+  // Expand unicode fraction glyphs to "<num>/<den>", inserting a space when
+  // glued to a leading integer (e.g. "1½" → "1 1/2").
+  for (final entry in _glyphToRatio.entries) {
+    if (s.contains(entry.key)) {
+      s = s.replaceAll(RegExp('(?<=\\d)\\s*${entry.key}'), ' ${entry.value}').replaceAll(entry.key, entry.value);
+    }
+  }
+  s = s.trim().replaceAll(RegExp(r'\s+'), ' ');
+  // Comma as a decimal separator only (single comma between digits).
+  if (RegExp(r'^\d+,\d+$').hasMatch(s)) s = s.replaceAll(',', '.');
+  // Mixed number: "1 1/2"
+  final mixed = RegExp(r'^(\d+)\s+(\d+)\s*/\s*(\d+)$').firstMatch(s);
+  if (mixed != null) {
+    final den = int.parse(mixed.group(3)!);
+    if (den == 0) return null;
+    return int.parse(mixed.group(1)!) + int.parse(mixed.group(2)!) / den;
+  }
+  // Pure fraction: "1/2"
+  final frac = RegExp(r'^(\d+)\s*/\s*(\d+)$').firstMatch(s);
+  if (frac != null) {
+    final den = int.parse(frac.group(2)!);
+    if (den == 0) return null;
+    return int.parse(frac.group(1)!) / den;
+  }
+  return num.tryParse(s);
+}
 
 String fmtQty(num? n) {
   if (n == null || n.isNaN) return '';
@@ -65,6 +105,11 @@ String unitLabel(String? unit, String lang, [num? qty]) {
   return l;
 }
 
+// NOTE: cup = 236.588 ml here (US legal cup) is the display/conversion basis.
+// The nutrition engine intentionally uses a different cup = 250 ml (metric)
+// in `cnf.dart` (_mlPer), matching the CNF densities. The two are deliberately
+// NOT unified — changing either would shift existing recipes' shown amounts or
+// computed calories. The "keep cups" pref sidesteps this (cups never convert).
 const Map<String, double> _toBase = {
   'g': 1, 'kg': 1000, 'ml': 1, 'l': 1000, 'tsp': 4.92892, 'tbsp': 14.7868,
   'cup': 236.588, 'floz': 29.5735, 'oz': 28.3495, 'lb': 453.592,
@@ -88,6 +133,7 @@ class QtyUnit {
 QtyUnit convertIngredientUnit(num? qty, String? unit, UnitPrefs prefs) {
   if (qty == null || unit == null) return QtyUnit(qty, unit);
   if (_smallPass.contains(unit)) return QtyUnit(qty, unit);
+  if (unit == 'cup' && prefs.keepCups) return QtyUnit(qty, unit); // keep authored cups
   final dim = dimensionOf(unit);
   if (dim == null) return QtyUnit(qty, unit);
   final base = qty * _toBase[unit]!;

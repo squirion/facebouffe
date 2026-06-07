@@ -2,8 +2,10 @@ import 'package:flutter/material.dart' hide Step;
 import 'package:provider/provider.dart';
 
 import '../data/models.dart';
+import '../data/format.dart' show fmtQty, parseQty;
 import '../state/app_state.dart';
 import '../services/cnf.dart';
+import '../nav.dart';
 import '../theme.dart';
 import 'fb_icon.dart';
 
@@ -273,12 +275,14 @@ class _NutritionPanelState extends State<NutritionPanel> {
   Recipe get form => widget.form;
 
   void _recompute() {
-    form.nutrition = Cnf.instance.compute(form.ingredients, form.servings, computedAt: DateTime.now().toIso8601String());
+    final app = context.read<AppState>();
+    form.nutrition = Cnf.instance.compute(form.ingredients, form.servings, computedAt: DateTime.now().toIso8601String(), resolveRecipe: app.getRecipe);
   }
 
   void _generate() {
     final app = context.read<AppState>();
     for (final ing in form.ingredients) {
+      if (ing.recipeRef != null) continue; // embedded sub-recipe — nutrition comes from B
       if (ing.name.trim().isEmpty) continue;
       final old = ing.nutritionRef;
       // Preserve manual corrections (picker pick → confidence 1, or a learned
@@ -379,6 +383,8 @@ class _NutritionPanelState extends State<NutritionPanel> {
           _modeToggle(fb, app),
           const SizedBox(height: 10),
           NutritionFactsLabel(nutrition: form.nutrition!, lang: app.lang, mode: mode),
+          const SizedBox(height: 12),
+          _weightRow(fb, app),
           const SizedBox(height: 9),
           Text(app.t('nutrition_disclaimer'), style: fb.ui(size: 11.5, color: fb.inkFaint, height: 1.45)),
           const SizedBox(height: 12),
@@ -401,6 +407,7 @@ class _NutritionPanelState extends State<NutritionPanel> {
 
   Widget _matchRow(int i, FbTheme fb, AppState app) {
     final ing = form.ingredients[i];
+    if (ing.recipeRef != null) return _subRecipeRow(ing, fb, app);
     final ref = ing.nutritionRef;
     final matched = ref != null && ref.matched;
     final on = ref != null && ref.includeInCalc;
@@ -450,6 +457,87 @@ class _NutritionPanelState extends State<NutritionPanel> {
     );
   }
 
+  // An embedded sub-recipe ingredient: link chip + amount, plus a prompt to
+  // generate B's nutrition when it (and its snapshot) can't propagate yet.
+  Widget _subRecipeRow(Ingredient ing, FbTheme fb, AppState app) {
+    final rr = ing.recipeRef!;
+    final b = app.getRecipe(rr.recipeId);
+    final liveW = b?.finishedWeightG ?? b?.nutrition?.autoTotalWeightG;
+    final usable = (b?.nutrition != null && liveW != null && liveW > 0 && b!.nutrition!.total.isNotEmpty) || (rr.totalWeightG != null && rr.totalWeightG! > 0 && rr.total.isNotEmpty);
+    final amount = '${fmtQty(ing.quantity)} ${ing.unit ?? ''}'.trim();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(color: fb.cardSoft, borderRadius: BorderRadius.circular(14), border: Border.all(color: fb.line)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(width: 24, height: 24, decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(7)), child: Center(child: FbIcon('link', size: 14, color: fb.accent))),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(rr.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 14.5, weight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text('${app.t('embed_subrecipe')}${amount.isNotEmpty ? ' · $amount' : ''}', style: fb.ui(size: 12.5, color: fb.inkSoft)),
+              ]),
+            ),
+          ]),
+          if (!usable) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => Nav.editRecipe(context, rr.recipeId),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+                decoration: BoxDecoration(color: const Color(0xFFC58A2E).withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFC58A2E).withValues(alpha: 0.33))),
+                child: Row(children: [
+                  const FbIcon('note', size: 14, color: Color(0xFF9A6C1E)),
+                  const SizedBox(width: 7),
+                  Expanded(child: Text(app.t('embed_needs_nutrition').replaceAll('{title}', rr.title), style: fb.ui(size: 12, weight: FontWeight.w600, color: const Color(0xFF8A6018), height: 1.4))),
+                  const SizedBox(width: 6),
+                  const FbIcon('chevR', size: 14, color: Color(0xFF9A6C1E)),
+                ]),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Per-portion weight readout + editable finished-total-weight override.
+  Widget _weightRow(FbTheme fb, AppState app) {
+    final n = form.nutrition;
+    if (n == null) return const SizedBox.shrink();
+    final basis = n.servingsBasis < 1 ? 1 : n.servingsBasis;
+    final totalW = form.finishedWeightG ?? n.autoTotalWeightG;
+    final perPortion = totalW > 0 ? (totalW / basis).round() : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (perPortion != null)
+          Text('${app.t('portion_weight')}: ≈ $perPortion g${n.weightComplete ? '' : ' *'}', style: fb.ui(size: 12.5, color: fb.inkSoft)),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: Text(app.t('finished_weight'), style: fb.ui(size: 12.5, color: fb.inkSoft))),
+          SizedBox(
+            width: 88,
+            child: _WeightInput(
+              value: form.finishedWeightG,
+              hint: n.autoTotalWeightG > 0 ? '${n.autoTotalWeightG.round()}' : '—',
+              onChange: (v) => setState(() {
+                form.finishedWeightG = v;
+                widget.onChanged();
+              }),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text('g', style: fb.ui(size: 12.5, color: fb.inkFaint)),
+        ]),
+      ],
+    );
+  }
+
   Widget _modeToggle(FbTheme fb, AppState app) {
     return Container(
       padding: const EdgeInsets.all(3),
@@ -468,6 +556,50 @@ class _NutritionPanelState extends State<NutritionPanel> {
             ),
           ),
       ]),
+    );
+  }
+}
+
+/// Small numeric field for the finished-weight override (text → parseQty).
+class _WeightInput extends StatefulWidget {
+  final num? value;
+  final String hint;
+  final ValueChanged<num?> onChange;
+  const _WeightInput({required this.value, required this.hint, required this.onChange});
+  @override
+  State<_WeightInput> createState() => _WeightInputState();
+}
+
+class _WeightInputState extends State<_WeightInput> {
+  late final TextEditingController _c;
+  @override
+  void initState() {
+    super.initState();
+    _c = TextEditingController(text: widget.value != null ? fmtQty(widget.value) : '');
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fb = context.fb;
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(10), border: Border.all(color: fb.line)),
+      alignment: Alignment.center,
+      child: TextField(
+        controller: _c,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.center,
+        style: fb.ui(size: 14),
+        decoration: InputDecoration.collapsed(hintText: widget.hint, hintStyle: fb.ui(size: 14, color: fb.inkFaint)),
+        onChanged: (v) => widget.onChange(v.trim().isEmpty ? null : parseQty(v)),
+      ),
     );
   }
 }
@@ -533,7 +665,14 @@ class _NutritionCardState extends State<NutritionCard> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text('${app.t('nutrition_per_serving')} · ${n.servingsBasis} ${n.servingsBasis == 1 ? app.t('serving_one') : app.t('servings')}', style: fb.ui(size: 11.5, color: fb.inkFaint)),
+                Builder(builder: (_) {
+                  final basis = n.servingsBasis < 1 ? 1 : n.servingsBasis;
+                  final totalW = widget.recipe.finishedWeightG ?? n.autoTotalWeightG;
+                  final perPortion = totalW > 0 ? (totalW / basis).round() : null;
+                  final label = '${app.t('nutrition_per_serving')} · ${n.servingsBasis} ${n.servingsBasis == 1 ? app.t('serving_one') : app.t('servings')}'
+                      '${perPortion != null ? ' · ≈ $perPortion g' : ''}';
+                  return Text(label, style: fb.ui(size: 11.5, color: fb.inkFaint));
+                }),
                 if (n.hasUnmatched)
                   Container(
                     margin: const EdgeInsets.only(top: 12),
