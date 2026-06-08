@@ -165,7 +165,12 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
           ),
           if (it.subRecipeId != null && app.getRecipe(it.subRecipeId) != null)
             GestureDetector(
-              onTap: () => app.shoppingExpandSubRecipe(it.id),
+              onTap: () {
+                final ok = app.shoppingExpandSubRecipe(it.id);
+                if (!ok) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(app.t('expand_failed'))));
+                }
+              },
               behavior: HitTestBehavior.opaque,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),

@@ -67,16 +67,21 @@ class NutritionFactsLabel extends StatelessWidget {
   final Nutrition nutrition;
   final String lang;
   final String mode; // perServing | total
-  const NutritionFactsLabel({super.key, required this.nutrition, required this.lang, this.mode = 'perServing'});
+  final num? totalWeightG; // finished/auto total weight, for the serving line
+  const NutritionFactsLabel({super.key, required this.nutrition, required this.lang, this.mode = 'perServing', this.totalWeightG});
 
   @override
   Widget build(BuildContext context) {
     final d = mode == 'total' ? nutrition.total : nutrition.perServing;
     num v(String k) => d[k] ?? 0;
-    final basis = nutrition.servingsBasis;
+    final basis = nutrition.servingsBasis < 1 ? 1 : nutrition.servingsBasis;
+    final w = totalWeightG;
+    final hasW = w != null && w > 0;
+    final totalW = hasW ? ' · ${w.round()} g' : '';
+    final perW = hasW ? ' (${(w / basis).round()} g)' : '';
     final perLine = mode == 'total'
-        ? (lang == 'fr' ? 'Recette entière ($basis portions)' : 'Whole recipe ($basis servings)')
-        : (lang == 'fr' ? 'Par 1 portion' : 'Per 1 serving');
+        ? (lang == 'fr' ? 'Recette entière ($basis portions)$totalW' : 'Whole recipe ($basis servings)$totalW')
+        : (lang == 'fr' ? 'Par 1 portion$perW' : 'Per 1 serving$perW');
     final satTransDv = dvPct('satTrans', v('satFat') + v('transFat'));
     const base = TextStyle(fontFamily: _nfFont, fontSize: 12.5, color: Colors.black, height: 1.25);
 
@@ -382,7 +387,7 @@ class _NutritionPanelState extends State<NutritionPanel> {
           const SizedBox(height: 16),
           _modeToggle(fb, app),
           const SizedBox(height: 10),
-          NutritionFactsLabel(nutrition: form.nutrition!, lang: app.lang, mode: mode),
+          NutritionFactsLabel(nutrition: form.nutrition!, lang: app.lang, mode: mode, totalWeightG: form.finishedWeightG ?? form.nutrition!.autoTotalWeightG),
           const SizedBox(height: 12),
           _weightRow(fb, app),
           const SizedBox(height: 9),
@@ -505,37 +510,27 @@ class _NutritionPanelState extends State<NutritionPanel> {
     );
   }
 
-  // Per-portion weight readout + editable finished-total-weight override.
+  // Editable finished-total-weight override (the per-portion weight itself shows
+  // on the Nutrition Facts label above).
   Widget _weightRow(FbTheme fb, AppState app) {
     final n = form.nutrition;
     if (n == null) return const SizedBox.shrink();
-    final basis = n.servingsBasis < 1 ? 1 : n.servingsBasis;
-    final totalW = form.finishedWeightG ?? n.autoTotalWeightG;
-    final perPortion = totalW > 0 ? (totalW / basis).round() : null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (perPortion != null)
-          Text('${app.t('portion_weight')}: ≈ $perPortion g${n.weightComplete ? '' : ' *'}', style: fb.ui(size: 12.5, color: fb.inkSoft)),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: Text(app.t('finished_weight'), style: fb.ui(size: 12.5, color: fb.inkSoft))),
-          SizedBox(
-            width: 88,
-            child: _WeightInput(
-              value: form.finishedWeightG,
-              hint: n.autoTotalWeightG > 0 ? '${n.autoTotalWeightG.round()}' : '—',
-              onChange: (v) => setState(() {
-                form.finishedWeightG = v;
-                widget.onChanged();
-              }),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text('g', style: fb.ui(size: 12.5, color: fb.inkFaint)),
-        ]),
-      ],
-    );
+    return Row(children: [
+      Expanded(child: Text(app.t('finished_weight'), style: fb.ui(size: 12.5, color: fb.inkSoft))),
+      SizedBox(
+        width: 88,
+        child: _WeightInput(
+          value: form.finishedWeightG,
+          hint: n.autoTotalWeightG > 0 ? '${n.autoTotalWeightG.round()}' : '—',
+          onChange: (v) => setState(() {
+            form.finishedWeightG = v;
+            widget.onChanged();
+          }),
+        ),
+      ),
+      const SizedBox(width: 6),
+      Text('g', style: fb.ui(size: 12.5, color: fb.inkFaint)),
+    ]);
   }
 
   Widget _modeToggle(FbTheme fb, AppState app) {
@@ -708,7 +703,7 @@ class _NutritionCardState extends State<NutritionCard> {
                     ]),
                   ),
                   const SizedBox(height: 10),
-                  NutritionFactsLabel(nutrition: n, lang: app.lang, mode: mode),
+                  NutritionFactsLabel(nutrition: n, lang: app.lang, mode: mode, totalWeightG: widget.recipe.finishedWeightG ?? n.autoTotalWeightG),
                   const SizedBox(height: 9),
                   Text(app.t('nutrition_disclaimer'), style: fb.ui(size: 11.5, color: fb.inkFaint, height: 1.45)),
                 ],

@@ -15,6 +15,9 @@ import '../widgets/nutrition.dart';
 const _units = [null, 'g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'oz', 'lb', 'pinch'];
 // Units offered for an embedded sub-recipe (weight + volume only — no count/pinch).
 const _embedUnits = ['g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'oz', 'lb'];
+// Slate-blue (from the app palette) distinguishes embedded-recipe cards/chips
+// from the terracotta accent used by section headers.
+const _embedColor = Color(0xFF4A7BA6);
 const _sections = [('infos', 'sec_infos'), ('ing', 'ingredients'), ('steps', 'steps'), ('desc', 'f_desc')];
 
 class EditScreen extends StatefulWidget {
@@ -415,32 +418,42 @@ class _EditScreenState extends State<EditScreen> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: fb.accentSoft.withValues(alpha: fb.dark ? 0.18 : 0.5), borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.accent.withValues(alpha: 0.4))),
-        child: Row(
+        decoration: BoxDecoration(color: _embedColor.withValues(alpha: fb.dark ? 0.16 : 0.09), borderRadius: BorderRadius.circular(16), border: Border.all(color: _embedColor.withValues(alpha: 0.4))),
+        child: Column(
           children: [
-            _dragHandle(displayIndex),
-            const SizedBox(width: 4),
-            SizedBox(width: 54, child: _input(fb, fmtQty(ing.quantity), app.t('f_qty'), (v) => ing.quantity = v.trim().isEmpty ? null : (parseQty(v) ?? ing.quantity), number: true, center: true, fractions: true)),
-            const SizedBox(width: 6),
-            SizedBox(width: 82, child: _UnitDropdown(value: ing.unit, lang: app.lang, units: _embedUnits, onChange: (u) => setState(() => ing.unit = u))),
-            const SizedBox(width: 6),
-            Expanded(
-              child: GestureDetector(
-                onTap: () => Nav.openRecipe(context, rr.recipeId),
-                child: Container(
-                  height: 44,
-                  padding: const EdgeInsets.symmetric(horizontal: 11),
-                  decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(13), border: Border.all(color: fb.accent.withValues(alpha: 0.45))),
-                  child: Row(children: [
-                    FbIcon('link', size: 14, color: fb.accent),
-                    const SizedBox(width: 7),
-                    Expanded(child: Text(rr.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 14.5, weight: FontWeight.w600, color: fb.accent))),
-                  ]),
+            Row(
+              children: [
+                _dragHandle(displayIndex),
+                const SizedBox(width: 4),
+                SizedBox(width: 54, child: _input(fb, fmtQty(ing.quantity), app.t('f_qty'), (v) => ing.quantity = v.trim().isEmpty ? null : (parseQty(v) ?? ing.quantity), number: true, center: true, fractions: true)),
+                const SizedBox(width: 6),
+                SizedBox(width: 82, child: _UnitDropdown(value: ing.unit, lang: app.lang, units: _embedUnits, onChange: (u) => setState(() => ing.unit = u))),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Nav.openRecipe(context, rr.recipeId),
+                    child: Container(
+                      height: 44,
+                      padding: const EdgeInsets.symmetric(horizontal: 11),
+                      decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(13), border: Border.all(color: _embedColor.withValues(alpha: 0.45))),
+                      child: Row(children: [
+                        const FbIcon('link', size: 14, color: _embedColor),
+                        const SizedBox(width: 7),
+                        Expanded(child: Text(rr.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 14.5, weight: FontWeight.w600, color: _embedColor))),
+                      ]),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(width: 6),
-            _miniBtn(fb, 'trash', false, () => setState(() { _ingRows.remove(row); _syncIng(); })),
+            const SizedBox(height: 7),
+            Row(
+              children: [
+                Expanded(child: _input(fb, ing.note ?? '', '${app.t('f_note')} · ${app.t('f_note_ph')}', (v) => ing.note = v, italic: true)),
+                const SizedBox(width: 6),
+                _miniBtn(fb, 'trash', false, () => setState(() { _ingRows.remove(row); _syncIng(); })),
+              ],
+            ),
           ],
         ),
       ),

@@ -739,7 +739,7 @@ class _IngredientRow extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: rr != null
-                ? _subChip(context, fb, rr)
+                ? _subChip(context, fb, rr, d.note)
                 : Text.rich(TextSpan(children: [
                     TextSpan(text: d.name, style: fb.ui(size: 15.5, color: fb.ink)),
                     if (d.note != null) TextSpan(text: ' · ${d.note}', style: fb.ui(size: 13.5, color: fb.inkFaint, fontStyle: FontStyle.italic)),
@@ -752,20 +752,31 @@ class _IngredientRow extends StatelessWidget {
 
   // An embedded sub-recipe renders as a tappable link chip opening B (or a plain
   // chip if B isn't available locally, e.g. a shared recipe whose source isn't).
-  Widget _subChip(BuildContext context, FbTheme fb, RecipeRef rr) {
+  Widget _subChip(BuildContext context, FbTheme fb, RecipeRef rr, String? note) {
+    const blue = Color(0xFF4A7BA6);
     final exists = context.read<AppState>().getRecipe(rr.recipeId) != null;
     final chip = Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(color: fb.accentSoft, borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: blue.withValues(alpha: fb.dark ? 0.22 : 0.12), borderRadius: BorderRadius.circular(8)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        FbIcon('link', size: 13, color: fb.accent),
+        const FbIcon('link', size: 13, color: blue),
         const SizedBox(width: 5),
-        Flexible(child: Text(rr.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 14.5, weight: FontWeight.w600, color: fb.accent))),
+        Flexible(child: Text(rr.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 14.5, weight: FontWeight.w600, color: blue))),
       ]),
     );
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: exists ? GestureDetector(onTap: () => Nav.openRecipe(context, rr.recipeId), child: chip) : chip,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: exists ? GestureDetector(onTap: () => Nav.openRecipe(context, rr.recipeId), child: chip) : chip,
+        ),
+        if (note != null && note.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(note, style: fb.ui(size: 13.5, color: fb.inkFaint, fontStyle: FontStyle.italic)),
+          ),
+      ],
     );
   }
 }

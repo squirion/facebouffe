@@ -960,19 +960,25 @@ class AppState extends ChangeNotifier {
 
   /// Replace an embedded sub-recipe shopping line with its sub-recipe's actual
   /// ingredients, scaled to the amount used (fraction = gramsUsed / B's weight).
-  /// No-op if B is unresolvable or has no usable weight.
-  void shoppingExpandSubRecipe(String itemId) {
+  /// Returns false (no change) if B is unresolvable or its weight can't be
+  /// estimated — the caller surfaces feedback.
+  bool shoppingExpandSubRecipe(String itemId) {
     final idx = shopping.indexWhere((x) => x.id == itemId);
-    if (idx < 0) return;
+    if (idx < 0) return false;
     final item = shopping[idx];
     final subId = item.subRecipeId;
-    if (subId == null) return;
+    if (subId == null) return false;
     final b = getRecipe(subId);
-    if (b == null) return;
+    if (b == null) return false;
     final subW = b.finishedWeightG ?? b.nutrition?.autoTotalWeightG ?? Cnf.instance.totalWeight(b.ingredients, resolve: getRecipe).grams;
-    if (subW <= 0) return;
-    final fraction = (item.subAmountG ?? 0) / subW;
-    if (fraction <= 0) return;
+    if (subW <= 0) return false;
+    // Prefer the grams captured at add-time; otherwise recompute from this line's
+    // amount (handles sub-recipes whose weight wasn't known when it was added).
+    final subV = Cnf.instance.totalVolume(b.ingredients).ml;
+    final grams = item.subAmountG ?? (item.quantity != null ? Cnf.instance.embedGramsFor(item.quantity, item.unit, subW, subV) : null);
+    if (grams == null || grams <= 0) return false;
+    final fraction = grams / subW;
+    if (fraction <= 0) return false;
     final scaled = <ShoppingItem>[];
     for (final ing in b.ingredients) {
       if (ing.name.trim().isEmpty) continue;
@@ -998,6 +1004,7 @@ class AppState extends ChangeNotifier {
     }
     shopping.removeAt(idx);
     shoppingAddMany(scaled);
+    return true;
   }
 
   int get shoppingUncheckedCount => shopping.where((x) => !x.checked).length;
