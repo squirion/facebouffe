@@ -46,6 +46,7 @@ extension CloudSync on AppState {
   Future<void> runCloudSync() async {
     if (!_canSync || _syncBusy) return;
     _syncBusy = true;
+    _pushFailedDuringSync = false;
     _setSyncStatus(SyncStatus.syncing);
     try {
       await _handleAccountSwitch(); // reset local store if it belongs to another account
@@ -58,12 +59,29 @@ extension CloudSync on AppState {
       await _reconcileLinks();
       _prefs?.setString('fb_local_owner', account!.id);
       await refreshFriends();
-      _setSyncStatus(SyncStatus.synced);
+      // Don't report "synced" if a push that ran during this sync failed.
+      _setSyncStatus(_pushFailedDuringSync ? SyncStatus.error : SyncStatus.synced);
     } catch (e) {
       debugPrint('[sync] runCloudSync failed: $e');
       _setSyncStatus(online ? SyncStatus.error : SyncStatus.offline);
     } finally {
       _syncBusy = false;
+      // Run any pushes that were deferred while the sync held the lock.
+      final pending = List.of(_pendingPushes);
+      _pendingPushes.clear();
+      for (final op in pending) {
+        unawaited(_safe(op));
+      }
+    }
+  }
+
+  // Run a fire-and-forget cloud push now, or defer it until the in-flight sync
+  // finishes (avoids interleaving with reconcile's await-heavy loops).
+  void _enqueuePush(Future<void> Function() op) {
+    if (_syncBusy) {
+      _pendingPushes.add(op);
+    } else {
+      unawaited(_safe(op));
     }
   }
 
@@ -565,15 +583,15 @@ extension CloudSync on AppState {
     if (!_canSync || !_migrated || _localOnlyIds.contains(r.id)) return;
     if (r.isLinked) {
       // a stolen recipe isn't mine to push — but my overlay (rating/notes) is
-      unawaited(_safe(() => sync.upsertOverlay(_overlayOf(r))));
+      _enqueuePush(() => sync.upsertOverlay(_overlayOf(r)));
       return;
     }
     if (!_isUuid(r.id)) return; // legacy non-uuid id — the reconcile sweep re-mints + pushes it
-    unawaited(_safe(() async {
+    _enqueuePush(() async {
       await _pushRecipeFull(r);
       _syncedIds.add(r.id);
       _persistSyncState();
-    }));
+    });
   }
 
   /// Upload the recipe's photos (content-addressed), then upsert its content
@@ -600,19 +618,19 @@ extension CloudSync on AppState {
     _localOnlyIds.remove(id);
     if (!_canSync || !_migrated) return;
     _persistSyncState();
-    unawaited(_safe(() => sync.deleteRecipe(id)));
+    _enqueuePush(() => sync.deleteRecipe(id));
   }
 
   void cloudPushLibrary() {
     if (!_canSync || !_migrated) return;
-    unawaited(_safe(() => sync.upsertLibrary(_libraryData(), DateTime.now())));
+    _enqueuePush(() => sync.upsertLibrary(_libraryData(), DateTime.now()));
   }
 
   /// Drop a link subscription (deleting a stolen recipe just unlinks it).
   void cloudUnlink(String id) {
     updatableLinks.remove(id);
     if (!_canSync || !_migrated) return;
-    unawaited(_safe(() => sync.unlinkRecipe(id)));
+    _enqueuePush(() => sync.unlinkRecipe(id));
   }
 
   // ── account ownership of the local store (shared-device safety) ──
@@ -1111,6 +1129,7 @@ extension CloudSync on AppState {
       await op();
     } catch (e) {
       debugPrint('[sync] push failed: $e');
+      if (_syncBusy) _pushFailedDuringSync = true; // so the sync doesn't end on "synced"
       _setSyncStatus(online ? SyncStatus.error : SyncStatus.offline);
     }
   }

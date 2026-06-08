@@ -36,7 +36,12 @@ class Cnf {
 
   bool get loaded => foods.isNotEmpty;
 
-  Future<void> ensureLoaded() => _loadFuture ??= _load();
+  // Reset the memoized future on failure so a transient load error doesn't wedge
+  // nutrition for the whole session.
+  Future<void> ensureLoaded() => _loadFuture ??= _load().catchError((Object e) {
+        _loadFuture = null;
+        throw e;
+      });
 
   Future<void> _load() async {
     final raw = await rootBundle.loadString('assets/cnf.json');

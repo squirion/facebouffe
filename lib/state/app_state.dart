@@ -102,6 +102,10 @@ class AppState extends ChangeNotifier {
   final Set<String> _localOnlyIds = {}; // recipes the user chose NOT to sync (later-device "skip")
   List<Recipe> _pendingLocalOnly = []; // recipes offered in the MigrationSheet
   bool _syncBusy = false;
+  // Fire-and-forget pushes requested while a sync is running are queued here and
+  // drained after it finishes, so they don't interleave with reconcile.
+  final List<Future<void> Function()> _pendingPushes = [];
+  bool _pushFailedDuringSync = false; // a queued/in-flight push failed during the run
   final Map<String, String> _imgHashCache = {}; // local photo path -> sha-256 content hash
   final Map<String, List<String>> _recipeImgHashes = {}; // recipe id -> last-synced image hash set
   List<FriendEdge> friends = []; // friendship edges (accepted + pending), resolved usernames

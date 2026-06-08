@@ -275,6 +275,9 @@ class _NutritionPanelState extends State<NutritionPanel> {
     super.initState();
     Cnf.instance.ensureLoaded().then((_) {
       if (mounted) setState(() => _loading = false);
+    }).catchError((_) {
+      // load failed — stop the spinner so the panel falls back to its normal UI
+      if (mounted) setState(() => _loading = false);
     });
   }
 

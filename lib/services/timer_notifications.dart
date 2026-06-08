@@ -32,8 +32,12 @@ class TimerNotifications {
 
   String _alarmChannelId(String? uri) => '$_alarmPrefix${(uri ?? 'default').hashCode}';
 
-  /// Idempotent and concurrency-safe: the body runs at most once.
-  Future<void> init() => _initFuture ??= _doInit();
+  /// Idempotent and concurrency-safe: the body runs at most once. On failure the
+  /// memoized future is cleared so a later call can retry.
+  Future<void> init() => _initFuture ??= _doInit().catchError((Object e) {
+        _initFuture = null;
+        throw e;
+      });
 
   Future<void> _doInit() async {
     if (kIsWeb) return;
