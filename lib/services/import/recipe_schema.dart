@@ -1,10 +1,12 @@
 import 'dart:convert';
 
 import '../../data/models.dart';
+import '../../data/format.dart' show kUnits, kUnitEnumJson;
 import '../recipe_import.dart' show ImportResult, ImportException;
 
 /// The unit enum the editor accepts; the model must emit one of these or null.
-const List<String> kImportUnits = ['g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'oz', 'lb', 'pinch'];
+/// Derived from the canonical [kUnits] so import validation and the editor agree.
+const List<String> kImportUnits = kUnits;
 
 /// Strict instruction handed to any AI tier (BYOK or on-device). Keeps the
 /// recipe in its original language, constrains units to the editor's enum, and
@@ -18,7 +20,7 @@ NEVER put a double-quote (") inside a string value.
 
 Rules:
 - Keep all text in the recipe's ORIGINAL language (usually French). Do not translate.
-- "unit" must be EXACTLY one of: "g","kg","ml","l","tsp","tbsp","cup","oz","lb","pinch" — or null for countable items (e.g. eggs) or when unknown. The unit is the measure only, NEVER an ingredient name.
+- "unit" must be EXACTLY one of: $kUnitEnumJson — or null for countable items (e.g. eggs) or when unknown. The unit is the measure only, NEVER an ingredient name.
 - "quantity" is a number (decimals allowed, e.g. 0.5) or null.
 - "servings","prepTimeMinutes","cookTimeMinutes" are numbers (0 if unknown).
 - Each cooking step is one sentence in "steps"; write temperatures inline like "180 °C".
@@ -38,7 +40,7 @@ NEVER put a double-quote (") inside a string value.
 Rules:
 - Write ALL text in the language requested in the constraints (default French). Do not mix languages.
 - Honor the requested meal, the ingredients to include, and the cuisine style(s); you may add complementary ingredients. Respect any extra notes.
-- "unit" must be EXACTLY one of: "g","kg","ml","l","tsp","tbsp","cup","oz","lb","pinch" — or null for countable items (e.g. eggs) or when unknown.
+- "unit" must be EXACTLY one of: $kUnitEnumJson — or null for countable items (e.g. eggs) or when unknown.
 - "quantity" is a number (decimals allowed, e.g. 0.5) or null. "servings","prepTimeMinutes","cookTimeMinutes" are numbers.
 - Give the dish an inventive "title" and a short, enticing "description".
 - Each cooking step is one sentence in "steps"; write temperatures inline like "180 °C".
@@ -57,7 +59,7 @@ NEVER put a double-quote (") inside a string value.
 
 Rules:
 - Write ALL text in the language requested in the cues (default French). Do not mix languages.
-- "unit" must be EXACTLY one of: "g","kg","ml","l","tsp","tbsp","cup","oz","lb","pinch" — or null for countable items or when unknown.
+- "unit" must be EXACTLY one of: $kUnitEnumJson — or null for countable items or when unknown.
 - "quantity" is a number (decimals allowed) or null. "servings","prepTimeMinutes","cookTimeMinutes" are numbers.
 - Each cooking step is one sentence; write temperatures inline like "180 °C".
 - "tags": short lowercase keywords; may be empty [].
@@ -73,7 +75,7 @@ Extract ONLY the ingredients from the text below into JSON.
 Output ONLY one JSON object: {"ingredients":[{"quantity":number|null,"unit":string|null,"name":string,"note":string}]}
 Rules:
 - One entry per ingredient. Keep the ORIGINAL language. No markdown, nothing outside the JSON.
-- "unit" must be EXACTLY one of "g","kg","ml","l","tsp","tbsp","cup","oz","lb","pinch" — or null for countable items / when unknown.
+- "unit" must be EXACTLY one of $kUnitEnumJson — or null for countable items / when unknown.
 - "quantity" is a number or null.
 - "name" is the ingredient only; "note" is a SHORT qualifier (e.g. "fondu", "haché", "à température pièce") or "". NEVER put cooking steps, sentences, or instructions in "name" or "note".''';
 

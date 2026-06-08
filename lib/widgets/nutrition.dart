@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import '../services/cnf.dart';
 import '../nav.dart';
 import '../theme.dart';
+import 'common.dart' show WarningBanner;
 import 'fb_icon.dart';
 
 // The regulated Canadian label uses a neutral sans (not the app's display face)
@@ -374,20 +375,11 @@ class _NutritionPanelState extends State<NutritionPanel> {
           for (int i = 0; i < form.ingredients.length; i++)
             if (form.ingredients[i].name.trim().isNotEmpty) _matchRow(i, fb, app),
           if (form.nutrition!.hasUnmatched)
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-              decoration: BoxDecoration(color: const Color(0xFFC58A2E).withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFC58A2E).withValues(alpha: 0.33))),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const FbIcon('note', size: 16, color: Color(0xFF9A6C1E)),
-                const SizedBox(width: 8),
-                Expanded(child: Text(app.t('nutrition_unmatched'), style: fb.ui(size: 12.5, weight: FontWeight.w600, color: const Color(0xFF8A6018), height: 1.45))),
-              ]),
-            ),
+            Padding(padding: const EdgeInsets.only(top: 12), child: WarningBanner(text: app.t('nutrition_unmatched'))),
           const SizedBox(height: 16),
           _modeToggle(fb, app),
           const SizedBox(height: 10),
-          NutritionFactsLabel(nutrition: form.nutrition!, lang: app.lang, mode: mode, totalWeightG: form.finishedWeightG ?? form.nutrition!.autoTotalWeightG),
+          NutritionFactsLabel(nutrition: form.nutrition!, lang: app.lang, mode: mode, totalWeightG: form.effectiveTotalWeightG),
           const SizedBox(height: 12),
           _weightRow(fb, app),
           const SizedBox(height: 9),
@@ -438,7 +430,7 @@ class _NutritionPanelState extends State<NutritionPanel> {
                     Flexible(child: Text(matched ? '→ ${Cnf.instance.cnfName(ref.foodCode, app.lang)}' : app.t('match_unmatched'), maxLines: 1, overflow: TextOverflow.ellipsis, style: fb.ui(size: 12.5, color: matched ? fb.inkSoft : fb.inkFaint, fontStyle: matched ? FontStyle.normal : FontStyle.italic))),
                     if (ref != null && ref.fromAlias) ...[const SizedBox(width: 6), FbIcon('check', size: 12, color: fb.accent)],
                     if (ref != null && ref.matched && !ref.includeInCalc) ...[const SizedBox(width: 6), _Badge(color: fb.inkFaint, bg: fb.line, label: app.t('match_excluded'), icon: 'minus')],
-                    if (ref != null && ref.matched && ref.includeInCalc && ref.confidence < 0.6) ...[const SizedBox(width: 6), const _Badge(color: Color(0xFFC58A2E), bg: Color(0x1FC58A2E), label: 'À vérifier', icon: 'note')],
+                    if (ref != null && ref.matched && ref.includeInCalc && ref.confidence < 0.6) ...[const SizedBox(width: 6), _Badge(color: const Color(0xFFC58A2E), bg: const Color(0x1FC58A2E), label: app.t('match_check'), icon: 'note')],
                   ]),
                 ],
               ),
@@ -467,7 +459,7 @@ class _NutritionPanelState extends State<NutritionPanel> {
   Widget _subRecipeRow(Ingredient ing, FbTheme fb, AppState app) {
     final rr = ing.recipeRef!;
     final b = app.getRecipe(rr.recipeId);
-    final liveW = b?.finishedWeightG ?? b?.nutrition?.autoTotalWeightG;
+    final liveW = b?.effectiveTotalWeightG;
     final usable = (b?.nutrition != null && liveW != null && liveW > 0 && b!.nutrition!.total.isNotEmpty) || (rr.totalWeightG != null && rr.totalWeightG! > 0 && rr.total.isNotEmpty);
     final amount = '${fmtQty(ing.quantity)} ${ing.unit ?? ''}'.trim();
     return Container(
@@ -490,19 +482,9 @@ class _NutritionPanelState extends State<NutritionPanel> {
           ]),
           if (!usable) ...[
             const SizedBox(height: 8),
-            GestureDetector(
+            WarningBanner(
+              text: app.t('embed_needs_nutrition').replaceAll('{title}', rr.title),
               onTap: () => Nav.editRecipe(context, rr.recipeId),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-                decoration: BoxDecoration(color: const Color(0xFFC58A2E).withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFC58A2E).withValues(alpha: 0.33))),
-                child: Row(children: [
-                  const FbIcon('note', size: 14, color: Color(0xFF9A6C1E)),
-                  const SizedBox(width: 7),
-                  Expanded(child: Text(app.t('embed_needs_nutrition').replaceAll('{title}', rr.title), style: fb.ui(size: 12, weight: FontWeight.w600, color: const Color(0xFF8A6018), height: 1.4))),
-                  const SizedBox(width: 6),
-                  const FbIcon('chevR', size: 14, color: Color(0xFF9A6C1E)),
-                ]),
-              ),
             ),
           ],
         ],
@@ -662,23 +644,14 @@ class _NutritionCardState extends State<NutritionCard> {
                 const SizedBox(height: 8),
                 Builder(builder: (_) {
                   final basis = n.servingsBasis < 1 ? 1 : n.servingsBasis;
-                  final totalW = widget.recipe.finishedWeightG ?? n.autoTotalWeightG;
+                  final totalW = widget.recipe.effectiveTotalWeightG ?? 0;
                   final perPortion = totalW > 0 ? (totalW / basis).round() : null;
                   final label = '${app.t('nutrition_per_serving')} · ${n.servingsBasis} ${n.servingsBasis == 1 ? app.t('serving_one') : app.t('servings')}'
                       '${perPortion != null ? ' · ≈ $perPortion g' : ''}';
                   return Text(label, style: fb.ui(size: 11.5, color: fb.inkFaint));
                 }),
                 if (n.hasUnmatched)
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                    decoration: BoxDecoration(color: const Color(0xFFC58A2E).withValues(alpha: 0.08), borderRadius: BorderRadius.circular(11)),
-                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const FbIcon('note', size: 15, color: Color(0xFF9A6C1E)),
-                      const SizedBox(width: 7),
-                      Expanded(child: Text(app.t('nutrition_unmatched'), style: fb.ui(size: 12, weight: FontWeight.w600, color: const Color(0xFF8A6018), height: 1.4))),
-                    ]),
-                  ),
+                  Padding(padding: const EdgeInsets.only(top: 12), child: WarningBanner(text: app.t('nutrition_unmatched'))),
                 GestureDetector(
                   onTap: () => setState(() => open = !open),
                   child: Container(
@@ -703,7 +676,7 @@ class _NutritionCardState extends State<NutritionCard> {
                     ]),
                   ),
                   const SizedBox(height: 10),
-                  NutritionFactsLabel(nutrition: n, lang: app.lang, mode: mode, totalWeightG: widget.recipe.finishedWeightG ?? n.autoTotalWeightG),
+                  NutritionFactsLabel(nutrition: n, lang: app.lang, mode: mode, totalWeightG: widget.recipe.effectiveTotalWeightG),
                   const SizedBox(height: 9),
                   Text(app.t('nutrition_disclaimer'), style: fb.ui(size: 11.5, color: fb.inkFaint, height: 1.45)),
                 ],

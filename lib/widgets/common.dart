@@ -384,3 +384,28 @@ class _TempChip extends StatelessWidget {
     );
   }
 }
+
+/// Amber caution banner (mustard tint). Optionally tappable, with a trailing
+/// chevron when [onTap] is set. Centralizes the warning-card styling that was
+/// otherwise copy-pasted across the nutrition UI.
+class WarningBanner extends StatelessWidget {
+  final String text;
+  final VoidCallback? onTap;
+  const WarningBanner({super.key, required this.text, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final fb = context.fb;
+    final inner = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(color: fb.warnBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: fb.warnBorder)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        FbIcon('note', size: 15, color: fb.warnIcon),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text, style: fb.ui(size: 12.5, weight: FontWeight.w600, color: fb.warnInk, height: 1.45))),
+        if (onTap != null) ...[const SizedBox(width: 6), FbIcon('chevR', size: 14, color: fb.warnIcon)],
+      ]),
+    );
+    return onTap == null ? inner : GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: inner);
+  }
+}

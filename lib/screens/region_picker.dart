@@ -178,7 +178,7 @@ class _RegionPickerState extends State<RegionPicker> {
             right: -10,
             child: GestureDetector(
               onTap: () => setState(() => _boxes.removeAt(i)),
-              child: Container(width: 24, height: 24, decoration: const BoxDecoration(color: Color(0xFFC0563B), shape: BoxShape.circle), child: const Center(child: FbIcon('x', size: 13, color: Colors.white))),
+              child: Container(width: 24, height: 24, decoration: BoxDecoration(color: fb.danger, shape: BoxShape.circle), child: const Center(child: FbIcon('x', size: 13, color: Colors.white))),
             ),
           ),
         ]),

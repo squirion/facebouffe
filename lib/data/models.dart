@@ -278,7 +278,6 @@ class Recipe {
   // a read-only, locally-cached subscription to someone else's recipe (§4).
   String? linkedOwnerId;
   String? linkedOwnerName;
-  int linkedVersion; // owner's version we last pulled (compare for "update available")
   List<Ingredient> ingredients;
   List<Step> steps;
   Personal personal;
@@ -304,7 +303,6 @@ class Recipe {
     this.visibility = 'private',
     this.linkedOwnerId,
     this.linkedOwnerName,
-    this.linkedVersion = 0,
     List<Ingredient>? ingredients,
     List<Step>? steps,
     Personal? personal,
@@ -317,32 +315,50 @@ class Recipe {
         steps = steps ?? [],
         personal = personal ?? Personal();
 
-  factory Recipe.fromJson(Map<String, dynamic> j) => Recipe(
-        id: j['id'] as String,
-        title: j['title'] as String? ?? '',
-        createdBy: j['createdBy'] as String? ?? '',
-        dateAdded: j['dateAdded'] as String? ?? '',
-        dateModified: j['dateModified'] as String? ?? '',
-        source: j['source'] as String?,
-        heroImage: j['heroImage'] as String?,
-        gallery: (j['gallery'] as List?)?.map((e) => e as String).toList() ?? [],
-        description: j['description'] as String? ?? '',
-        servings: (j['servings'] as num?)?.toInt() ?? 4,
-        prepTimeMinutes: (j['prepTimeMinutes'] as num?)?.toInt() ?? 0,
-        cookTimeMinutes: (j['cookTimeMinutes'] as num?)?.toInt() ?? 0,
-        tags: (j['tags'] as List?)?.map((e) => e as String).toList() ?? [],
-        variantGroupId: j['variantGroupId'] as String?,
-        links: (j['links'] as List?)?.map((e) => e as String).toList() ?? [],
-        visibility: j['visibility'] as String? ?? 'private',
-        linkedOwnerId: j['linkedOwnerId'] as String?,
-        linkedOwnerName: j['linkedOwnerName'] as String?,
-        linkedVersion: (j['linkedVersion'] as num?)?.toInt() ?? 0,
-        ingredients: (j['ingredients'] as List?)?.map((e) => Ingredient.fromJson(e as Map<String, dynamic>)).toList() ?? [],
-        steps: (j['steps'] as List?)?.map((e) => Step.fromJson(e as Map<String, dynamic>)).toList() ?? [],
-        personal: j['personal'] != null ? Personal.fromJson(j['personal'] as Map<String, dynamic>) : Personal(),
-        nutrition: j['nutrition'] != null ? Nutrition.fromJson(j['nutrition'] as Map<String, dynamic>) : null,
-        finishedWeightG: j['finishedWeightG'] as num?,
-      );
+  factory Recipe.fromJson(Map<String, dynamic> j) {
+    final r = Recipe(id: j['id'] as String, title: '');
+    r._assignContent(j);
+    // identity + local-only fields (NOT part of "owner content")
+    r.visibility = j['visibility'] as String? ?? 'private';
+    r.linkedOwnerId = j['linkedOwnerId'] as String?;
+    r.linkedOwnerName = j['linkedOwnerName'] as String?;
+    r.personal = j['personal'] != null ? Personal.fromJson(j['personal'] as Map<String, dynamic>) : Personal();
+    return r;
+  }
+
+  /// Assigns the owner-authored content fields from JSON. Single source of truth
+  /// shared by [fromJson] and [applyContentFrom] — does NOT touch id, visibility,
+  /// the personal overlay, or linked-copy metadata. Add new content fields here
+  /// (and in [toJson]) and they propagate to synced/linked copies automatically.
+  void _assignContent(Map<String, dynamic> j) {
+    title = j['title'] as String? ?? '';
+    createdBy = j['createdBy'] as String? ?? '';
+    dateAdded = j['dateAdded'] as String? ?? '';
+    dateModified = j['dateModified'] as String? ?? '';
+    source = j['source'] as String?;
+    heroImage = j['heroImage'] as String?;
+    gallery = (j['gallery'] as List?)?.map((e) => e as String).toList() ?? [];
+    description = j['description'] as String? ?? '';
+    servings = (j['servings'] as num?)?.toInt() ?? 4;
+    prepTimeMinutes = (j['prepTimeMinutes'] as num?)?.toInt() ?? 0;
+    cookTimeMinutes = (j['cookTimeMinutes'] as num?)?.toInt() ?? 0;
+    tags = (j['tags'] as List?)?.map((e) => e as String).toList() ?? [];
+    variantGroupId = j['variantGroupId'] as String?;
+    links = (j['links'] as List?)?.map((e) => e as String).toList() ?? [];
+    ingredients = (j['ingredients'] as List?)?.map((e) => Ingredient.fromJson(e as Map<String, dynamic>)).toList() ?? [];
+    steps = (j['steps'] as List?)?.map((e) => Step.fromJson(e as Map<String, dynamic>)).toList() ?? [];
+    nutrition = j['nutrition'] != null ? Nutrition.fromJson(j['nutrition'] as Map<String, dynamic>) : null;
+    finishedWeightG = j['finishedWeightG'] as num?;
+  }
+
+  /// Adopt owner content from a cloud copy in place — keeps this copy's id,
+  /// visibility, personal overlay and linked metadata, so held references stay
+  /// valid. Used when a synced/linked recipe is newer in the cloud.
+  void applyContentFrom(Map<String, dynamic> content) => _assignContent(content);
+
+  /// The recipe's finished weight (grams): the user override if set, else the
+  /// auto estimate from the last nutrition compute. Null until computed.
+  num? get effectiveTotalWeightG => finishedWeightG ?? nutrition?.autoTotalWeightG;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -363,7 +379,6 @@ class Recipe {
         'visibility': visibility,
         if (linkedOwnerId != null) 'linkedOwnerId': linkedOwnerId,
         if (linkedOwnerName != null) 'linkedOwnerName': linkedOwnerName,
-        if (linkedVersion != 0) 'linkedVersion': linkedVersion,
         'ingredients': ingredients.map((e) => e.toJson()).toList(),
         'steps': steps.map((e) => e.toJson()).toList(),
         'personal': personal.toJson(),

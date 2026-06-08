@@ -41,7 +41,7 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
         title: Text(app.t('clear_list_confirm'), style: fb.display(size: 19, weight: FontWeight.w600)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(app.t('cancel'), style: fb.ui(size: 14, weight: FontWeight.w600, color: fb.inkSoft))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('clear_list'), style: fb.ui(size: 14, weight: FontWeight.w700, color: const Color(0xFFC0563B)))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('clear_list'), style: fb.ui(size: 14, weight: FontWeight.w700, color: fb.danger))),
         ],
       ),
     );

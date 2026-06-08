@@ -319,7 +319,7 @@ class _SousChefScreenState extends State<SousChefScreen> with WidgetsBindingObse
           content: Text(app.t('sc_close_body')),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(app.t('cancel'))),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('sc_close_recipe'), style: const TextStyle(color: Color(0xFFC0563B), fontWeight: FontWeight.w700))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('sc_close_recipe'), style: TextStyle(color: ctx.fb.danger, fontWeight: FontWeight.w700))),
           ],
         ),
       );

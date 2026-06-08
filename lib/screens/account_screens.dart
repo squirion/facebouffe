@@ -212,7 +212,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   Widget _errorText(FbTheme fb, String msg) => Padding(
         padding: const EdgeInsets.only(top: 10),
-        child: Text(msg, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: const Color(0xFFC0563B))),
+        child: Text(msg, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: fb.danger)),
       );
 }
 
@@ -325,7 +325,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                   Text(_hint(app), style: fb.ui(size: 13, weight: FontWeight.w600, color: _hintColor(fb), height: 1.4)),
                   const SizedBox(height: 8),
                   Text(app.t('username_permanent'), style: fb.ui(size: 13, color: fb.inkFaint)),
-                  if (_claimError != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_claimError!, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: const Color(0xFFC0563B)))),
+                  if (_claimError != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_claimError!, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: fb.danger))),
                   const SizedBox(height: 22),
                   _PrimaryButton(label: app.t('continue_btn'), busy: _claiming, onTap: _state == _Avail.free ? () => _claim(app) : null),
                 ],
@@ -345,7 +345,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
         return Icon(Icons.check_circle, color: fb.accent, size: 22);
       case _Avail.taken:
       case _Avail.invalid:
-        return const Icon(Icons.error_outline, color: Color(0xFFC0563B), size: 22);
+        return Icon(Icons.error_outline, color: fb.danger, size: 22);
       case _Avail.idle:
         return null;
     }
@@ -372,7 +372,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
         return fb.accent;
       case _Avail.taken:
       case _Avail.invalid:
-        return const Color(0xFFC0563B);
+        return fb.danger;
       default:
         return fb.inkFaint;
     }
@@ -394,7 +394,7 @@ class AccountScreen extends StatelessWidget {
         content: Text(app.t('signout_note'), style: fb.ui(size: 14.5, color: fb.inkSoft, height: 1.4)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(app.t('cancel'), style: fb.ui(size: 14, weight: FontWeight.w600, color: fb.inkSoft))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('signout'), style: fb.ui(size: 14, weight: FontWeight.w700, color: const Color(0xFFC0563B)))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('signout'), style: fb.ui(size: 14, weight: FontWeight.w700, color: fb.danger))),
         ],
       ),
     );
@@ -412,9 +412,9 @@ class AccountScreen extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             child: Row(children: [
-              FbIcon(icon, size: 18, color: danger ? const Color(0xFFC0563B) : fb.inkSoft),
+              FbIcon(icon, size: 18, color: danger ? fb.danger : fb.inkSoft),
               const SizedBox(width: 12),
-              Text(label, style: fb.ui(size: 15, weight: FontWeight.w600, color: danger ? const Color(0xFFC0563B) : fb.ink)),
+              Text(label, style: fb.ui(size: 15, weight: FontWeight.w600, color: danger ? fb.danger : fb.ink)),
             ]),
           ),
         );
@@ -513,9 +513,9 @@ class AccountScreen extends StatelessWidget {
                     decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(18), boxShadow: fb.shadow),
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                     child: Row(children: [
-                      const Icon(Icons.logout, size: 20, color: Color(0xFFC0563B)),
+                      Icon(Icons.logout, size: 20, color: fb.danger),
                       const SizedBox(width: 12),
-                      Text(app.t('signout'), style: fb.ui(size: 15.5, weight: FontWeight.w700, color: const Color(0xFFC0563B))),
+                      Text(app.t('signout'), style: fb.ui(size: 15.5, weight: FontWeight.w700, color: fb.danger)),
                     ]),
                   ),
                 ),
@@ -556,7 +556,7 @@ class _SyncRow extends StatelessWidget {
       SyncStatus.syncing => (app.t('sync_syncing'), fb.inkSoft, true),
       SyncStatus.synced => (app.t('sync_synced'), fb.accent, false),
       SyncStatus.offline => (app.t('sync_offline'), fb.inkSoft, false),
-      SyncStatus.error => (app.t('sync_error'), const Color(0xFFC0563B), false),
+      SyncStatus.error => (app.t('sync_error'), fb.danger, false),
       SyncStatus.idle => (app.t('sync_synced'), fb.inkSoft, false),
     };
     return GestureDetector(

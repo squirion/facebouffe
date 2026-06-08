@@ -12,9 +12,10 @@ import '../widgets/common.dart';
 import '../widgets/fb_icon.dart';
 import '../widgets/nutrition.dart';
 
-const _units = [null, 'g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'oz', 'lb', 'pinch'];
+// Derived from the canonical [kUnits] (format.dart) so the dropdowns can't drift.
+const _units = [null, ...kUnits];
 // Units offered for an embedded sub-recipe (weight + volume only — no count/pinch).
-const _embedUnits = ['g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'oz', 'lb'];
+final _embedUnits = [for (final u in kUnits) if (u != 'pinch') u];
 // Slate-blue (from the app palette) distinguishes embedded-recipe cards/chips
 // from the terracotta accent used by section headers.
 const _embedColor = Color(0xFF4A7BA6);
@@ -168,7 +169,7 @@ class _EditScreenState extends State<EditScreen> {
         content: Text(app.t('delete_confirm_body')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(app.t('cancel'))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('delete'), style: const TextStyle(color: Color(0xFFC0563B), fontWeight: FontWeight.w700))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('delete'), style: TextStyle(color: ctx.fb.danger, fontWeight: FontWeight.w700))),
         ],
       ),
     );
@@ -292,9 +293,9 @@ class _EditScreenState extends State<EditScreen> {
               height: 48,
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(13), border: Border.all(color: fb.line)),
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const FbIcon('trash', size: 18, color: Color(0xFFC0563B)),
+                FbIcon('trash', size: 18, color: fb.danger),
                 const SizedBox(width: 8),
-                Text(app.t('delete'), style: fb.ui(size: 15, weight: FontWeight.w700, color: const Color(0xFFC0563B))),
+                Text(app.t('delete'), style: fb.ui(size: 15, weight: FontWeight.w700, color: fb.danger)),
               ]),
             ),
           ),
@@ -319,11 +320,11 @@ class _EditScreenState extends State<EditScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      decoration: BoxDecoration(color: const Color(0xFFC0563B).withValues(alpha: 0.09), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFC0563B).withValues(alpha: 0.33))),
+      decoration: BoxDecoration(color: fb.danger.withValues(alpha: 0.09), borderRadius: BorderRadius.circular(12), border: Border.all(color: fb.danger.withValues(alpha: 0.33))),
       child: Row(children: [
-        const FbIcon('x', size: 16, color: Color(0xFF9C3F29)),
+        FbIcon('x', size: 16, color: fb.dangerInk),
         const SizedBox(width: 8),
-        Expanded(child: Text(error!, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: const Color(0xFF9C3F29)))),
+        Expanded(child: Text(error!, style: fb.ui(size: 13.5, weight: FontWeight.w600, color: fb.dangerInk))),
       ]),
     );
   }
@@ -1158,7 +1159,7 @@ class _TempTextareaState extends State<TempTextarea> {
               children: [
                 if (widget.extra != null) widget.extra!,
                 if (detected.isNotEmpty) ...[
-                  const FbIcon('check', size: 13, color: Color(0xFF6BA368)),
+                  FbIcon('check', size: 13, color: fb.success),
                   for (final d in detected)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

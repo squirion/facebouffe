@@ -122,7 +122,7 @@ class RecentlyDeletedScreen extends StatelessWidget {
         content: Text(app.t('trash_purge_body')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(app.t('cancel'))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('delete'), style: const TextStyle(color: Color(0xFFC0563B), fontWeight: FontWeight.w700))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('delete'), style: TextStyle(color: ctx.fb.danger, fontWeight: FontWeight.w700))),
         ],
       ),
     );

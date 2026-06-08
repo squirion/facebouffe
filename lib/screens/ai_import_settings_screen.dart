@@ -189,7 +189,7 @@ class _ApiKeyManagerState extends State<ApiKeyManager> {
     final statusColor = {
       'testing': fb.inkSoft,
       'valid': const Color(0xFF4F7D4C),
-      'invalid': const Color(0xFFC0563B),
+      'invalid': fb.danger,
       'empty': const Color(0xFF9A6C1E),
     }[_test];
     final statusLabel = {
@@ -218,7 +218,7 @@ class _ApiKeyManagerState extends State<ApiKeyManager> {
                       decoration: BoxDecoration(color: _provider == p.$1 ? fb.card : Colors.transparent, borderRadius: BorderRadius.circular(9), boxShadow: _provider == p.$1 ? fb.shadow : null),
                       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                         Text(p.$2, style: fb.ui(size: 13.5, weight: _provider == p.$1 ? FontWeight.w700 : FontWeight.w600, color: _provider == p.$1 ? fb.ink : fb.inkSoft)),
-                        if (app.importKeyFor(p.$1)) ...[const SizedBox(width: 5), Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF6BA368), shape: BoxShape.circle))],
+                        if (app.importKeyFor(p.$1)) ...[const SizedBox(width: 5), Container(width: 6, height: 6, decoration: BoxDecoration(color: fb.success, shape: BoxShape.circle))],
                       ]),
                     ),
                   ),
@@ -278,9 +278,9 @@ class _ApiKeyManagerState extends State<ApiKeyManager> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(borderRadius: BorderRadius.circular(11), border: Border.all(color: fb.line)),
                   child: Row(children: [
-                    FbIcon('trash', size: 16, color: hasKey ? const Color(0xFFC0563B) : fb.inkFaint),
+                    FbIcon('trash', size: 16, color: hasKey ? fb.danger : fb.inkFaint),
                     const SizedBox(width: 7),
-                    Text(app.t('delete_key'), style: fb.ui(size: 14, weight: FontWeight.w700, color: hasKey ? const Color(0xFFC0563B) : fb.inkFaint)),
+                    Text(app.t('delete_key'), style: fb.ui(size: 14, weight: FontWeight.w700, color: hasKey ? fb.danger : fb.inkFaint)),
                   ]),
                 ),
               ),
@@ -388,9 +388,9 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
               Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const FbIcon('note', size: 14, color: Color(0xFFC0563B)),
+                  FbIcon('note', size: 14, color: fb.danger),
                   const SizedBox(width: 7),
-                  Expanded(child: Text('${app.t('ondevice_dl_failed')} — ${_status.reason}', style: fb.ui(size: 12, weight: FontWeight.w600, color: const Color(0xFF9C3F29), height: 1.4))),
+                  Expanded(child: Text('${app.t('ondevice_dl_failed')} — ${_status.reason}', style: fb.ui(size: 12, weight: FontWeight.w600, color: fb.dangerInk, height: 1.4))),
                 ]),
               ),
           ],
@@ -400,7 +400,7 @@ class _OnDeviceModelManagerState extends State<OnDeviceModelManager> {
   }
 
   Widget _btn(FbTheme fb, String label, String icon, {bool outline = false, bool danger = false, required VoidCallback onTap}) {
-    final color = danger ? const Color(0xFFC0563B) : (outline ? fb.accent : Colors.white);
+    final color = danger ? fb.danger : (outline ? fb.accent : Colors.white);
     return GestureDetector(
       onTap: onTap,
       child: Container(

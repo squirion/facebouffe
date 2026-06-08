@@ -254,7 +254,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           title: Text(app.t('block_confirm').replaceFirst('%s', handle), style: fb.display(size: 19, weight: FontWeight.w600)),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(app.t('cancel'), style: fb.ui(size: 14, weight: FontWeight.w600, color: fb.inkSoft))),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('block_user'), style: fb.ui(size: 14, weight: FontWeight.w700, color: const Color(0xFFC0563B)))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(app.t('block_user'), style: fb.ui(size: 14, weight: FontWeight.w700, color: fb.danger))),
           ],
         ),
       );
@@ -378,7 +378,7 @@ class _SheetRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fb = context.fb;
-    final color = danger ? const Color(0xFFC0563B) : fb.ink;
+    final color = danger ? fb.danger : fb.ink;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,

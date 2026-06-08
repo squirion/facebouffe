@@ -240,7 +240,7 @@ class _MenuRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fb = context.fb;
-    final color = danger ? const Color(0xFFC0563B) : null;
+    final color = danger ? fb.danger : null;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,

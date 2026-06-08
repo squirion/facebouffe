@@ -347,8 +347,7 @@ extension CloudSync on AppState {
         if (c == null || c.ownerId == null) continue;
         final r = _recipeFromCloud(c)
           ..linkedOwnerId = c.ownerId
-          ..linkedOwnerName = _resolveOwnerName(c.ownerId!, ownerNameHint)
-          ..linkedVersion = c.version;
+          ..linkedOwnerName = _resolveOwnerName(c.ownerId!, ownerNameHint);
         recipes.insert(0, r);
         await sync.linkRecipe(id, c.ownerId!, c.version);
         final ih = c.content['imageHashes'];
@@ -405,7 +404,6 @@ extension CloudSync on AppState {
         return;
       }
       _replaceContent(local, c); // owner content (incl. dateModified); keeps personal + linked meta
-      local.linkedVersion = c.version;
       updatableLinks.remove(recipeId);
       final ih = c.content['imageHashes'];
       if (ih is Map) await _downloadImages({recipeId: Map<String, dynamic>.from(ih)});
@@ -439,7 +437,6 @@ extension CloudSync on AppState {
       ..id = newId
       ..linkedOwnerId = null
       ..linkedOwnerName = null
-      ..linkedVersion = 0
       ..createdBy = account?.username ?? ''
       ..visibility = 'private'
       ..dateModified = DateTime.now().toIso8601String();
@@ -496,8 +493,7 @@ extension CloudSync on AppState {
       if (c != null && c.ownerId != null) {
         final r = _recipeFromCloud(c)
           ..linkedOwnerId = c.ownerId
-          ..linkedOwnerName = _resolveOwnerName(c.ownerId!, null)
-          ..linkedVersion = c.version;
+          ..linkedOwnerName = _resolveOwnerName(c.ownerId!, null);
         recipes.insert(0, r);
         final ih = c.content['imageHashes'];
         if (ih is Map) await _downloadImages({c.id: Map<String, dynamic>.from(ih)});
@@ -1039,7 +1035,11 @@ extension CloudSync on AppState {
     return CloudRecipe(
       id: r.id,
       visibility: r.visibility,
-      version: 1, // real versioning arrives with steal/"update available" (Phase 6)
+      // Sync is timestamp-LWW by date_modified (see _reconcile/_reconcileLinks);
+      // version is a monotonic stamp derived from the modification time so the
+      // recipes.version / linked_recipes.linked_version columns are truthful
+      // (re-pushing unchanged content keeps the same value — no spurious bumps).
+      version: _parse(r.dateModified).millisecondsSinceEpoch ~/ 60000,
       dateModified: _parse(r.dateModified),
       content: content,
       linkIds: r.links.where(_isUuid).toList(), // uuid[] column; non-uuid links live in content
@@ -1065,30 +1065,11 @@ extension CloudSync on AppState {
     r.personal.lastCooked = o.lastCooked?.toIso8601String();
   }
 
-  // Replace owner-content fields in place (keep the existing Personal overlay,
-  // which is applied separately) so held references stay valid.
-  void _replaceContent(Recipe local, CloudRecipe c) {
-    final f = Recipe.fromJson(c.content);
-    local
-      ..title = f.title
-      ..createdBy = f.createdBy
-      ..dateAdded = f.dateAdded
-      ..dateModified = f.dateModified
-      ..source = f.source
-      ..heroImage = f.heroImage
-      ..gallery = f.gallery
-      ..description = f.description
-      ..servings = f.servings
-      ..prepTimeMinutes = f.prepTimeMinutes
-      ..cookTimeMinutes = f.cookTimeMinutes
-      ..tags = f.tags
-      ..variantGroupId = f.variantGroupId
-      ..links = f.links
-      ..ingredients = f.ingredients
-      ..steps = f.steps
-      ..nutrition = f.nutrition
-      ..finishedWeightG = f.finishedWeightG;
-  }
+  // Replace owner-content in place (keeps id, visibility, the personal overlay,
+  // and linked metadata — all applied separately) so held references stay valid.
+  // Field list lives on Recipe._assignContent, so new content fields propagate
+  // here automatically.
+  void _replaceContent(Recipe local, CloudRecipe c) => local.applyContentFrom(c.content);
 
   Map<String, dynamic> _libraryData() => {
         'tags': tags.where((t) => !t.system).map((t) => t.toJson()).toList(),

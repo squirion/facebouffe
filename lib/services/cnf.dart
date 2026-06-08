@@ -424,7 +424,7 @@ class Cnf {
         num? subW = rr.totalWeightG;
         num? subV = rr.totalVolumeMl;
         final liveB = resolve?.call(rr.recipeId);
-        final liveW = liveB?.finishedWeightG ?? liveB?.nutrition?.autoTotalWeightG;
+        final liveW = liveB?.effectiveTotalWeightG;
         if (liveB != null && liveW != null && liveW > 0) {
           subW = liveW;
           subV = totalVolume(liveB.ingredients).ml;
@@ -497,7 +497,7 @@ class Cnf {
         num? subW;
         num? subV;
         final liveB = resolveRecipe?.call(rr.recipeId);
-        final liveW = liveB?.finishedWeightG ?? liveB?.nutrition?.autoTotalWeightG;
+        final liveW = liveB?.effectiveTotalWeightG;
         if (liveB?.nutrition != null && liveW != null && liveW > 0 && liveB!.nutrition!.total.isNotEmpty) {
           subTotal = liveB.nutrition!.total;
           subW = liveW;

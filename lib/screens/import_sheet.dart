@@ -467,19 +467,19 @@ class _ImportSheetState extends State<_ImportSheet> {
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-                  decoration: BoxDecoration(color: const Color(0xFFC0563B).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: fb.danger.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const FbIcon('note', size: 15, color: Color(0xFFC0563B)),
+                    FbIcon('note', size: 15, color: fb.danger),
                     const SizedBox(width: 8),
                     Expanded(
                       child: kImportDebug
                           ? ConstrainedBox(
                               constraints: const BoxConstraints(maxHeight: 180),
                               child: SingleChildScrollView(
-                                child: SelectableText(_error!, style: TextStyle(fontFamily: 'monospace', fontSize: fb.fs(11.5), color: const Color(0xFF9C3F29), height: 1.4)),
+                                child: SelectableText(_error!, style: TextStyle(fontFamily: 'monospace', fontSize: fb.fs(11.5), color: fb.dangerInk, height: 1.4)),
                               ),
                             )
-                          : Text(_error!, style: fb.ui(size: 12.5, weight: FontWeight.w600, color: const Color(0xFF9C3F29), height: 1.4)),
+                          : Text(_error!, style: fb.ui(size: 12.5, weight: FontWeight.w600, color: fb.dangerInk, height: 1.4)),
                     ),
                   ]),
                 ),

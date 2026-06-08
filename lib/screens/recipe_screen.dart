@@ -76,7 +76,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
           // an embedded sub-recipe → one expandable line carrying its grams used
           final rr = ing.recipeRef!;
           final b = app.getRecipe(rr.recipeId);
-          final subW = b?.finishedWeightG ?? b?.nutrition?.autoTotalWeightG ?? rr.totalWeightG;
+          final subW = b?.effectiveTotalWeightG ?? rr.totalWeightG;
           final subV = b != null ? Cnf.instance.totalVolume(b.ingredients).ml : rr.totalVolumeMl;
           final grams = (scaledQty != null && subW != null && subW > 0) ? Cnf.instance.embedGramsFor(scaledQty, ing.unit, subW, subV) : null;
           items.add(ShoppingItem(id: uuid(), name: rr.title, quantity: conv.quantity, unit: conv.unit, sourceRecipeId: recipe.id, subRecipeId: rr.recipeId, subAmountG: grams));
@@ -152,9 +152,9 @@ class _RecipeScreenState extends State<RecipeScreen> {
           child: Container(
             height: 48,
             decoration: BoxDecoration(
-              color: _addedFlash ? const Color(0xFF6BA368).withValues(alpha: 0.09) : fb.accentSoft,
+              color: _addedFlash ? fb.success.withValues(alpha: 0.09) : fb.accentSoft,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _addedFlash ? const Color(0xFF6BA368) : fb.accent, width: 1.5),
+              border: Border.all(color: _addedFlash ? fb.success : fb.accent, width: 1.5),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,

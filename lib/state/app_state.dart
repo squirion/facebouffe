@@ -144,7 +144,7 @@ class AppState extends ChangeNotifier {
     return RecipeRef(
       recipeId: b.id,
       title: b.title,
-      totalWeightG: b.finishedWeightG ?? n?.autoTotalWeightG,
+      totalWeightG: b.effectiveTotalWeightG,
       totalVolumeMl: Cnf.instance.totalVolume(b.ingredients).ml,
       total: n != null ? Map<String, num>.from(n.total) : {},
       servings: b.servings,
@@ -644,7 +644,6 @@ class AppState extends ChangeNotifier {
     // a variant is always your own editable recipe (even off a linked one)
     copy.linkedOwnerId = null;
     copy.linkedOwnerName = null;
-    copy.linkedVersion = 0;
     copy.visibility = 'private';
     copy.createdBy = account?.username ?? '';
     recipes.insert(0, copy);
@@ -970,7 +969,7 @@ class AppState extends ChangeNotifier {
     if (subId == null) return false;
     final b = getRecipe(subId);
     if (b == null) return false;
-    final subW = b.finishedWeightG ?? b.nutrition?.autoTotalWeightG ?? Cnf.instance.totalWeight(b.ingredients, resolve: getRecipe).grams;
+    final subW = b.effectiveTotalWeightG ?? Cnf.instance.totalWeight(b.ingredients, resolve: getRecipe).grams;
     if (subW <= 0) return false;
     // Prefer the grams captured at add-time; otherwise recompute from this line's
     // amount (handles sub-recipes whose weight wasn't known when it was added).

@@ -222,11 +222,11 @@ class _AdventureScreenState extends State<AdventureScreen> {
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-                          decoration: BoxDecoration(color: const Color(0xFFC0563B).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                          decoration: BoxDecoration(color: fb.danger.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
                           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            const FbIcon('note', size: 15, color: Color(0xFFC0563B)),
+                            FbIcon('note', size: 15, color: fb.danger),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(_error!, style: fb.ui(size: 13, weight: FontWeight.w600, color: const Color(0xFF9C3F29), height: 1.4))),
+                            Expanded(child: Text(_error!, style: fb.ui(size: 13, weight: FontWeight.w600, color: fb.dangerInk, height: 1.4))),
                           ]),
                         ),
                       ),

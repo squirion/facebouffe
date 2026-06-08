@@ -559,7 +559,7 @@ class _TagManagerState extends State<TagManager> {
                 const SizedBox(width: 8),
                 GestureDetector(onTap: () => _doCreate(app), child: Container(height: 36, padding: const EdgeInsets.symmetric(horizontal: 15), decoration: BoxDecoration(color: fb.accent, borderRadius: BorderRadius.circular(9)), alignment: Alignment.center, child: Text(app.t('create_label'), style: fb.ui(size: 13.5, weight: FontWeight.w700, color: Colors.white)))),
               ]),
-              if (createWarn) Padding(padding: const EdgeInsets.only(top: 8, left: 41), child: Text(app.t('tag_exists'), style: fb.ui(size: 12.5, weight: FontWeight.w600, color: const Color(0xFFC0563B)))),
+              if (createWarn) Padding(padding: const EdgeInsets.only(top: 8, left: 41), child: Text(app.t('tag_exists'), style: fb.ui(size: 12.5, weight: FontWeight.w600, color: fb.danger))),
             ],
           ),
         ),
@@ -619,7 +619,7 @@ class _TagManagerState extends State<TagManager> {
               GestureDetector(onTap: () => setState(() { confirmId = confirmId == tg.id ? null : tg.id; editId = null; }), child: Container(width: 34, height: 34, decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), border: Border.all(color: fb.line)), child: Center(child: FbIcon('trash', size: 16, color: fb.inkSoft)))),
             ]),
           ),
-          if (warnId == tg.id) Padding(padding: const EdgeInsets.fromLTRB(57, 0, 16, 12), child: Text(app.t('tag_exists'), style: fb.ui(size: 12.5, weight: FontWeight.w600, color: const Color(0xFFC0563B)))),
+          if (warnId == tg.id) Padding(padding: const EdgeInsets.fromLTRB(57, 0, 16, 12), child: Text(app.t('tag_exists'), style: fb.ui(size: 12.5, weight: FontWeight.w600, color: fb.danger))),
           if (confirmId == tg.id)
             Padding(
               padding: const EdgeInsets.fromLTRB(57, 0, 16, 14),
@@ -631,7 +631,7 @@ class _TagManagerState extends State<TagManager> {
                   Row(children: [
                     GestureDetector(onTap: () => setState(() => confirmId = null), child: Container(height: 34, padding: const EdgeInsets.symmetric(horizontal: 14), decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), border: Border.all(color: fb.line)), alignment: Alignment.center, child: Text(app.t('cancel'), style: fb.ui(size: 13, weight: FontWeight.w600, color: fb.inkSoft)))),
                     const SizedBox(width: 8),
-                    GestureDetector(onTap: () { app.deleteTag(tg.id); setState(() => confirmId = null); }, child: Container(height: 34, padding: const EdgeInsets.symmetric(horizontal: 14), decoration: BoxDecoration(color: const Color(0xFFC0563B), borderRadius: BorderRadius.circular(9)), alignment: Alignment.center, child: Text(app.t('delete'), style: fb.ui(size: 13, weight: FontWeight.w700, color: Colors.white)))),
+                    GestureDetector(onTap: () { app.deleteTag(tg.id); setState(() => confirmId = null); }, child: Container(height: 34, padding: const EdgeInsets.symmetric(horizontal: 14), decoration: BoxDecoration(color: fb.danger, borderRadius: BorderRadius.circular(9)), alignment: Alignment.center, child: Text(app.t('delete'), style: fb.ui(size: 13, weight: FontWeight.w700, color: Colors.white)))),
                   ]),
                 ],
               ),

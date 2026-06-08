@@ -89,6 +89,15 @@ String _trimNum(num n) {
 }
 
 // ── Units ───────────────────────────────────────────────────────
+/// The single canonical unit enum the app accepts. Everything else derives from
+/// this: the editor dropdowns (`_units`/`_embedUnits`), the import contract
+/// (`kImportUnits`), and the LLM-prompt enum fragment ([kUnitEnumJson]).
+const List<String> kUnits = ['g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'oz', 'lb', 'pinch'];
+
+/// [kUnits] rendered as a JSON-quoted, comma-separated fragment for embedding in
+/// the strict-JSON import prompts, so the prompts can't drift from the enum.
+const String kUnitEnumJson = '"g","kg","ml","l","tsp","tbsp","cup","oz","lb","pinch"';
+
 const Map<String, Map<String, String>> _unitLabel = {
   'fr': {'g': 'g', 'kg': 'kg', 'ml': 'ml', 'l': 'l', 'tsp': 'c. à thé', 'tbsp': 'c. à soupe', 'cup': 'tasse', 'oz': 'oz', 'lb': 'lb', 'pinch': 'pincée', 'floz': 'oz liq.'},
   'en': {'g': 'g', 'kg': 'kg', 'ml': 'ml', 'l': 'l', 'tsp': 'tsp', 'tbsp': 'tbsp', 'cup': 'cup', 'oz': 'oz', 'lb': 'lb', 'pinch': 'pinch', 'floz': 'fl oz'},

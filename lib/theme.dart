@@ -15,6 +15,15 @@ class FbTheme {
   final Color glass, scrim;
   final List<BoxShadow> shadow;
   final Color gold = const Color(0xFFF4B400);
+  // Semantic colors — theme-independent mid-tones, legible on both surfaces.
+  final Color danger = const Color(0xFFC0563B); // destructive actions / errors
+  final Color dangerInk = const Color(0xFF9C3F29); // darker danger, for text on tint
+  final Color success = const Color(0xFF6BA368); // confirmations / "in cart"
+  final Color warn = const Color(0xFFC58A2E); // caution (mustard)
+  final Color warnIcon = const Color(0xFF9A6C1E);
+  final Color warnInk = const Color(0xFF8A6018); // warning text on tint
+  Color get warnBg => warn.withValues(alpha: dark ? 0.16 : 0.08);
+  Color get warnBorder => warn.withValues(alpha: 0.33);
 
   FbTheme._({
     required this.dark,
