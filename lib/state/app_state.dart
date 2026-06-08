@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File, Directory;
+import 'dart:io' show File;
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:crypto/crypto.dart' show sha256;
-import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -15,6 +13,7 @@ import '../services/import/ondevice_ai.dart';
 import '../services/sync/sync_backend.dart';
 import '../services/sync/supabase_backend.dart';
 import '../services/cnf.dart';
+import '../services/image_cache.dart';
 
 import '../data/models.dart';
 import '../data/i18n.dart';
@@ -106,8 +105,9 @@ class AppState extends ChangeNotifier {
   // drained after it finishes, so they don't interleave with reconcile.
   final List<Future<void> Function()> _pendingPushes = [];
   bool _pushFailedDuringSync = false; // a queued/in-flight push failed during the run
-  final Map<String, String> _imgHashCache = {}; // local photo path -> sha-256 content hash
-  final Map<String, List<String>> _recipeImgHashes = {}; // recipe id -> last-synced image hash set
+  // Content-addressed image store (hashing/upload/download/cache/avatars). This
+  // class owns the recipe→path maps below and the persist/notify policy.
+  late final ImageCacheService _images = ImageCacheService(sync, notifyListeners);
   List<FriendEdge> friends = []; // friendship edges (accepted + pending), resolved usernames
   // Transient: a friend's shared recipes while browsing their cookbook (online-only,
   // not in your library). getRecipe() falls through to these so the existing recipe
@@ -115,8 +115,6 @@ class AppState extends ChangeNotifier {
   final Map<String, Recipe> visitingRecipes = {};
   final Map<String, VariantGroup> visitingGroups = {}; // friend's variant groups while browsing
   final Map<String, List<Review>> _reviewsCache = {}; // recipe id -> reviews (Phase 5)
-  final Map<String, String> avatarCache = {}; // avatar hash -> local cached file path
-  final Set<String> _avatarLoading = {}; // avatar hashes currently downloading
   final Map<String, CloudRecipe> _stealCache = {}; // recipe id -> pulled content while resolving a steal bundle
   final Set<String> updatableLinks = {}; // linked recipe ids with an owner update available
 

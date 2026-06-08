@@ -222,55 +222,19 @@ extension CloudSync on AppState {
     return out;
   }
 
-  // ── avatars ──
-  /// Local cached path for an avatar hash, or null (kicks off a background
+  // ── avatars ── (cache + byte I/O live in ImageCacheService)
+  /// Local cached path/URL for an avatar hash, or null (kicks off a background
   /// download when missing — the widget rebuilds when it lands).
-  String? avatarFor(String? hash) {
-    if (hash == null) return null;
-    final p = avatarCache[hash];
-    if (p != null) return p;
-    unawaited(_ensureAvatar(hash));
-    return null;
-  }
-
-  Future<void> _ensureAvatar(String hash) async {
-    if (avatarCache.containsKey(hash) || _avatarLoading.contains(hash)) return;
-    _avatarLoading.add(hash);
-    try {
-      if (kIsWeb) {
-        final u = await sync.imageUrl(hash); // web: signed URL, no file cache
-        if (u != null) {
-          avatarCache[hash] = u;
-          notify();
-        }
-        return;
-      }
-      final dir = await getApplicationDocumentsDirectory();
-      final f = File('${dir.path}/avatar_$hash.jpg');
-      if (!await f.exists()) {
-        final bytes = await sync.downloadImage(hash);
-        if (bytes == null) return;
-        await f.writeAsBytes(bytes);
-      }
-      avatarCache[hash] = f.path;
-      notify();
-    } catch (_) {
-      // leave uncached; falls back to the letter
-    } finally {
-      _avatarLoading.remove(hash);
-    }
-  }
+  String? avatarFor(String? hash) => _images.avatarFor(hash);
 
   /// Set the signed-in user's avatar from a picked/cropped local image.
   Future<void> applyAvatar(String localPath) async {
     if (!_canSync) return;
     try {
-      final bytes = await _readImageBytes(localPath);
-      if (bytes == null) return;
-      final hash = sha256.convert(bytes).toString();
-      await sync.uploadImageIfAbsent(hash, bytes, 'image/jpeg');
+      final hash = await _images.hashAndUpload(localPath);
+      if (hash == null) return;
       await sync.setMyAvatar(hash);
-      avatarCache[hash] = localPath; // show the picked file immediately
+      _images.avatarCache[hash] = localPath; // show the picked file immediately
       account = account?.withAvatar(hash);
       notify();
     } catch (_) {
@@ -598,7 +562,7 @@ extension CloudSync on AppState {
   /// (with image hashes embedded) and its overlay.
   Future<void> _pushRecipeFull(Recipe r) async {
     final base = _cloudRecipeOf(r);
-    final hashes = await _uploadImagesFor(r);
+    final hashes = await _images.uploadImagesFor(recipePhotos[r.id], recipeGallery[r.id] ?? const <String>[]);
     final content = Map<String, dynamic>.from(base.content)..['imageHashes'] = hashes;
     await sync.upsertRecipe(CloudRecipe(
       id: base.id,
@@ -609,7 +573,7 @@ extension CloudSync on AppState {
       linkIds: base.linkIds,
     ));
     // After the recipe row exists, register its image refs (FK to recipes.id).
-    await _registerRecipeImages(r.id, hashes);
+    await _images.registerRecipeImages(r.id, hashes);
     await sync.upsertOverlay(_overlayOf(r));
   }
 
@@ -865,73 +829,14 @@ extension CloudSync on AppState {
     unawaited(_downloadImages(imgByRecipe)); // fill photos in the background
   }
 
-  // ── images (Phase 2B) ──
-
-  /// Upload a recipe's hero + gallery photo bytes (content-addressed dedup).
-  /// Returns `{hero: hash?, gallery: [hash,…]}`. Does NOT touch recipe_images —
-  /// that ref-count registration runs in [_registerRecipeImages] AFTER the
-  /// recipe row exists (recipe_images.recipe_id FKs recipes.id, so a brand-new
-  /// recipe must be upserted first).
-  Future<Map<String, dynamic>> _uploadImagesFor(Recipe r) async {
-    String? heroHash;
-    final hero = recipePhotos[r.id];
-    if (hero != null && hero.isNotEmpty) heroHash = await _hashAndUpload(hero);
-    final galleryHashes = <String>[];
-    for (final p in (recipeGallery[r.id] ?? const <String>[])) {
-      final h = await _hashAndUpload(p);
-      if (h != null) galleryHashes.add(h);
-    }
-    return {'hero': heroHash, 'gallery': galleryHashes};
-  }
-
-  /// Reconcile the recipe→image ref-count rows (drives image GC). Must run after
-  /// the recipe row exists, since recipe_images.recipe_id FKs recipes.id.
-  Future<void> _registerRecipeImages(String recipeId, Map<String, dynamic> hashes) async {
-    final hero = hashes['hero'] as String?;
-    final gallery = (hashes['gallery'] as List?)?.map((e) => e as String).toList() ?? const [];
-    final all = [?hero, ...gallery];
-    final prev = _recipeImgHashes[recipeId];
-    if (prev == null || !_listEq(prev, all)) {
-      await sync.setRecipeImages(recipeId, all);
-      _recipeImgHashes[recipeId] = all;
-    }
-  }
-
-  Future<String?> _hashAndUpload(String path) async {
-    final cached = _imgHashCache[path];
-    if (cached != null) return cached; // already hashed (and uploaded) this session
-    final bytes = await _readImageBytes(path);
-    if (bytes == null) return null;
-    final hash = sha256.convert(bytes).toString();
-    await sync.uploadImageIfAbsent(hash, bytes, 'image/jpeg');
-    _imgHashCache[path] = hash;
-    return hash;
-  }
-
-  Future<Uint8List?> _readImageBytes(String path) async {
-    try {
-      if (path.startsWith('data:')) {
-        final i = path.indexOf(',');
-        return base64Decode(path.substring(i + 1));
-      }
-      if (kIsWeb) return null; // web non-data paths aren't readable as files
-      return await File(path).readAsBytes();
-    } catch (_) {
-      return null;
-    }
-  }
+  // ── images (Phase 2B) ── byte/network/fs I/O lives in ImageCacheService;
+  // AppState owns the recipe→path maps and the persist/notify policy.
 
   /// Download + cache any cloud images referenced by pulled recipes, then map
   /// them back into recipePhotos / recipeGallery. Runs in the background.
   Future<void> _downloadImages(Map<String, Map<String, dynamic>> byRecipe, {bool persist = true}) async {
     if (byRecipe.isEmpty) return;
     if (kIsWeb) return _resolveImageUrls(byRecipe); // web: signed URLs, no file cache
-    Directory dir;
-    try {
-      dir = await getApplicationDocumentsDirectory();
-    } catch (_) {
-      return;
-    }
     var changed = false;
     for (final entry in byRecipe.entries) {
       final id = entry.key;
@@ -939,7 +844,7 @@ extension CloudSync on AppState {
       final hero = ih['hero'] as String?;
       final heroPath = recipePhotos[id];
       if (hero != null && (heroPath == null || !File(heroPath).existsSync())) {
-        final p = await _ensureCached(dir, hero);
+        final p = await _images.cachedPath(hero);
         if (p != null) {
           recipePhotos[id] = p;
           changed = true;
@@ -949,7 +854,7 @@ extension CloudSync on AppState {
       if (galleryHashes.isNotEmpty && (recipeGallery[id] == null || recipeGallery[id]!.isEmpty)) {
         final paths = <String>[];
         for (final h in galleryHashes) {
-          final p = await _ensureCached(dir, h);
+          final p = await _images.cachedPath(h);
           if (p != null) paths.add(p);
         }
         if (paths.isNotEmpty) {
@@ -967,23 +872,6 @@ extension CloudSync on AppState {
     }
   }
 
-  Future<String?> _ensureCached(Directory dir, String hash) async {
-    final f = File('${dir.path}/img_$hash.jpg');
-    if (await f.exists()) {
-      _imgHashCache[f.path] = hash;
-      return f.path;
-    }
-    final bytes = await sync.downloadImage(hash);
-    if (bytes == null) return null;
-    try {
-      await f.writeAsBytes(bytes);
-    } catch (_) {
-      return null;
-    }
-    _imgHashCache[f.path] = hash;
-    return f.path;
-  }
-
   // Web: resolve hashes to signed Storage URLs (no file cache) and store them as
   // the photo paths, so the Image.network display path renders them.
   Future<void> _resolveImageUrls(Map<String, Map<String, dynamic>> byRecipe) async {
@@ -997,7 +885,7 @@ extension CloudSync on AppState {
       // keep data: URLs (web-added photos are stable).
       final heroStale = curHero == null || curHero.isEmpty || curHero.startsWith('http');
       if (hero != null && heroStale) {
-        final u = await sync.imageUrl(hero);
+        final u = await _images.signedUrl(hero);
         if (u != null) {
           recipePhotos[id] = u;
           changed = true;
@@ -1009,7 +897,7 @@ extension CloudSync on AppState {
       if (galleryHashes.isNotEmpty && galleryStale) {
         final urls = <String>[];
         for (final h in galleryHashes) {
-          final u = await sync.imageUrl(h);
+          final u = await _images.signedUrl(h);
           if (u != null) urls.add(u);
         }
         if (urls.isNotEmpty) {
@@ -1019,14 +907,6 @@ extension CloudSync on AppState {
       }
     }
     if (changed) notify(); // in-memory only — signed URLs expire, don't persist
-  }
-
-  bool _listEq(List<String> a, List<String> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
   }
 
   // ── mapping helpers ──
