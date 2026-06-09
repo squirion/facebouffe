@@ -5,7 +5,6 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
@@ -14,6 +13,7 @@ import '../services/sync/sync_backend.dart';
 import '../services/sync/supabase_backend.dart';
 import '../services/cnf.dart';
 import '../services/image_cache.dart';
+import '../services/local_store.dart';
 
 import '../data/models.dart';
 import '../data/i18n.dart';
@@ -83,7 +83,7 @@ class AppState extends ChangeNotifier {
 
   bool reduceMotion = false;
   String appVersion = ''; // e.g. "1.0.1+2" — loaded from package_info
-  SharedPreferences? _prefs;
+  LocalStore? _store; // local key/value persistence (SharedPreferences seam)
   bool ready = false;
 
   // ── account / social layer (Phase 2) — optional sign-in ──
@@ -184,8 +184,8 @@ class AppState extends ChangeNotifier {
 
   // ── init / persistence ──
   Future<void> init() async {
-    _prefs = await SharedPreferences.getInstance();
-    final db = _prefs!.getString('fb_db');
+    final store = _store = await LocalStore.create();
+    final db = store.str(LocalStore.db);
     if (db != null) {
       try {
         _loadDb(jsonDecode(db) as Map<String, dynamic>);
@@ -196,50 +196,50 @@ class AppState extends ChangeNotifier {
       await _loadSeed();
     }
     // settings
-    profile.language = _prefs!.getString('fb_lang') ?? profile.language;
-    profile.fontSize = _prefs!.getString('fb_fontsize') ?? profile.fontSize;
-    profile.temperature = _prefs!.getString('fb_temp') ?? profile.temperature;
-    profile.volume = _prefs!.getString('fb_vol') ?? profile.volume;
-    profile.weight = _prefs!.getString('fb_weight') ?? profile.weight;
-    profile.keepCups = _prefs!.getBool('fb_keepcups') ?? profile.keepCups;
-    dark = _prefs!.getBool('fb_dark') ?? false;
-    accentHex = _prefs!.getString('fb_accent') ?? accentHex;
-    homeLayout = _prefs!.getString('fb_home') ?? homeLayout;
-    chimeSound = _prefs!.getString('fb_chime') ?? chimeSound;
-    chimeAlarmUri = _prefs!.getString('fb_chime_uri');
-    chimeAlarmName = _prefs!.getString('fb_chime_name');
-    final tips = _prefs!.getString('fb_tips');
+    profile.language = store.str(LocalStore.lang) ?? profile.language;
+    profile.fontSize = store.str(LocalStore.fontSize) ?? profile.fontSize;
+    profile.temperature = store.str(LocalStore.temp) ?? profile.temperature;
+    profile.volume = store.str(LocalStore.volume) ?? profile.volume;
+    profile.weight = store.str(LocalStore.weight) ?? profile.weight;
+    profile.keepCups = store.flag(LocalStore.keepCups) ?? profile.keepCups;
+    dark = store.flag(LocalStore.dark) ?? false;
+    accentHex = store.str(LocalStore.accent) ?? accentHex;
+    homeLayout = store.str(LocalStore.home) ?? homeLayout;
+    chimeSound = store.str(LocalStore.chime) ?? chimeSound;
+    chimeAlarmUri = store.str(LocalStore.chimeUri);
+    chimeAlarmName = store.str(LocalStore.chimeName);
+    final tips = store.str(LocalStore.tips);
     if (tips != null) {
       try {
         tipsSeen = TipsSeen.fromMap(jsonDecode(tips) as Map<String, dynamic>);
       } catch (_) {}
     }
-    final photos = _prefs!.getString('fb_photos');
+    final photos = store.str(LocalStore.photos);
     if (photos != null) {
       try {
         recipePhotos = Map<String, String>.from(jsonDecode(photos) as Map);
       } catch (_) {}
     }
-    final gallery = _prefs!.getString('fb_gallery');
+    final gallery = store.str(LocalStore.gallery);
     if (gallery != null) {
       try {
         recipeGallery = (jsonDecode(gallery) as Map).map((k, v) => MapEntry(k as String, (v as List).map((e) => e as String).toList()));
       } catch (_) {}
     }
-    final trash = _prefs!.getString('fb_trash');
+    final trash = store.str(LocalStore.trash);
     if (trash != null) {
       try {
         recentlyDeleted = (jsonDecode(trash) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
       } catch (_) {}
     }
-    final al = _prefs!.getString('fb_aliases');
+    final al = store.str(LocalStore.aliases);
     if (al != null) {
       try {
         aliases = Map<String, String>.from(jsonDecode(al) as Map);
       } catch (_) {}
     }
-    preferredAI = _prefs!.getString('fb_preferred_ai') ?? preferredAI;
-    importProvider = _prefs!.getString('fb_import_provider') ?? importProvider;
+    preferredAI = store.str(LocalStore.preferredAi) ?? preferredAI;
+    importProvider = store.str(LocalStore.importProvider) ?? importProvider;
     _watchConnectivity();
     try {
       for (final p in const ['claude', 'openai', 'gemini']) {
@@ -331,32 +331,24 @@ class AppState extends ChangeNotifier {
       };
 
   void _persistDb() {
-    _prefs?.setString('fb_db', jsonEncode(exportData()));
+    _store?.setJson(LocalStore.db, exportData());
   }
 
   void _persistSettings() {
-    final p = _prefs;
+    final p = _store;
     if (p == null) return;
-    p.setString('fb_lang', profile.language);
-    p.setString('fb_fontsize', profile.fontSize);
-    p.setString('fb_temp', profile.temperature);
-    p.setString('fb_vol', profile.volume);
-    p.setString('fb_weight', profile.weight);
-    p.setBool('fb_keepcups', profile.keepCups);
-    p.setBool('fb_dark', dark);
-    p.setString('fb_accent', accentHex);
-    p.setString('fb_home', homeLayout);
-    p.setString('fb_chime', chimeSound);
-    if (chimeAlarmUri != null) {
-      p.setString('fb_chime_uri', chimeAlarmUri!);
-    } else {
-      p.remove('fb_chime_uri');
-    }
-    if (chimeAlarmName != null) {
-      p.setString('fb_chime_name', chimeAlarmName!);
-    } else {
-      p.remove('fb_chime_name');
-    }
+    p.setStr(LocalStore.lang, profile.language);
+    p.setStr(LocalStore.fontSize, profile.fontSize);
+    p.setStr(LocalStore.temp, profile.temperature);
+    p.setStr(LocalStore.volume, profile.volume);
+    p.setStr(LocalStore.weight, profile.weight);
+    p.setFlag(LocalStore.keepCups, profile.keepCups);
+    p.setFlag(LocalStore.dark, dark);
+    p.setStr(LocalStore.accent, accentHex);
+    p.setStr(LocalStore.home, homeLayout);
+    p.setStr(LocalStore.chime, chimeSound);
+    p.setStrOrRemove(LocalStore.chimeUri, chimeAlarmUri);
+    p.setStrOrRemove(LocalStore.chimeName, chimeAlarmName);
   }
 
   // ── settings mutations ──
@@ -533,7 +525,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _persistTrash() => _prefs?.setString('fb_trash', jsonEncode(recentlyDeleted));
+  void _persistTrash() => _store?.setJson(LocalStore.trash, recentlyDeleted);
 
   /// Restore a buffered recipe (by index in [recentlyDeleted]) to the active set.
   void restoreDeleted(int index) {
@@ -785,18 +777,18 @@ class AppState extends ChangeNotifier {
         tipsSeen.stolenRecipe = true;
         break;
     }
-    _prefs?.setString('fb_tips', jsonEncode(tipsSeen.toMap()));
+    _store?.setJson(LocalStore.tips, tipsSeen.toMap());
     notifyListeners();
   }
 
   void resetTips() {
     tipsSeen = TipsSeen();
-    _prefs?.setString('fb_tips', jsonEncode(tipsSeen.toMap()));
+    _store?.setJson(LocalStore.tips, tipsSeen.toMap());
     notifyListeners();
   }
 
   // ── photos ──
-  void _persistPhotos() => _prefs?.setString('fb_photos', jsonEncode(recipePhotos));
+  void _persistPhotos() => _store?.setJson(LocalStore.photos, recipePhotos);
 
   void setRecipePhoto(String id, String? path) {
     if (path == null) {
@@ -809,7 +801,7 @@ class AppState extends ChangeNotifier {
   }
 
   // ── gallery ──
-  void _persistGallery() => _prefs?.setString('fb_gallery', jsonEncode(recipeGallery));
+  void _persistGallery() => _store?.setJson(LocalStore.gallery, recipeGallery);
 
   static const int maxGalleryPhotos = 5;
 
@@ -839,13 +831,13 @@ class AppState extends ChangeNotifier {
     final key = normalizeIngredientName(name);
     if (key.isEmpty) return;
     aliases[key] = foodCode;
-    _prefs?.setString('fb_aliases', jsonEncode(aliases));
+    _store?.setJson(LocalStore.aliases, aliases);
     notifyListeners();
   }
 
   void removeAlias(String key) {
     aliases.remove(key);
-    _prefs?.setString('fb_aliases', jsonEncode(aliases));
+    _store?.setJson(LocalStore.aliases, aliases);
     notifyListeners();
   }
 
@@ -874,13 +866,13 @@ class AppState extends ChangeNotifier {
 
   void setPreferredAI(String p) {
     preferredAI = p;
-    _prefs?.setString('fb_preferred_ai', p);
+    _store?.setStr(LocalStore.preferredAi, p);
     notifyListeners();
   }
 
   void setImportProvider(String p) {
     importProvider = p;
-    _prefs?.setString('fb_import_provider', p);
+    _store?.setStr(LocalStore.importProvider, p);
     notifyListeners();
   }
 

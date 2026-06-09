@@ -38,7 +38,7 @@ String _remapDescription(String desc, Map<String, String> map) =>
 extension CloudSync on AppState {
   // ── public surface ──
   bool get _canSync => signedIn && account?.username != null;
-  bool get _migrated => account != null && (_prefs?.getBool('fb_synced_${account!.id}') ?? false);
+  bool get _migrated => account != null && (_store?.flag(LocalStore.synced(account!.id)) ?? false);
   int get pendingMigrationCount => _pendingLocalOnly.length;
 
   /// Entry point: run once after sign-in and on app open. Migrates on first run,
@@ -57,7 +57,7 @@ extension CloudSync on AppState {
         await _reconcile();
       }
       await _reconcileLinks();
-      _prefs?.setString('fb_local_owner', account!.id);
+      _store?.setStr(LocalStore.localOwner, account!.id);
       await refreshFriends();
       // Don't report "synced" if a push that ran during this sync failed.
       _setSyncStatus(_pushFailedDuringSync ? SyncStatus.error : SyncStatus.synced);
@@ -605,20 +605,20 @@ extension CloudSync on AppState {
   // and pull this account's cookbook fresh.
   Future<void> _handleAccountSwitch() async {
     final me = account!.id;
-    String? owner = _prefs?.getString('fb_local_owner');
+    String? owner = _store?.str(LocalStore.localOwner);
     if (owner == null) {
       // first run with this marker — infer from any account migrated here
-      for (final k in (_prefs?.getKeys() ?? const <String>{})) {
-        if (k.startsWith('fb_synced_') && (_prefs?.getBool(k) ?? false)) {
-          owner = k.substring('fb_synced_'.length);
+      for (final k in (_store?.keys() ?? const <String>{})) {
+        if (LocalStore.isSyncedKey(k) && (_store?.flag(k) ?? false)) {
+          owner = k.substring(LocalStore.synced('').length);
           break;
         }
       }
     }
     if (owner == null || owner == me) return; // anonymous/same owner → no switch
     await _resetLocalCookbook();
-    _prefs?.remove('fb_synced_$me');
-    _prefs?.remove('fb_sync_state_$me');
+    _store?.remove(LocalStore.synced(me));
+    _store?.remove(LocalStore.syncState(me));
     _syncedIds.clear();
     _localOnlyIds.clear();
   }
@@ -689,7 +689,7 @@ extension CloudSync on AppState {
   }
 
   void _markMigrated() {
-    _prefs?.setBool('fb_synced_${account!.id}', true);
+    _store?.setFlag(LocalStore.synced(account!.id), true);
     _persistSyncState();
   }
 
@@ -752,13 +752,13 @@ extension CloudSync on AppState {
     if (recipes.any((r) => !_isUuid(r.id))) _remintAllIds();
     // Heal legacy variant-group ids → uuids and backfill content.variantBaseId,
     // re-pushing affected owned grouped recipes so the cloud has both (one-time).
-    final vbaseKey = 'fb_vbase_${account!.id}';
-    final needBackfill = !(_prefs?.getBool(vbaseKey) ?? false);
+    final vbaseKey = LocalStore.vbase(account!.id);
+    final needBackfill = !(_store?.flag(vbaseKey) ?? false);
     if (_remintVariantGroupIds() || needBackfill) {
       for (final r in recipes.where((r) => !r.isLinked && r.variantGroupId != null)) {
         await _pushRecipeFull(r);
       }
-      _prefs?.setBool(vbaseKey, true);
+      _store?.setFlag(vbaseKey, true);
     }
     final cloud = await sync.fetchOwnedRecipes();
     final overlays = await sync.fetchOverlays();
@@ -1016,17 +1016,17 @@ extension CloudSync on AppState {
 
   void _persistSyncState() {
     if (account == null) return;
-    _prefs?.setString('fb_sync_state_${account!.id}', jsonEncode({
+    _store?.setJson(LocalStore.syncState(account!.id), {
       'synced': _syncedIds.toList(),
       'localOnly': _localOnlyIds.toList(),
-    }));
+    });
   }
 
   void _loadSyncState() {
     if (account == null) return;
     _syncedIds.clear();
     _localOnlyIds.clear();
-    final raw = _prefs?.getString('fb_sync_state_${account!.id}');
+    final raw = _store?.str(LocalStore.syncState(account!.id));
     if (raw == null) return;
     try {
       final m = jsonDecode(raw) as Map<String, dynamic>;
