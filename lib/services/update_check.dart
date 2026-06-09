@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,7 +36,23 @@ class UpdateCheck {
         final prefs = await SharedPreferences.getInstance();
         if (prefs.getInt('fb_update_dismissed') == remoteBuild) return null; // dismissed this version
       }
-      return UpdateInfo(j['version'] as String? ?? '', remoteBuild, j['apk'] as String? ?? kApkLatestUrl);
+      final apkUrl = j['apk'] as String? ?? kApkLatestUrl;
+      // On Android, only advertise once the APK is actually downloadable — the
+      // version.json (which drives this) deploys before the slower APK release
+      // job finishes, so the versioned APK URL 404s during that window.
+      if (!kIsWeb && apkUrl.isNotEmpty) {
+        try {
+          final head = await http.head(Uri.parse(apkUrl)).timeout(const Duration(seconds: 8));
+          if (head.statusCode != 200) {
+            if (throwOnError) throw Exception('APK not published yet (HTTP ${head.statusCode})');
+            return null;
+          }
+        } catch (e) {
+          if (throwOnError) rethrow;
+          return null; // not reachable yet — don't advertise
+        }
+      }
+      return UpdateInfo(j['version'] as String? ?? '', remoteBuild, apkUrl);
     } catch (e) {
       if (throwOnError) rethrow;
       return null; // offline / not yet deployed — no banner

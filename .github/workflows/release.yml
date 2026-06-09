@@ -40,7 +40,10 @@ jobs:
         run: |
           VER=$(grep '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//')
           BUILD=${VER##*+}
-          APK="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/facebouffe.apk"
+          # Versioned (not /latest/) so the URL 404s until THIS release's APK is
+          # actually published — the Android update check gates on its reachability,
+          # so the banner can't advertise an APK that isn't downloadable yet.
+          APK="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VER%%+*}/facebouffe.apk"
           # Flutter generates build/web/version.json; merge in our update fields.
           if [ ! -f build/web/version.json ]; then echo "{\"version\":\"${VER%%+*}\",\"build_number\":\"$BUILD\"}" > build/web/version.json; fi
           jq --argjson build "$BUILD" --arg apk "$APK" '. + {build: $build, apk: $apk}' build/web/version.json > build/web/version.tmp.json
