@@ -975,19 +975,28 @@ extension CloudSync on AppState {
   void _replaceContent(Recipe local, CloudRecipe c) => local.applyContentFrom(c.content);
 
   Map<String, dynamic> _libraryData() => {
-        'tags': tags.where((t) => !t.system).map((t) => t.toJson()).toList(),
+        'tags': tags.where((t) => !t.system && !_deletedTagIds.contains(t.id)).map((t) => t.toJson()).toList(),
         'variantGroups': variantGroups.map((g) => g.toJson()).toList(),
         'aliases': aliases,
+        'deletedTags': _deletedTagIds.toList(),
       };
 
   void _applyLibraryIfAny(({Map<String, dynamic> data, DateTime updatedAt})? lib) {
     if (lib == null) return;
     final data = lib.data;
+    // Merge deletion tombstones first so they suppress any tag the cloud blob
+    // (or another device) still carries — otherwise the additive merge below
+    // would resurrect a tag the user deleted.
+    for (final id in (data['deletedTags'] as List? ?? const [])) {
+      _deletedTagIds.add(id as String);
+    }
     final byId = {for (final t in tags) t.id: t};
     for (final tj in (data['tags'] as List? ?? const [])) {
       final t = Tag.fromJson(Map<String, dynamic>.from(tj as Map));
       byId[t.id] = t;
     }
+    // Drop any tombstoned tag (locally held or just merged in from the cloud).
+    byId.removeWhere((id, _) => _deletedTagIds.contains(id));
     tags = byId.values.toList();
     final gById = {for (final g in variantGroups) g.groupId: g};
     for (final gj in (data['variantGroups'] as List? ?? const [])) {
@@ -1024,6 +1033,7 @@ extension CloudSync on AppState {
     _store?.setJson(LocalStore.syncState(account!.id), {
       'synced': _syncedIds.toList(),
       'localOnly': _localOnlyIds.toList(),
+      'deletedTags': _deletedTagIds.toList(),
     });
   }
 
@@ -1037,6 +1047,9 @@ extension CloudSync on AppState {
       final m = jsonDecode(raw) as Map<String, dynamic>;
       _syncedIds.addAll((m['synced'] as List? ?? const []).map((e) => e as String));
       _localOnlyIds.addAll((m['localOnly'] as List? ?? const []).map((e) => e as String));
+      // Don't clear _deletedTagIds — a tombstone created this session (offline,
+      // before this sync) must survive the reload — merge instead.
+      _deletedTagIds.addAll((m['deletedTags'] as List? ?? const []).map((e) => e as String));
     } catch (_) {}
   }
 }

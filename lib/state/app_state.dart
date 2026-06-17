@@ -104,6 +104,12 @@ class AppState extends ChangeNotifier {
   bool migrationPending = false; // later-device: local-only recipes await user choice
   final Set<String> _syncedIds = {}; // recipe ids known to exist in the cloud
   final Set<String> _localOnlyIds = {}; // recipes the user chose NOT to sync (later-device "skip")
+  // Tombstones for user-deleted custom tags. The library blob is merged additively
+  // on pull, so without these a deleted tag is re-added from any device's copy and
+  // re-published — it "always comes back". Ids are never reused (addTag mints a new
+  // uuid each time), so a tombstone safely suppresses a tag forever. Synced via the
+  // library blob so every device learns the deletion.
+  final Set<String> _deletedTagIds = {};
   List<Recipe> _pendingLocalOnly = []; // recipes offered in the MigrationSheet
   bool _syncBusy = false;
   // Fire-and-forget pushes requested while a sync is running are queued here and
@@ -823,6 +829,7 @@ class AppState extends ChangeNotifier {
 
   void deleteTag(String id) {
     tags.removeWhere((t) => t.id == id);
+    _deletedTagIds.add(id); // tombstone so sync doesn't re-add it from another copy
     final touched = <Recipe>[];
     for (final r in recipes) {
       if (r.tags.remove(id)) {
@@ -831,6 +838,7 @@ class AppState extends ChangeNotifier {
       }
     }
     _persistDb();
+    _persistSyncState(); // persist the tombstone (no-op when signed out)
     cloudPushLibrary();
     for (final r in touched) {
       cloudPushRecipe(r);
