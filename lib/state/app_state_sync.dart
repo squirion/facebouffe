@@ -817,6 +817,9 @@ extension CloudSync on AppState {
       }
     }
 
+    // tidy variant groups (incl. any stale ones merged in from the cloud lib)
+    // before re-publishing the library, so the cleanup sticks across devices
+    healVariantGroups();
     _syncedIds
       ..clear()
       ..addAll(recipes.where((r) => !_localOnlyIds.contains(r.id) && !r.isLinked).map((r) => r.id));

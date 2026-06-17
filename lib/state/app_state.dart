@@ -136,6 +136,41 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  /// One-pass repair of variant groups. A group's *real* membership is the set
+  /// of existing recipes that point to it (recipe.variantGroupId) — the source of
+  /// truth — which fixes accumulated cruft: duplicate group objects nobody points
+  /// to, dead members, and groups whose base recipe was deleted. Groups with
+  /// fewer than two real members are dissolved (their recipes become standalone),
+  /// memberIds/baseId are rebuilt from the real members, and dangling pointers
+  /// are cleared. Idempotent. Returns the recipe ids whose variantGroupId changed.
+  Set<String> healVariantGroups() {
+    final realMembers = <String, List<String>>{};
+    for (final r in recipes) {
+      final gid = r.variantGroupId;
+      if (gid != null) realMembers.putIfAbsent(gid, () => []).add(r.id);
+    }
+    final keep = <VariantGroup>[];
+    final keptIds = <String>{};
+    for (final g in variantGroups) {
+      final members = realMembers[g.groupId] ?? const <String>[];
+      if (members.length < 2) continue; // dissolve: nobody / a single recipe points here
+      g.memberIds = List<String>.from(members);
+      if (!members.contains(g.baseId)) g.baseId = members.first; // base gone → re-elect
+      keep.add(g);
+      keptIds.add(g.groupId);
+    }
+    final cleared = <String>{};
+    for (final r in recipes) {
+      final gid = r.variantGroupId;
+      if (gid != null && !keptIds.contains(gid)) {
+        r.variantGroupId = null; // group dissolved or never existed
+        cleared.add(r.id);
+      }
+    }
+    variantGroups = keep;
+    return cleared;
+  }
+
   // ── recipe-as-ingredient (embedded sub-recipes) ──
 
   /// Build a snapshot of recipe [b] for embedding it as an ingredient. Captures
@@ -195,6 +230,10 @@ class AppState extends ChangeNotifier {
     } else {
       await _loadSeed();
     }
+    // one-time tidy of any stale/dissolved variant groups accumulated over time
+    final groupsBefore = variantGroups.length;
+    final healed = healVariantGroups();
+    if (healed.isNotEmpty || variantGroups.length != groupsBefore) _persistDb();
     // settings
     profile.language = store.str(LocalStore.lang) ?? profile.language;
     profile.fontSize = store.str(LocalStore.fontSize) ?? profile.fontSize;
@@ -508,36 +547,11 @@ class AppState extends ChangeNotifier {
     recipes.removeWhere((x) => x.id == id);
     final photo = recipePhotos.remove(id);
     final gallery = recipeGallery.remove(id);
-    // Variant-group cleanup: drop this member, hand the "base" off to the next
-    // one if it was the base, and dissolve the group if a single recipe remains
-    // (keep that recipe, just remove the group). Otherwise the survivors would
-    // be orphaned (none is the base, so the browse list hides them).
-    final touchedMembers = <Recipe>[];
-    var groupChanged = false;
-    if (r != null && !r.isLinked && r.variantGroupId != null) {
-      final g = getVariantGroup(r.variantGroupId);
-      if (g != null) {
-        groupChanged = true;
-        g.memberIds.remove(id);
-        g.memberIds.removeWhere((mid) => getRecipe(mid) == null); // shed stale members
-        if (!g.memberIds.contains(g.baseId) && g.memberIds.isNotEmpty) g.baseId = g.memberIds.first;
-        if (g.memberIds.length < 2) {
-          for (final mid in g.memberIds) {
-            final m = getRecipe(mid);
-            if (m != null) {
-              m.variantGroupId = null; // sole survivor → standalone
-              touchedMembers.add(m);
-            }
-          }
-          variantGroups.removeWhere((x) => x.groupId == g.groupId);
-        } else {
-          for (final mid in g.memberIds) {
-            final m = getRecipe(mid);
-            if (m != null) touchedMembers.add(m);
-          }
-        }
-      }
-    }
+    // Variant-group cleanup: hand the base off / dissolve a singleton group so
+    // survivors stay visible (they'd otherwise orphan when the base is removed).
+    final groupsBefore = variantGroups.length;
+    final cleared = (r != null && !r.isLinked) ? healVariantGroups() : <String>{};
+    final groupChanged = cleared.isNotEmpty || variantGroups.length != groupsBefore;
     if (r != null) {
       recentlyDeleted.insert(0, {
         'recipe': r.toJson(),
@@ -559,10 +573,11 @@ class AppState extends ChangeNotifier {
       cloudDeleteRecipe(id);
     }
     if (groupChanged) {
-      // re-push surviving members (their denormalized variant base / group id
-      // changed) and the library blob (variant group membership/base).
-      for (final m in touchedMembers) {
-        cloudPushRecipe(m);
+      // re-push recipes whose variantGroupId was cleared, plus the library blob
+      // (variant group membership/base) so the cleanup propagates to the cloud.
+      for (final cid in cleared) {
+        final m = getRecipe(cid);
+        if (m != null) cloudPushRecipe(m);
       }
       cloudPushLibrary();
     }
