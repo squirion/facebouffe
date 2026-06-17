@@ -519,16 +519,22 @@ class AppState extends ChangeNotifier {
       if (g != null) {
         groupChanged = true;
         g.memberIds.remove(id);
-        if (g.baseId == id && g.memberIds.isNotEmpty) g.baseId = g.memberIds.first;
-        for (final mid in g.memberIds) {
-          final m = getRecipe(mid);
-          if (m != null) touchedMembers.add(m);
-        }
+        g.memberIds.removeWhere((mid) => getRecipe(mid) == null); // shed stale members
+        if (!g.memberIds.contains(g.baseId) && g.memberIds.isNotEmpty) g.baseId = g.memberIds.first;
         if (g.memberIds.length < 2) {
-          for (final m in touchedMembers) {
-            m.variantGroupId = null; // sole survivor → standalone
+          for (final mid in g.memberIds) {
+            final m = getRecipe(mid);
+            if (m != null) {
+              m.variantGroupId = null; // sole survivor → standalone
+              touchedMembers.add(m);
+            }
           }
           variantGroups.removeWhere((x) => x.groupId == g.groupId);
+        } else {
+          for (final mid in g.memberIds) {
+            final m = getRecipe(mid);
+            if (m != null) touchedMembers.add(m);
+          }
         }
       }
     }
@@ -1092,11 +1098,23 @@ class AppState extends ChangeNotifier {
   }
 
   /// Recipes deduplicated by variant group (group shown once via its base).
-  List<Recipe> get baseRecipes => recipes.where((r) {
-        if (r.variantGroupId == null) return true;
-        final g = getVariantGroup(r.variantGroupId);
-        return g == null || g.baseId == r.id;
-      }).toList();
+  /// Orphan-resilient: if a group's base recipe no longer exists, the first
+  /// surviving member represents the group, so deleting/losing the base never
+  /// hides the remaining variants.
+  List<Recipe> get baseRecipes {
+    final ids = {for (final r in recipes) r.id};
+    return recipes.where((r) {
+      final gid = r.variantGroupId;
+      if (gid == null) return true;
+      final g = getVariantGroup(gid);
+      if (g == null) return true; // group gone → standalone
+      if (g.baseId == r.id) return true; // the designated base
+      if (ids.contains(g.baseId)) return false; // a real base represents the group
+      // base recipe is missing → first existing member represents the group
+      final rep = g.memberIds.firstWhere(ids.contains, orElse: () => '');
+      return rep == r.id;
+    }).toList();
+  }
 }
 
 final _rand = Random();
