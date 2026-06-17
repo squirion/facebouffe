@@ -14,6 +14,7 @@ import '../services/sync/supabase_backend.dart';
 import '../services/cnf.dart';
 import '../services/image_cache.dart';
 import '../services/local_store.dart';
+import '../services/timer_notifications.dart';
 
 import '../data/models.dart';
 import '../data/i18n.dart';
@@ -52,7 +53,10 @@ class AppState extends ChangeNotifier {
   List<Tag> tags = [];
   List<VariantGroup> variantGroups = [];
   Profile profile = Profile();
-  List<ShoppingItem> shopping = [];
+  // Groceries are now a small multi-list model: one undeletable `main` list (the
+  // target of "add to groceries"), plus `received`/`sent` tabs from list-sharing.
+  List<ShoppingList> shoppingLists = [ShoppingList(id: 'main', kind: 'main')];
+  String? activeShoppingListId; // null ⇒ main
   TipsSeen tipsSeen = TipsSeen();
   Map<String, String> recipePhotos = {}; // recipe id (or "__draft") -> hero photo path
   Map<String, List<String>> recipeGallery = {}; // recipe id (or "__draft") -> gallery photo paths
@@ -90,6 +94,7 @@ class AppState extends ChangeNotifier {
   final SyncBackend sync;
   Account? account; // null = signed out / offline-only
   StreamSubscription<Account?>? _acctSub;
+  StreamSubscription<void>? _sharedSub; // Realtime: friend shared a grocery list
   bool get signedIn => account != null;
 
   AppState({SyncBackend? sync}) : sync = sync ?? SupabaseSyncBackend();
@@ -271,6 +276,16 @@ class AppState extends ChangeNotifier {
         recentlyDeleted = (jsonDecode(trash) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
       } catch (_) {}
     }
+    final shop = store.str(LocalStore.shopping);
+    if (shop != null) {
+      try {
+        final loaded = (jsonDecode(shop) as List).map((e) => ShoppingList.fromJson(e as Map<String, dynamic>)).toList();
+        if (loaded.isNotEmpty) {
+          shoppingLists = loaded;
+          if (!shoppingLists.any((l) => l.isMain)) shoppingLists.insert(0, ShoppingList(id: 'main', kind: 'main'));
+        }
+      } catch (_) {}
+    }
     final al = store.str(LocalStore.aliases);
     if (al != null) {
       try {
@@ -299,12 +314,33 @@ class AppState extends ChangeNotifier {
   // ── account / social ──
   void _initAccount() {
     account = sync.currentAccount;
-    if (account != null) _refreshUsername();
+    if (account != null) {
+      _refreshUsername();
+      _subscribeSharedLists();
+    }
     _acctSub = sync.accountChanges.listen((a) async {
       account = a;
-      if (a != null && a.username == null) await _refreshUsername();
+      if (a != null) {
+        if (a.username == null) await _refreshUsername();
+        _subscribeSharedLists();
+      } else {
+        _cancelSharedListsSub();
+      }
       notifyListeners();
     });
+  }
+
+  /// Realtime: instant delivery of shared grocery lists while the app is open.
+  void _subscribeSharedLists() {
+    if (_sharedSub != null) return;
+    try {
+      _sharedSub = sync.sharedListInserts().listen((_) => unawaited(importSharedLists()));
+    } catch (_) {}
+  }
+
+  void _cancelSharedListsSub() {
+    _sharedSub?.cancel();
+    _sharedSub = null;
   }
 
   Future<void> _refreshUsername() async {
@@ -337,6 +373,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> signOutAccount() async {
+    _cancelSharedListsSub();
     await sync.signOut();
     account = null;
     _syncedIds.clear();
@@ -911,12 +948,21 @@ class AppState extends ChangeNotifier {
   }
 
   // ── import engine config (§2f) ──
+  /// Call when the app returns to the foreground: pull anything that arrived
+  /// while backgrounded (e.g. a friend's shared grocery list), "email-fast".
+  void onAppResumed() {
+    if (signedIn) unawaited(runCloudSync());
+  }
+
   void _watchConnectivity() {
     Future<void> apply(List<ConnectivityResult> r) async {
       final up = r.any((c) => c != ConnectivityResult.none);
       if (up != online) {
+        final cameOnline = up && !online;
         online = up;
         notifyListeners();
+        // Reconnect → pull anything that arrived while offline (e.g. shared lists).
+        if (cameOnline && signedIn) unawaited(runCloudSync());
       }
     }
 
@@ -930,6 +976,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _connSub?.cancel();
     _acctSub?.cancel();
+    _sharedSub?.cancel();
     super.dispose();
   }
 
@@ -981,42 +1028,94 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── shopping ──
-  void shoppingAdd(ShoppingItem it) {
-    shopping.add(it);
+  // ── shopping (multi-list) ──
+  /// The undeletable `main` list. Self-heals if somehow absent.
+  ShoppingList get mainShoppingList {
+    for (final l in shoppingLists) {
+      if (l.isMain) return l;
+    }
+    final m = ShoppingList(id: 'main', kind: 'main');
+    shoppingLists.insert(0, m);
+    return m;
+  }
+
+  /// The list the groceries screen is currently showing (defaults to main).
+  ShoppingList get activeShoppingList {
+    final id = activeShoppingListId;
+    if (id != null) {
+      for (final l in shoppingLists) {
+        if (l.id == id) return l;
+      }
+    }
+    return mainShoppingList;
+  }
+
+  /// Items of the active list — kept as a getter so existing screen code works.
+  List<ShoppingItem> get shopping => activeShoppingList.items;
+
+  void setActiveShoppingList(String? id) {
+    activeShoppingListId = id;
     notifyListeners();
   }
 
-  void shoppingAddMany(List<ShoppingItem> arr) {
+  void _persistShopping() => _store?.setJson(LocalStore.shopping, shoppingLists.map((e) => e.toJson()).toList());
+
+  int _nowMs() => DateTime.now().millisecondsSinceEpoch;
+
+  void shoppingAdd(ShoppingItem it) {
+    final list = activeShoppingList;
+    if (list.frozen) return;
+    list.items.add(it);
+    _persistShopping();
+    notifyListeners();
+  }
+
+  /// Recipe "add to groceries" always targets the **main** list.
+  void shoppingAddMany(List<ShoppingItem> arr, {ShoppingList? into}) {
+    final items = (into ?? mainShoppingList).items;
     for (final it in arr) {
-      final idx = shopping.indexWhere((x) => !x.checked && x.name == it.name && x.unit == it.unit);
-      if (idx >= 0 && it.quantity != null && shopping[idx].quantity != null) {
-        shopping[idx].quantity = shopping[idx].quantity! + it.quantity!;
+      final idx = items.indexWhere((x) => !x.checked && x.name == it.name && x.unit == it.unit);
+      if (idx >= 0 && it.quantity != null && items[idx].quantity != null) {
+        items[idx].quantity = items[idx].quantity! + it.quantity!;
       } else {
-        shopping.add(it);
+        items.add(it);
       }
     }
+    _persistShopping();
     notifyListeners();
   }
 
   void shoppingToggle(String id) {
-    final it = shopping.firstWhere((x) => x.id == id);
-    it.checked = !it.checked;
+    final list = activeShoppingList;
+    if (list.frozen) return;
+    final idx = list.items.indexWhere((x) => x.id == id);
+    if (idx < 0) return;
+    list.items[idx].checked = !list.items[idx].checked;
+    _persistShopping();
     notifyListeners();
   }
 
   void shoppingRemove(String id) {
-    shopping.removeWhere((x) => x.id == id);
+    final list = activeShoppingList;
+    if (list.frozen) return;
+    list.items.removeWhere((x) => x.id == id);
+    _persistShopping();
     notifyListeners();
   }
 
   void shoppingClearChecked() {
-    shopping.removeWhere((x) => x.checked);
+    final list = activeShoppingList;
+    if (list.frozen) return;
+    list.items.removeWhere((x) => x.checked);
+    _persistShopping();
     notifyListeners();
   }
 
   void shoppingClearAll() {
-    shopping.clear();
+    final list = activeShoppingList;
+    if (list.frozen) return;
+    list.items.clear();
+    _persistShopping();
     notifyListeners();
   }
 
@@ -1025,22 +1124,34 @@ class AppState extends ChangeNotifier {
   /// Returns false (no change) if B is unresolvable or its weight can't be
   /// estimated — the caller surfaces feedback.
   bool shoppingExpandSubRecipe(String itemId) {
-    final idx = shopping.indexWhere((x) => x.id == itemId);
+    final list = activeShoppingList;
+    if (list.frozen) return false;
+    final idx = list.items.indexWhere((x) => x.id == itemId);
     if (idx < 0) return false;
-    final item = shopping[idx];
+    final item = list.items[idx];
+    final expanded = _expandSubRecipeLine(item);
+    if (expanded == null) return false;
+    list.items.removeAt(idx);
+    shoppingAddMany(expanded, into: list); // persists + notifies
+    return true;
+  }
+
+  /// Expand a single sub-recipe line into its scaled ingredient lines, or null
+  /// when it isn't a resolvable sub-recipe line. Shared by expand + send-flatten.
+  List<ShoppingItem>? _expandSubRecipeLine(ShoppingItem item) {
     final subId = item.subRecipeId;
-    if (subId == null) return false;
+    if (subId == null) return null;
     final b = getRecipe(subId);
-    if (b == null) return false;
+    if (b == null) return null;
     final subW = b.effectiveTotalWeightG ?? Cnf.instance.totalWeight(b.ingredients, resolve: getRecipe).grams;
-    if (subW <= 0) return false;
+    if (subW <= 0) return null;
     // Prefer the grams captured at add-time; otherwise recompute from this line's
     // amount (handles sub-recipes whose weight wasn't known when it was added).
     final subV = Cnf.instance.totalVolume(b.ingredients).ml;
     final grams = item.subAmountG ?? (item.quantity != null ? Cnf.instance.embedGramsFor(item.quantity, item.unit, subW, subV) : null);
-    if (grams == null || grams <= 0) return false;
+    if (grams == null || grams <= 0) return null;
     final fraction = grams / subW;
-    if (fraction <= 0) return false;
+    if (fraction <= 0) return null;
     final scaled = <ShoppingItem>[];
     for (final ing in b.ingredients) {
       if (ing.name.trim().isEmpty) continue;
@@ -1064,12 +1175,126 @@ class AppState extends ChangeNotifier {
           : QtyUnit(ing.quantity == null ? null : ing.quantity! * fraction, ing.unit);
       scaled.add(ShoppingItem(id: uuid(), name: ing.name, quantity: conv.quantity, unit: conv.unit, sourceRecipeId: b.id));
     }
-    shopping.removeAt(idx);
-    shoppingAddMany(scaled);
+    return scaled;
+  }
+
+  // ── shopping: list sharing ──
+  /// Flatten a list for sending: expand sub-recipe lines (one level deep),
+  /// strip provenance, and reset checkmarks. Merges duplicates by name+unit.
+  List<ShoppingItem> flattenForSend(List<ShoppingItem> items) {
+    final out = <ShoppingItem>[];
+    void addMerged(ShoppingItem it) {
+      final idx = out.indexWhere((x) => x.name == it.name && x.unit == it.unit);
+      if (idx >= 0 && it.quantity != null && out[idx].quantity != null) {
+        out[idx].quantity = out[idx].quantity! + it.quantity!;
+      } else {
+        out.add(it);
+      }
+    }
+    for (final it in items) {
+      final expanded = it.subRecipeId != null ? _expandSubRecipeLine(it) : null;
+      final lines = expanded ?? [it];
+      for (final l in lines) {
+        addMerged(ShoppingItem(id: uuid(), name: l.name, quantity: l.quantity, unit: l.unit));
+      }
+    }
+    return out;
+  }
+
+  /// Send the main list to [friend]. On success: snapshot a frozen `sent` tab,
+  /// clear main, persist. Returns false (and changes nothing) on failure/offline.
+  Future<bool> sendShoppingList(FriendEdge friend) async {
+    final main = mainShoppingList;
+    final flat = flattenForSend(main.items);
+    if (flat.isEmpty) return false;
+    final me = account?.username ?? '';
+    try {
+      await sync.sendSharedList(friend.userId, me, flat.map((e) => e.toJson()).toList());
+    } catch (_) {
+      return false;
+    }
+    shoppingLists.add(ShoppingList(
+      id: uuid(),
+      kind: 'sent',
+      otherUser: friend.username,
+      otherUserId: friend.userId,
+      frozen: true,
+      createdAt: _nowMs(),
+      items: flat.map((e) => e.copy()).toList(),
+    ));
+    main.items.clear();
+    activeShoppingListId = null; // back to main (now empty, fresh start)
+    _persistShopping();
+    notifyListeners();
     return true;
   }
 
-  int get shoppingUncheckedCount => shopping.where((x) => !x.checked).length;
+  /// Remove a received/sent tab. Main is never removed. Received lists also
+  /// delete their cloud inbox row (fire-and-forget). Switches active to main.
+  void deleteShoppingList(String id) {
+    final idx = shoppingLists.indexWhere((l) => l.id == id);
+    if (idx < 0) return;
+    final list = shoppingLists[idx];
+    if (list.isMain) return;
+    final rowId = list.sourceRowId;
+    if (rowId != null) unawaited(_safeDeleteSharedRow(rowId));
+    shoppingLists.removeAt(idx);
+    if (activeShoppingListId == id) activeShoppingListId = null;
+    _persistShopping();
+    notifyListeners();
+  }
+
+  Future<void> _safeDeleteSharedRow(String rowId) async {
+    try {
+      await sync.deleteSharedList(rowId);
+    } catch (_) {}
+  }
+
+  /// Pull inbox rows addressed to me and append any not already imported (deduped
+  /// by sourceRowId). Fires a local notification per newly-received list. Safe to
+  /// call repeatedly (idempotent). Returns the count of newly-imported lists.
+  Future<int> importSharedLists() async {
+    if (!signedIn) return 0;
+    List<SharedList> rows;
+    try {
+      rows = await sync.fetchSharedLists();
+    } catch (_) {
+      return 0;
+    }
+    final known = {for (final l in shoppingLists) if (l.sourceRowId != null) l.sourceRowId};
+    var added = 0;
+    for (final row in rows) {
+      if (known.contains(row.id)) continue;
+      shoppingLists.add(ShoppingList(
+        id: uuid(),
+        kind: 'received',
+        otherUser: row.fromUsername,
+        otherUserId: row.fromUser,
+        sourceRowId: row.id,
+        createdAt: row.createdAt,
+        items: row.items.map((e) => ShoppingItem.fromJson(e)).toList(),
+      ));
+      added++;
+      unawaited(notifyListReceived(row.fromUsername));
+    }
+    if (added > 0) {
+      _persistShopping();
+      notifyListeners();
+    }
+    return added;
+  }
+
+  /// Local notification when a friend's grocery list arrives.
+  Future<void> notifyListReceived(String fromUsername) async {
+    try {
+      await TimerNotifications.instance.notify(
+        title: t('list_received_title'),
+        body: t('list_received_body').replaceAll('@name', '@$fromUsername'),
+      );
+    } catch (_) {}
+  }
+
+  int get shoppingUncheckedCount => mainShoppingList.items.where((x) => !x.checked).length;
 
   // ── import ──
   int importData(Map<String, dynamic> data) {

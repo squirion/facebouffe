@@ -134,6 +134,17 @@ create table recipe_images (
 );
 -- GC: an image is orphaned when no recipe_images row references its hash.
 -- Run periodically (edge function/cron); see §5.
+
+-- Phase 7: share a grocery list with a friend (inbox table + Realtime).
+create table shared_lists (
+  id            uuid primary key default gen_random_uuid(),
+  from_user     uuid not null references profiles(id) on delete cascade,
+  from_username text not null,                          -- denormalized (shown on the tab)
+  to_user       uuid not null references profiles(id) on delete cascade,
+  items         jsonb not null,                         -- ShoppingItem json (flattened, unchecked)
+  created_at    timestamptz not null default now()
+);
+create index shared_lists_to_user_idx on shared_lists (to_user);
 ```
 
 ---
@@ -239,6 +250,17 @@ create policy friendships_delete on friendships for delete using ( user_a = auth
 -- blocks (only the blocker manages their blocks)
 alter table blocks enable row level security;
 create policy blocks_all on blocks for all using ( blocker_id = auth.uid() ) with check ( blocker_id = auth.uid() );
+
+-- shared_lists (Phase 7): send only to a friend; both parties can read & delete.
+alter table shared_lists enable row level security;
+create policy shared_lists_insert on shared_lists for insert to authenticated
+  with check ( from_user = auth.uid() and private.is_friend(from_user, to_user) );
+create policy shared_lists_read on shared_lists for select to authenticated
+  using ( to_user = auth.uid() or from_user = auth.uid() );
+create policy shared_lists_delete on shared_lists for delete to authenticated
+  using ( to_user = auth.uid() or from_user = auth.uid() );
+-- Realtime delivery (recipient subscribes to inserts addressed to them):
+alter publication supabase_realtime add table shared_lists;
 
 -- (images / recipe_images policies are defined above, in the Phase 2B block.)
 ```

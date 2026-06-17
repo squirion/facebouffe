@@ -29,6 +29,7 @@ class LocalStore {
   static const chimeUri = 'fb_chime_uri';
   static const chimeName = 'fb_chime_name';
   static const tips = 'fb_tips';
+  static const shopping = 'fb_shopping';
   static const photos = 'fb_photos';
   static const gallery = 'fb_gallery';
   static const trash = 'fb_trash';

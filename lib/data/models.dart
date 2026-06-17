@@ -515,6 +515,79 @@ class ShoppingItem {
     this.subRecipeId,
     this.subAmountG,
   });
+
+  factory ShoppingItem.fromJson(Map<String, dynamic> j) => ShoppingItem(
+        id: j['id'] as String,
+        name: j['name'] as String? ?? '',
+        quantity: j['quantity'] as num?,
+        unit: j['unit'] as String?,
+        checked: j['checked'] as bool? ?? false,
+        sourceRecipeId: j['sourceRecipeId'] as String?,
+        subRecipeId: j['subRecipeId'] as String?,
+        subAmountG: j['subAmountG'] as num?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (quantity != null) 'quantity': quantity,
+        if (unit != null) 'unit': unit,
+        if (checked) 'checked': checked,
+        if (sourceRecipeId != null) 'sourceRecipeId': sourceRecipeId,
+        if (subRecipeId != null) 'subRecipeId': subRecipeId,
+        if (subAmountG != null) 'subAmountG': subAmountG,
+      };
+
+  ShoppingItem copy() => ShoppingItem(id: id, name: name, quantity: quantity, unit: unit, checked: checked, sourceRecipeId: sourceRecipeId, subRecipeId: subRecipeId, subAmountG: subAmountG);
+}
+
+/// A grocery list shown as a tab on the groceries page. There is always one
+/// `main` list (the one "add to groceries" targets). `received` lists arrive
+/// from a friend (editable); `sent` lists are frozen snapshots of what you sent.
+class ShoppingList {
+  String id;
+  String kind; // 'main' | 'received' | 'sent'
+  String? otherUser; // sender (received) or recipient (sent) @username
+  String? otherUserId;
+  String? sourceRowId; // shared_lists row id this was imported from (received)
+  bool frozen; // sent lists are read-only
+  int createdAt; // epoch ms (for disambiguating same-friend tabs)
+  List<ShoppingItem> items;
+
+  ShoppingList({
+    required this.id,
+    this.kind = 'main',
+    this.otherUser,
+    this.otherUserId,
+    this.sourceRowId,
+    this.frozen = false,
+    this.createdAt = 0,
+    List<ShoppingItem>? items,
+  }) : items = items ?? [];
+
+  bool get isMain => kind == 'main';
+
+  factory ShoppingList.fromJson(Map<String, dynamic> j) => ShoppingList(
+        id: j['id'] as String,
+        kind: j['kind'] as String? ?? 'main',
+        otherUser: j['otherUser'] as String?,
+        otherUserId: j['otherUserId'] as String?,
+        sourceRowId: j['sourceRowId'] as String?,
+        frozen: j['frozen'] as bool? ?? false,
+        createdAt: (j['createdAt'] as num?)?.toInt() ?? 0,
+        items: (j['items'] as List?)?.map((e) => ShoppingItem.fromJson(e as Map<String, dynamic>)).toList() ?? [],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind,
+        if (otherUser != null) 'otherUser': otherUser,
+        if (otherUserId != null) 'otherUserId': otherUserId,
+        if (sourceRowId != null) 'sourceRowId': sourceRowId,
+        if (frozen) 'frozen': frozen,
+        'createdAt': createdAt,
+        'items': items.map((e) => e.toJson()).toList(),
+      };
 }
 
 class TipsSeen {

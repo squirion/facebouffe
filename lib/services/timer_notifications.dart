@@ -24,6 +24,7 @@ class TimerNotifications {
   Future<void>? _initFuture;
 
   static const String _chimeChannel = 'fb_timer_chime';
+  static const String _socialChannel = 'fb_social'; // non-alarm app notices (e.g. a friend shares a list)
   static const String _alarmPrefix = 'fb_timer_alarm_';
   // The device's default alarm tone, used when the user hasn't picked a specific one.
   static const String defaultAlarmUri = 'content://settings/system/alarm_alert';
@@ -70,6 +71,14 @@ class TimerNotifications {
         playSound: true,
         enableVibration: true,
         audioAttributesUsage: AudioAttributesUsage.alarm, // sounds while asleep / under DND
+      ));
+      await a.createNotificationChannel(const AndroidNotificationChannel(
+        _socialChannel,
+        'Social',
+        description: 'Avis sociaux (ex. un ami partage une liste d\'épicerie).',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
       ));
     }
     _ready = true;
@@ -205,6 +214,33 @@ class TimerNotifications {
       ),
     );
     await _plugin.show(id: 90001, title: title, body: body, notificationDetails: details);
+  }
+
+  /// Post an immediate, non-alarm app notification (e.g. a friend shared a
+   /// grocery list). Best-effort: silently no-ops if notifications aren't ready.
+  Future<void> notify({required String title, required String body, int id = 90100}) async {
+    if (kIsWeb) {
+      await requestPermissions();
+      webnotif.showWebNotif(title, body);
+      return;
+    }
+    if (!_ready) {
+      try {
+        await init();
+      } catch (_) {
+        return;
+      }
+    }
+    if (!_ready) return;
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        _socialChannel, 'Social',
+        channelDescription: 'Avis sociaux.',
+        icon: 'ic_stat_timer',
+        importance: Importance.high, priority: Priority.high,
+      ),
+    );
+    await _plugin.show(id: id, title: title, body: body, notificationDetails: details);
   }
 
   Future<void> cancel(int id) async {

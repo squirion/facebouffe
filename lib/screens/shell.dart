@@ -38,16 +38,30 @@ class RootShell extends StatefulWidget {
   State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> {
+class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   bool _migrationShowing = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // "Partager vers Facebouffe" — handle links/images shared from other apps.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ShareImport.init(context);
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      context.read<AppState>().onAppResumed();
+    }
   }
 
   @override

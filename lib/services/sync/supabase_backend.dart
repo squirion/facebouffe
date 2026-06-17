@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -416,5 +417,65 @@ class SupabaseSyncBackend implements SyncBackend {
   @override
   Future<void> deleteReview(String commentId) async {
     await _c.from('comments').delete().eq('id', commentId);
+  }
+
+  // ── Phase 7: share a grocery list ──
+
+  @override
+  Future<void> sendSharedList(String toUserId, String fromUsername, List<Map<String, dynamic>> items) async {
+    final uid = _c.auth.currentUser?.id;
+    if (uid == null) throw StateError('not signed in');
+    await _c.from('shared_lists').insert({
+      'from_user': uid,
+      'from_username': fromUsername,
+      'to_user': toUserId,
+      'items': items,
+    });
+  }
+
+  @override
+  Future<List<SharedList>> fetchSharedLists() async {
+    final uid = _c.auth.currentUser?.id;
+    if (uid == null) return [];
+    final rows = await _c.from('shared_lists').select('id,from_user,from_username,items,created_at').eq('to_user', uid).order('created_at');
+    return (rows as List).map((r) {
+      final m = r as Map<String, dynamic>;
+      final created = DateTime.tryParse(m['created_at'] as String? ?? '');
+      return SharedList(
+        id: m['id'] as String,
+        fromUser: m['from_user'] as String,
+        fromUsername: m['from_username'] as String? ?? '',
+        createdAt: created?.millisecondsSinceEpoch ?? 0,
+        items: ((m['items'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+      );
+    }).toList();
+  }
+
+  @override
+  Future<void> deleteSharedList(String id) async {
+    await _c.from('shared_lists').delete().eq('id', id);
+  }
+
+  @override
+  Stream<void> sharedListInserts() {
+    final uid = _c.auth.currentUser?.id;
+    if (uid == null) return const Stream<void>.empty();
+    final controller = StreamController<void>();
+    final channel = _c.channel('shared_lists:$uid');
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'shared_lists',
+          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'to_user', value: uid),
+          callback: (_) {
+            if (!controller.isClosed) controller.add(null);
+          },
+        )
+        .subscribe();
+    controller.onCancel = () async {
+      await _c.removeChannel(channel);
+    };
+    return controller.stream;
   }
 }

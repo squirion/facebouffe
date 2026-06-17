@@ -49,6 +49,7 @@ class FbIcon extends StatelessWidget {
     'refresh': Icons.refresh,
     'download': Icons.download_rounded,
     'sparkles': Icons.auto_awesome_outlined,
+    'send': Icons.send_outlined,
   };
 
   static const _filled = {

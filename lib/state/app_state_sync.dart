@@ -59,6 +59,8 @@ extension CloudSync on AppState {
       await _reconcileLinks();
       _store?.setStr(LocalStore.localOwner, account!.id);
       await refreshFriends();
+      await importSharedLists(); // pull any grocery lists friends shared
+
       // Don't report "synced" if a push that ran during this sync failed.
       _setSyncStatus(_pushFailedDuringSync ? SyncStatus.error : SyncStatus.synced);
     } catch (e) {

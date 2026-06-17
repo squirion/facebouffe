@@ -55,6 +55,16 @@ class FriendEdge {
   bool get incoming => status == 'pending' && !outgoing;
 }
 
+/// One shared grocery list (`shared_lists` row) addressed to a friend.
+class SharedList {
+  final String id; // row id (uuid)
+  final String fromUser; // sender's user id
+  final String fromUsername; // denormalized sender handle (shown on the tab)
+  final int createdAt; // epoch ms
+  final List<Map<String, dynamic>> items; // ShoppingItem json
+  const SharedList({required this.id, required this.fromUser, required this.fromUsername, required this.createdAt, required this.items});
+}
+
 /// One owned recipe in the cloud (`recipes` row). [content] is the recipe's
 /// full json minus the private `personal` overlay (which syncs separately).
 class CloudRecipe {
@@ -219,6 +229,22 @@ abstract class SyncBackend {
   /// Image-hash maps for a batch of recipe ids — one DB call used to refresh
   /// signed URLs for linked recipes without fetching full content each time.
   Future<Map<String, Map<String, dynamic>>> fetchImageHashes(List<String> ids);
+
+  // ── Phase 7: share a grocery list ──
+
+  /// Insert a grocery list addressed to [toUserId]. [items] is ShoppingItem json.
+  /// RLS enforces sender = me and friendship.
+  Future<void> sendSharedList(String toUserId, String fromUsername, List<Map<String, dynamic>> items);
+
+  /// Grocery lists addressed to me (newest first), oldest sender info denormalized.
+  Future<List<SharedList>> fetchSharedLists();
+
+  /// Delete a shared-list row by id (sender or recipient).
+  Future<void> deleteSharedList(String id);
+
+  /// Realtime: emits a tick whenever a `shared_lists` row addressed to me is
+  /// inserted (instant delivery while the app is open). Empty stream if signed out.
+  Stream<void> sharedListInserts();
 
   // ── Phase 5: reviews ──
 
