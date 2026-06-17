@@ -49,7 +49,8 @@ class _RecipeScreenState extends State<RecipeScreen> {
     }
     final visiting = widget.visiting;
     final linkedMode = !visiting && recipe.isLinked; // a stolen, read-only copy in my library
-    final owned = !visiting && !linkedMode && app.signedIn; // my own recipe
+    final mine = !visiting && !linkedMode; // my own local recipe (editable/favoritable even when signed out)
+    final owned = mine && app.signedIn; // cloud-backed too (sharing + review moderation need an account)
     final twoPane = context.layout.twoPane; // ingredients | steps side-by-side when wides
 
     final servings = _servings ??= recipe.servings;
@@ -436,9 +437,10 @@ class _RecipeScreenState extends State<RecipeScreen> {
                         ...nutritionBlock,
                         ...feedbackBlock,
                       ],
-                      // owner action row — owned recipes only; capped so the
-                      // three buttons don't stretch across a wide screen
-                      if (owned) ...[
+                      // owner action row (add variant / export / edit) — shown for
+                      // my own recipes (incl. signed-out); capped so the three
+                      // buttons don't stretch across a wide screen
+                      if (mine) ...[
                         const SizedBox(height: 18),
                         if (twoPane)
                           Align(
@@ -463,7 +465,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 RoundBtn(icon: 'back', onTap: () => Navigator.pop(context)),
-                if (owned)
+                if (mine)
                   Row(children: [
                     _PopHeart(active: fav, onTap: () => app.toggleFav(recipe.id)),
                     const SizedBox(width: 8),

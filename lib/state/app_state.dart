@@ -508,6 +508,30 @@ class AppState extends ChangeNotifier {
     recipes.removeWhere((x) => x.id == id);
     final photo = recipePhotos.remove(id);
     final gallery = recipeGallery.remove(id);
+    // Variant-group cleanup: drop this member, hand the "base" off to the next
+    // one if it was the base, and dissolve the group if a single recipe remains
+    // (keep that recipe, just remove the group). Otherwise the survivors would
+    // be orphaned (none is the base, so the browse list hides them).
+    final touchedMembers = <Recipe>[];
+    var groupChanged = false;
+    if (r != null && !r.isLinked && r.variantGroupId != null) {
+      final g = getVariantGroup(r.variantGroupId);
+      if (g != null) {
+        groupChanged = true;
+        g.memberIds.remove(id);
+        if (g.baseId == id && g.memberIds.isNotEmpty) g.baseId = g.memberIds.first;
+        for (final mid in g.memberIds) {
+          final m = getRecipe(mid);
+          if (m != null) touchedMembers.add(m);
+        }
+        if (g.memberIds.length < 2) {
+          for (final m in touchedMembers) {
+            m.variantGroupId = null; // sole survivor → standalone
+          }
+          variantGroups.removeWhere((x) => x.groupId == g.groupId);
+        }
+      }
+    }
     if (r != null) {
       recentlyDeleted.insert(0, {
         'recipe': r.toJson(),
@@ -528,6 +552,14 @@ class AppState extends ChangeNotifier {
     } else {
       cloudDeleteRecipe(id);
     }
+    if (groupChanged) {
+      // re-push surviving members (their denormalized variant base / group id
+      // changed) and the library blob (variant group membership/base).
+      for (final m in touchedMembers) {
+        cloudPushRecipe(m);
+      }
+      cloudPushLibrary();
+    }
     notifyListeners();
   }
 
@@ -540,6 +572,16 @@ class AppState extends ChangeNotifier {
     final recipe = Recipe.fromJson(Map<String, dynamic>.from(entry['recipe'] as Map));
     recipes.removeWhere((x) => x.id == recipe.id); // guard against a reused id
     recipes.insert(0, recipe);
+    // Rejoin its variant group if it still exists; otherwise restore standalone
+    // (the group may have dissolved while this recipe was in the trash).
+    if (recipe.variantGroupId != null) {
+      final g = getVariantGroup(recipe.variantGroupId);
+      if (g == null) {
+        recipe.variantGroupId = null;
+      } else if (!g.memberIds.contains(recipe.id)) {
+        g.memberIds.add(recipe.id);
+      }
+    }
     final photo = entry['photo'];
     if (photo is String && photo.isNotEmpty) recipePhotos[recipe.id] = photo;
     final gallery = (entry['gallery'] as List?)?.map((e) => e.toString()).toList() ?? const [];
