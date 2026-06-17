@@ -320,6 +320,12 @@ class AppState extends ChangeNotifier {
     tags = (j['tags'] as List).map((e) => Tag.fromJson(e as Map<String, dynamic>)).toList();
     variantGroups = (j['variantGroups'] as List? ?? []).map((e) => VariantGroup.fromJson(e as Map<String, dynamic>)).toList();
     if (j['profile'] != null) profile = Profile.fromJson(j['profile'] as Map<String, dynamic>);
+    // Bundled seed may ship recipe photos inline (data: URLs). The user's own
+    // fb_db export omits these — its photos load separately from fb_photos.
+    if (j['photos'] is Map) recipePhotos = Map<String, String>.from(j['photos'] as Map);
+    if (j['galleries'] is Map) {
+      recipeGallery = (j['galleries'] as Map).map((k, v) => MapEntry(k as String, (v as List).map((e) => e as String).toList()));
+    }
   }
 
   Map<String, dynamic> exportData() => {

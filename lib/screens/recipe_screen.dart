@@ -465,7 +465,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
                 RoundBtn(icon: 'back', onTap: () => Navigator.pop(context)),
                 if (owned)
                   Row(children: [
-                    _PopStar(active: fav, onTap: () => app.toggleFav(recipe.id)),
+                    _PopHeart(active: fav, onTap: () => app.toggleFav(recipe.id)),
                     const SizedBox(width: 8),
                     RoundBtn(icon: 'pencil', onTap: () => Nav.editRecipe(context, recipe.id)),
                   ]),
@@ -540,16 +540,16 @@ class _VisibilityControl extends StatelessWidget {
   }
 }
 
-class _PopStar extends StatefulWidget {
+class _PopHeart extends StatefulWidget {
   final bool active;
   final VoidCallback onTap;
-  const _PopStar({required this.active, required this.onTap});
+  const _PopHeart({required this.active, required this.onTap});
 
   @override
-  State<_PopStar> createState() => _PopStarState();
+  State<_PopHeart> createState() => _PopHeartState();
 }
 
-class _PopStarState extends State<_PopStar> with SingleTickerProviderStateMixin {
+class _PopHeartState extends State<_PopHeart> with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
 
   @override
@@ -573,7 +573,7 @@ class _PopStarState extends State<_PopStar> with SingleTickerProviderStateMixin 
           width: 40,
           height: 40,
           decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.34), shape: BoxShape.circle),
-          child: Center(child: FbIcon('star', size: 21, fill: widget.active, color: widget.active ? fb.gold : Colors.white)),
+          child: Center(child: FbIcon('heart', size: 21, fill: widget.active, color: widget.active ? fb.favorite : Colors.white)),
         ),
       ),
     );

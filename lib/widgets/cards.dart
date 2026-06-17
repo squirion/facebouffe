@@ -53,7 +53,7 @@ class FeatureCard extends StatelessWidget {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.32), shape: BoxShape.circle),
-                  child: Center(child: FbIcon('star', size: 17, fill: true, color: fb.gold)),
+                  child: Center(child: FbIcon('heart', size: 17, fill: true, color: fb.favorite)),
                 ),
               ),
             Positioned(
@@ -122,7 +122,7 @@ class MiniCard extends StatelessWidget {
                       width: 26,
                       height: 26,
                       decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.3), shape: BoxShape.circle),
-                      child: Center(child: FbIcon('star', size: 14, fill: true, color: fb.gold)),
+                      child: Center(child: FbIcon('heart', size: 14, fill: true, color: fb.favorite)),
                     ),
                   ),
               ],
@@ -175,7 +175,7 @@ class ListCard extends StatelessWidget {
                       ],
                       if (isFav) ...[
                         const Spacer(),
-                        FbIcon('star', size: 13, fill: true, color: fb.gold),
+                        FbIcon('heart', size: 13, fill: true, color: fb.favorite),
                       ],
                     ],
                   ),

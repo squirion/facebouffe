@@ -15,6 +15,7 @@ class FbIcon extends StatelessWidget {
     'basket': Icons.shopping_basket_outlined,
     'sliders': Icons.tune,
     'star': Icons.star_border_rounded,
+    'heart': Icons.favorite_border_rounded,
     'plus': Icons.add,
     'minus': Icons.remove,
     'chevL': Icons.chevron_left,
@@ -53,6 +54,7 @@ class FbIcon extends StatelessWidget {
   static const _filled = {
     'home': Icons.home_rounded,
     'star': Icons.star_rounded,
+    'heart': Icons.favorite_rounded,
     'flame': Icons.local_fire_department,
     'check': Icons.check,
     'play': Icons.play_arrow_rounded,

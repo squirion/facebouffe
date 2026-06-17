@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -162,19 +163,22 @@ class _DotPainter extends CustomPainter {
   bool shouldRepaint(_DotPainter old) => old.color != color;
 }
 
-/// An image widget for a stored file path (web blob URL vs local file).
+/// An image widget for a stored photo: a data: URL (seed/web-added), a web blob
+/// URL, or a local file path.
 Widget fileImage(String path, {BoxFit fit = BoxFit.cover}) {
+  if (path.startsWith('data:')) {
+    return Image.memory(base64Decode(path.substring(path.indexOf(',') + 1)), fit: fit, gaplessPlayback: true);
+  }
   if (kIsWeb) return Image.network(path, fit: fit, gaplessPlayback: true);
   return Image.file(File(path), fit: fit, gaplessPlayback: true);
 }
 
-/// Resolves a stored photo path to an Image widget (web blob vs file).
+/// Resolves a stored photo path to an Image widget (data URL vs web blob vs file).
 Widget? recipeImage(BuildContext context, String? id, {BoxFit fit = BoxFit.cover}) {
   if (id == null) return null;
   final path = context.read<AppState>().recipePhotos[id];
   if (path == null || path.isEmpty) return null;
-  if (kIsWeb) return Image.network(path, fit: fit, gaplessPlayback: true);
-  return Image.file(File(path), fit: fit, gaplessPlayback: true);
+  return fileImage(path, fit: fit);
 }
 
 // ── Hero media — photo if present, else fallback tile ───────────

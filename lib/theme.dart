@@ -16,6 +16,7 @@ class FbTheme {
   final List<BoxShadow> shadow;
   final Color gold = const Color(0xFFF4B400);
   // Semantic colors — theme-independent mid-tones, legible on both surfaces.
+  final Color favorite = const Color(0xFFD64545); // favorite heart (warm red)
   final Color danger = const Color(0xFFC0563B); // destructive actions / errors
   final Color dangerInk = const Color(0xFF9C3F29); // darker danger, for text on tint
   final Color success = const Color(0xFF6BA368); // confirmations / "in cart"

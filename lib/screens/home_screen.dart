@@ -131,7 +131,7 @@ class HomeScreen extends StatelessWidget {
               // favorites
               SectionLabel(
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  FbIcon('star', size: fb.fs(18), fill: true, color: fb.gold),
+                  FbIcon('heart', size: fb.fs(18), fill: true, color: fb.favorite),
                   const SizedBox(width: 7),
                   Text(app.t('sec_favorites')),
                 ]),
@@ -145,7 +145,7 @@ class HomeScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                     decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: fb.lineStrong, style: BorderStyle.solid)),
                     child: Row(children: [
-                      FbIcon('star', size: fb.fs(22), color: fb.gold),
+                      FbIcon('heart', size: fb.fs(22), color: fb.favorite),
                       const SizedBox(width: 12),
                       Expanded(child: Text(app.t('fav_empty'), style: fb.ui(size: 13.5, color: fb.inkSoft, height: 1.45))),
                     ]),
