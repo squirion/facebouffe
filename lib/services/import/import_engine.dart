@@ -25,13 +25,16 @@ class ImportEngine {
   /// Ordered engines to try for [method], best-available first (decision tree):
   /// AI engines appear only when usable (model present / key + connection), in
   /// the user's preferred order. Links always try the rule-based parser first.
-  static List<String> resolveChain(ImportMethod method, AppState app) {
+  /// [multiImage] true when 2+ photos are being imported together — only the
+  /// cloud providers do real multi-image vision, so the on-device engine (OCR →
+  /// small-context model) is excluded from the chain in that case.
+  static List<String> resolveChain(ImportMethod method, AppState app, {bool multiImage = false}) {
     final ai = <String>[];
     if (app.preferredAI == 'online') {
       if (app.onlineAiReady) ai.add('online');
-      if (app.onDeviceReady) ai.add('ondevice');
+      if (!multiImage && app.onDeviceReady) ai.add('ondevice');
     } else {
-      if (app.onDeviceReady) ai.add('ondevice');
+      if (!multiImage && app.onDeviceReady) ai.add('ondevice');
       if (app.onlineAiReady) ai.add('online');
     }
     // Links: Tier 0 (any-site JSON-LD) first, then fold to the AI engines so an
@@ -41,8 +44,8 @@ class ImportEngine {
   }
 
   /// The engine that will run first for [method] ('none' if nothing is usable).
-  static String resolve(ImportMethod method, AppState app) {
-    final chain = resolveChain(method, app);
+  static String resolve(ImportMethod method, AppState app, {bool multiImage = false}) {
+    final chain = resolveChain(method, app, multiImage: multiImage);
     return chain.isEmpty ? 'none' : chain.first;
   }
 
@@ -69,8 +72,7 @@ class ImportEngine {
     required AppState app,
     String? url,
     String? text,
-    Uint8List? imageBytes,
-    String mediaType = 'image/jpeg',
+    List<({Uint8List bytes, String type})> images = const [],
     bool allowReader = false, // on-device URL import asks before using the reader proxy
   }) async {
     importLog('runWith engine=$engine method=$method online=${app.online}');
@@ -99,7 +101,7 @@ class ImportEngine {
           feed = await RecipeImport.fetchReadableText(u, allowReader: true);
           importLog('online page text len=${feed.length}');
         }
-        final raw = await ByokClient.extract(provider: provider, apiKey: key, text: feed, imageBytes: imageBytes, mediaType: mediaType);
+        final raw = await ByokClient.extract(provider: provider, apiKey: key, text: feed, images: images);
         importLog('online raw (first 300): ${raw.length > 300 ? raw.substring(0, 300) : raw}');
         return draftFromModelJson(raw, source: _sourceLabel(method));
       case 'ondevice':
@@ -111,9 +113,15 @@ class ImportEngine {
           // Smaller cap: Phi's ~4096-token context truncates long pages anyway.
           // allowReader is gated so the UI can confirm before the URL leaves the device.
           input = await RecipeImport.fetchReadableText(u, maxChars: 8000, allowReader: allowReader);
-        } else if (method == ImportMethod.photo && imageBytes != null) {
-          importLog('ondevice → OCR ${imageBytes.length} bytes');
-          input = await Ocr.recognize(imageBytes);
+        } else if (method == ImportMethod.photo && images.isNotEmpty) {
+          // On-device has no vision: OCR each page to text and join. Multi-image
+          // normally routes to the cloud (resolveChain), so this is usually one page.
+          final pages = <String>[];
+          for (final im in images) {
+            importLog('ondevice → OCR ${im.bytes.length} bytes');
+            pages.add(await Ocr.recognize(im.bytes));
+          }
+          input = pages.join('\n\n--- page ---\n\n');
         }
         if (input.trim().isEmpty) throw ImportException('empty_input', 'no text to feed the on-device model');
         final raw = await OnDeviceAi.generate(input, kImportPrompt);

@@ -49,9 +49,9 @@ class _ImportSheet extends StatefulWidget {
 class _ImportSheetState extends State<_ImportSheet> {
   ImportMethod? method; // null = chooser stage
   final _controller = TextEditingController();
-  Uint8List? _photo;
-  String _mediaType = 'image/jpeg';
-  bool _regions = false; // photo: guide OCR by drawing ingredient/step regions
+  final List<_PickedImage> _photos = []; // one or more pages/photos of a recipe
+  int _picSeq = 0; // monotonic id for stable reorder keys
+  bool _regions = false; // photo: guide OCR by drawing ingredient/step regions (single image only)
   bool _busy = false;
   bool _extracting = false; // pulling text out of a picked file
   String? _error;
@@ -61,7 +61,7 @@ class _ImportSheetState extends State<_ImportSheet> {
     super.initState();
     method = widget.startMethod;
     if (widget.sharedText != null) _controller.text = widget.sharedText!;
-    _photo = widget.sharedImage;
+    if (widget.sharedImage != null) _photos.add(_PickedImage(widget.sharedImage!, 'image/jpeg', _picSeq++));
   }
 
   @override
@@ -84,13 +84,36 @@ class _ImportSheetState extends State<_ImportSheet> {
     });
   }
 
-  Future<void> _pickPhoto(ImageSource source) async {
+  Future<void> _addPhotos(ImageSource source) async {
+    if (_photos.length >= kMaxImportImages) {
+      setState(() => _error = app.t('import_photo_max'));
+      return;
+    }
     try {
-      final x = await ImagePicker().pickImage(source: source, maxWidth: 2200, imageQuality: 88);
-      if (x == null) return;
-      final bytes = await x.readAsBytes();
-      if (x.name.toLowerCase().endsWith('.png')) _mediaType = 'image/png';
-      if (mounted) setState(() => _photo = bytes);
+      final picker = ImagePicker();
+      final picked = <XFile>[];
+      if (source == ImageSource.gallery) {
+        picked.addAll(await picker.pickMultiImage(maxWidth: 2200, imageQuality: 88));
+      } else {
+        final x = await picker.pickImage(source: source, maxWidth: 2200, imageQuality: 88);
+        if (x != null) picked.add(x);
+      }
+      if (picked.isEmpty) return;
+      var hitCap = false;
+      for (final x in picked) {
+        if (_photos.length >= kMaxImportImages) {
+          hitCap = true;
+          break;
+        }
+        final bytes = await x.readAsBytes();
+        final type = x.name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+        _photos.add(_PickedImage(bytes, type, _picSeq++));
+      }
+      if (!mounted) return;
+      setState(() {
+        if (_photos.length > 1) _regions = false; // region tool is single-image only
+        _error = hitCap ? app.t('import_photo_max') : null;
+      });
     } catch (_) {}
   }
 
@@ -147,7 +170,7 @@ class _ImportSheetState extends State<_ImportSheet> {
     }
   }
 
-  bool get _ready => method == ImportMethod.photo ? _photo != null : _controller.text.trim().isNotEmpty;
+  bool get _ready => method == ImportMethod.photo ? _photos.isNotEmpty : _controller.text.trim().isNotEmpty;
 
   // Engine chosen for the active run + the next fallback (for the "retry with…"
   // bump). Region import remembers its boxes so a bump can re-run them.
@@ -158,13 +181,14 @@ class _ImportSheetState extends State<_ImportSheet> {
   // On-device inference runs in-app; keep the screen awake so the OS doesn't
   // background/throttle/kill it mid-run.
   bool get _keepAwake => _engine == 'ondevice';
-  String _resolvedEngine() => _engine ?? ImportEngine.resolve(method!, app);
+  String _resolvedEngine() => _engine ?? ImportEngine.resolve(method!, app, multiImage: method == ImportMethod.photo && _photos.length > 1);
 
   void _run() {
     if (!_ready || _busy) return;
-    final chain = ImportEngine.resolveChain(method!, app);
+    final multi = method == ImportMethod.photo && _photos.length > 1;
+    final chain = ImportEngine.resolveChain(method!, app, multiImage: multi);
     if (chain.isEmpty) {
-      setState(() => _error = app.t('import_err_needs_ai'));
+      setState(() => _error = app.t(multi ? 'import_err_multi_needs_online' : 'import_err_needs_ai'));
       return;
     }
     _pendingRegions = null;
@@ -173,18 +197,19 @@ class _ImportSheetState extends State<_ImportSheet> {
 
   // Region-guided photo import: draw ingredient boxes, then step boxes, then run.
   Future<void> _runRegions() async {
-    if (_photo == null || _busy) return;
+    if (_photos.isEmpty || _busy) return;
     final root = widget.rootContext;
     final fr = app.lang == 'fr';
+    final img = _photos.first.bytes; // region tool is single-image only
     final ing = await Navigator.of(root).push<List<Rect>>(MaterialPageRoute(builder: (_) => RegionPicker(
-          image: _photo!,
+          image: img,
           title: fr ? 'Encadrez les ingrédients' : 'Box the ingredients',
           hint: fr ? 'Glissez pour dessiner une ou plusieurs zones' : 'Drag to draw one or more boxes',
           isLast: false,
         )));
     if (ing == null || !mounted || !root.mounted) return;
     final steps = await Navigator.of(root).push<List<Rect>>(MaterialPageRoute(builder: (_) => RegionPicker(
-          image: _photo!,
+          image: img,
           title: fr ? 'Encadrez les étapes' : 'Box the steps',
           hint: fr ? 'Glissez pour dessiner une ou plusieurs zones' : 'Drag to draw one or more boxes',
           isLast: true,
@@ -218,7 +243,7 @@ class _ImportSheetState extends State<_ImportSheet> {
       try {
         final regions = _pendingRegions;
         if (regions != null) {
-          res = await ImportEngine.extractFromRegions(app: app, imageBytes: _photo!, ingredientBoxes: regions.$1, stepBoxes: regions.$2, engineOverride: engine);
+          res = await ImportEngine.extractFromRegions(app: app, imageBytes: _photos.first.bytes, ingredientBoxes: regions.$1, stepBoxes: regions.$2, engineOverride: engine);
         } else {
           res = await ImportEngine.runWith(
             engine: engine,
@@ -226,8 +251,7 @@ class _ImportSheetState extends State<_ImportSheet> {
             app: app,
             url: method == ImportMethod.link ? _controller.text : null,
             text: method == ImportMethod.text ? _controller.text : null,
-            imageBytes: method == ImportMethod.photo ? _photo : null,
-            mediaType: _mediaType,
+            images: method == ImportMethod.photo ? [for (final p in _photos) (bytes: p.bytes, type: p.type)] : const [],
             allowReader: allowReader,
           );
         }
@@ -272,7 +296,9 @@ class _ImportSheetState extends State<_ImportSheet> {
 
   void _failed(String engine, String code, String message) {
     if (code == 'ondevice_unavailable') app.markOnDeviceUnavailable();
-    final chain = _pendingRegions != null ? ImportEngine.resolveChain(ImportMethod.photo, app) : ImportEngine.resolveChain(method!, app);
+    final chain = _pendingRegions != null
+        ? ImportEngine.resolveChain(ImportMethod.photo, app)
+        : ImportEngine.resolveChain(method!, app, multiImage: method == ImportMethod.photo && _photos.length > 1);
     final idx = chain.indexOf(engine);
     final next = (idx >= 0 && idx + 1 < chain.length) ? chain[idx + 1] : null;
     if (mounted) setState(() { _busy = false; _error = message; _nextEngine = next; });
@@ -448,7 +474,7 @@ class _ImportSheetState extends State<_ImportSheet> {
                   ]),
                 ),
               ),
-            if (m == ImportMethod.photo)
+            if (m == ImportMethod.photo && _photos.length <= 1)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: GestureDetector(
@@ -544,48 +570,96 @@ class _ImportSheetState extends State<_ImportSheet> {
       );
     }
     // photo
-    final has = _photo != null;
-    return Column(
-      children: [
+    if (_photos.isEmpty) {
+      return Column(children: [
         Container(
           height: 168,
-          decoration: BoxDecoration(
-            color: has ? fb.accentSoft : fb.card,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: has ? fb.accent : fb.lineStrong, width: 2),
-          ),
+          decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: fb.lineStrong, width: 2)),
           clipBehavior: Clip.antiAlias,
-          child: has
-              ? Stack(fit: StackFit.expand, children: [
-                  Image.memory(_photo!, fit: BoxFit.cover),
-                  Positioned(top: 8, right: 8, child: Container(padding: const EdgeInsets.all(6), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: const FbIcon('check', size: 14, color: Colors.white))),
-                ])
-              : Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Container(width: 52, height: 52, decoration: BoxDecoration(color: fb.accentSoft, shape: BoxShape.circle), child: Center(child: FbIcon('camera', size: 24, color: fb.accent))),
-                  const SizedBox(height: 10),
-                  Text(app.t('import_photo_drop'), style: fb.ui(size: 14, weight: FontWeight.w600, color: fb.inkSoft)),
-                ])),
+          child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 52, height: 52, decoration: BoxDecoration(color: fb.accentSoft, shape: BoxShape.circle), child: Center(child: FbIcon('camera', size: 24, color: fb.accent))),
+            const SizedBox(height: 10),
+            Text(app.t('import_photo_drop'), style: fb.ui(size: 14, weight: FontWeight.w600, color: fb.inkSoft)),
+          ])),
         ),
         const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: _photoBtn(fb, 'camera', app.t('import_photo_camera'), ImageSource.camera)),
-          const SizedBox(width: 10),
-          Expanded(child: _photoBtn(fb, 'note', app.t('import_photo_gallery'), ImageSource.gallery)),
-        ]),
+        _photoButtons(fb),
+      ]);
+    }
+    return Column(
+      children: [
+        SizedBox(
+          height: 116,
+          child: ReorderableListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _photos.length,
+            onReorderItem: (oldI, newI) => setState(() {
+              _photos.insert(newI, _photos.removeAt(oldI));
+            }),
+            itemBuilder: (ctx, i) => _thumb(fb, i),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _photoButtons(fb),
       ],
     );
   }
 
-  Widget _photoBtn(FbTheme fb, String icon, String label, ImageSource source) => GestureDetector(
-        onTap: () => _pickPhoto(source),
-        child: Container(
-          height: 44,
-          decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: fb.line)),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            FbIcon(icon, size: 16, color: fb.accent),
-            const SizedBox(width: 7),
-            Text(label, style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent)),
-          ]),
+  // One draggable thumbnail with an order badge and a remove (×) button.
+  Widget _thumb(FbTheme fb, int i) {
+    final p = _photos[i];
+    return Padding(
+      key: ValueKey(p.id),
+      padding: const EdgeInsets.only(right: 10),
+      child: SizedBox(
+        width: 92,
+        child: Stack(children: [
+          Container(
+            width: 92,
+            height: 116,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: fb.accent, width: 2)),
+            clipBehavior: Clip.antiAlias,
+            child: Image.memory(p.bytes, fit: BoxFit.cover, width: 92, height: 116),
+          ),
+          Positioned(top: 5, left: 5, child: Container(width: 20, height: 20, alignment: Alignment.center, decoration: BoxDecoration(color: fb.accent, borderRadius: BorderRadius.circular(6)), child: Text('${i + 1}', style: fb.ui(size: 11, weight: FontWeight.w800, color: Colors.white)))),
+          Positioned(top: 5, right: 5, child: GestureDetector(
+            onTap: () => setState(() => _photos.removeAt(i)),
+            child: Container(padding: const EdgeInsets.all(4), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: const FbIcon('x', size: 12, color: Colors.white)),
+          )),
+        ]),
+      ),
+    );
+  }
+
+  Widget _photoButtons(FbTheme fb) {
+    final atCap = _photos.length >= kMaxImportImages;
+    return Column(children: [
+      Row(children: [
+        Expanded(child: _photoBtn(fb, 'camera', app.t('import_photo_camera'), ImageSource.camera, atCap)),
+        const SizedBox(width: 10),
+        Expanded(child: _photoBtn(fb, 'note', app.t('import_photo_gallery'), ImageSource.gallery, atCap)),
+      ]),
+      if (_photos.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 7),
+          child: Text('${_photos.length}/$kMaxImportImages', style: fb.ui(size: 11.5, color: fb.inkFaint)),
+        ),
+    ]);
+  }
+
+  Widget _photoBtn(FbTheme fb, String icon, String label, ImageSource source, bool disabled) => GestureDetector(
+        onTap: disabled ? null : () => _addPhotos(source),
+        child: Opacity(
+          opacity: disabled ? 0.4 : 1,
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: fb.line)),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              FbIcon(icon, size: 16, color: fb.accent),
+              const SizedBox(width: 7),
+              Text(label, style: fb.ui(size: 13.5, weight: FontWeight.w700, color: fb.accent)),
+            ]),
+          ),
         ),
       );
 
@@ -599,4 +673,16 @@ class _ImportSheetState extends State<_ImportSheet> {
           Text(_keepAwake ? app.t('import_ondevice_slow') : app.t('import_validating'), textAlign: TextAlign.center, style: fb.ui(size: 12.5, color: fb.inkFaint, height: 1.45)),
         ]),
       );
+}
+
+/// Max images that can be sent together for one recipe import (multi-page).
+const int kMaxImportImages = 5;
+
+/// One picked page/photo for import: bytes, its media type, and a stable [id]
+/// used as the reorder key in the thumbnail strip.
+class _PickedImage {
+  final Uint8List bytes;
+  final String type; // image/jpeg | image/png
+  final int id;
+  _PickedImage(this.bytes, this.type, this.id);
 }

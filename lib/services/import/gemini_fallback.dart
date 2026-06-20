@@ -34,8 +34,7 @@ class GeminiFallback {
     required String apiKey,
     required String system,
     required String userText,
-    Uint8List? img,
-    String mediaType = 'image/jpeg',
+    List<({Uint8List bytes, String type})> images = const [],
     void Function(String model)? onAttempt, // fired with each model id as it's tried
   }) async {
     final now = DateTime.now();
@@ -52,7 +51,7 @@ class GeminiFallback {
     for (final model in order) {
       onAttempt?.call(model);
       try {
-        final text = await _call(model, apiKey, system, userText, img, mediaType);
+        final text = await _call(model, apiKey, system, userText, images);
         _coolUntil.remove(model); // success clears any cooldown
         importLog('gemini ok via $model');
         return text;
@@ -76,12 +75,12 @@ class GeminiFallback {
     throw last ?? ImportException('provider_error', 'No Gemini model available');
   }
 
-  static Future<String> _call(String model, String key, String system, String userText, Uint8List? img, String mediaType) async {
+  static Future<String> _call(String model, String key, String system, String userText, List<({Uint8List bytes, String type})> images) async {
     final parts = <Map<String, dynamic>>[
       {'text': userText},
-      if (img != null)
+      for (final im in images)
         {
-          'inline_data': {'mime_type': mediaType, 'data': base64Encode(img)},
+          'inline_data': {'mime_type': im.type, 'data': base64Encode(im.bytes)},
         },
     ];
     final res = await http.post(

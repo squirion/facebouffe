@@ -23,27 +23,29 @@ class ByokClient {
     'openai': 'gpt-4o-mini',
   };
 
-  static const _maxTokens = 4096;
+  // Headroom for a long multi-page recipe's JSON (Gemini already uses 8192).
+  static const _maxTokens = 8192;
 
-  /// Returns raw model output (expected to be JSON). [imageBytes] + [mediaType]
-  /// drive the multimodal path; [text] is appended to the instruction.
+  /// Returns raw model output (expected to be JSON). [images] (each with its own
+  /// media type) drive the multimodal path — multiple pages/photos of one recipe
+  /// are sent together; [text] is appended to the instruction.
   static Future<String> extract({
     required String provider,
     required String apiKey,
     String? text,
-    Uint8List? imageBytes,
-    String mediaType = 'image/jpeg',
+    List<({Uint8List bytes, String type})> images = const [],
   }) async {
-    if (imageBytes == null && (text == null || text.trim().isEmpty)) {
+    if (images.isEmpty && (text == null || text.trim().isEmpty)) {
       throw ImportException('empty_input');
     }
+    final userText = _userText(text, images.length);
     switch (provider) {
       case 'claude':
-        return _anthropic(apiKey, kImportPrompt, _userText(text), imageBytes, mediaType);
+        return _anthropic(apiKey, kImportPrompt, userText, images);
       case 'openai':
-        return _openai(apiKey, kImportPrompt, _userText(text), imageBytes, mediaType);
+        return _openai(apiKey, kImportPrompt, userText, images);
       case 'gemini':
-        return _gemini(apiKey, kImportPrompt, _userText(text), imageBytes, mediaType);
+        return _gemini(apiKey, kImportPrompt, userText, images);
       default:
         throw ImportException('bad_provider');
     }
@@ -56,10 +58,10 @@ class ByokClient {
     switch (provider) {
       case 'claude':
         onModel?.call(_models['claude']!);
-        return _anthropic(apiKey, system, request, null, 'image/jpeg');
+        return _anthropic(apiKey, system, request, const []);
       case 'openai':
         onModel?.call(_models['openai']!);
-        return _openai(apiKey, system, request, null, 'image/jpeg');
+        return _openai(apiKey, system, request, const []);
       case 'gemini':
         return GeminiFallback.generate(apiKey: apiKey, system: system, userText: request, onAttempt: onModel);
       default:
@@ -67,8 +69,13 @@ class ByokClient {
     }
   }
 
-  static String _userText(String? text) =>
-      text == null || text.trim().isEmpty ? 'Extract the recipe from the attached image.' : 'Recipe input:\n\n${text.trim()}';
+  static String _userText(String? text, int imageCount) {
+    if (text != null && text.trim().isNotEmpty) return 'Recipe input:\n\n${text.trim()}';
+    if (imageCount > 1) {
+      return 'The $imageCount attached images are pages/photos of a SINGLE recipe. Combine them into one recipe.';
+    }
+    return 'Extract the recipe from the attached image.';
+  }
 
   static Never _fail(http.Response r) {
     final body = r.body.length > 400 ? r.body.substring(0, 400) : r.body;
@@ -79,13 +86,13 @@ class ByokClient {
   }
 
   // ── Anthropic Messages API ──
-  static Future<String> _anthropic(String key, String system, String userText, Uint8List? img, String mediaType) async {
+  static Future<String> _anthropic(String key, String system, String userText, List<({Uint8List bytes, String type})> images) async {
     final content = <Map<String, dynamic>>[
       {'type': 'text', 'text': userText},
-      if (img != null)
+      for (final im in images)
         {
           'type': 'image',
-          'source': {'type': 'base64', 'media_type': mediaType, 'data': base64Encode(img)},
+          'source': {'type': 'base64', 'media_type': im.type, 'data': base64Encode(im.bytes)},
         },
     ];
     final res = await http.post(
@@ -115,13 +122,13 @@ class ByokClient {
   }
 
   // ── OpenAI Chat Completions ──
-  static Future<String> _openai(String key, String system, String userText, Uint8List? img, String mediaType) async {
+  static Future<String> _openai(String key, String system, String userText, List<({Uint8List bytes, String type})> images) async {
     final content = <Map<String, dynamic>>[
       {'type': 'text', 'text': userText},
-      if (img != null)
+      for (final im in images)
         {
           'type': 'image_url',
-          'image_url': {'url': 'data:$mediaType;base64,${base64Encode(img)}'},
+          'image_url': {'url': 'data:${im.type};base64,${base64Encode(im.bytes)}'},
         },
     ];
     final res = await http.post(
@@ -145,8 +152,8 @@ class ByokClient {
   }
 
   // ── Google Gemini — delegates to the multi-model fallback (gemini_fallback.dart) ──
-  static Future<String> _gemini(String key, String system, String userText, Uint8List? img, String mediaType) =>
-      GeminiFallback.generate(apiKey: key, system: system, userText: userText, img: img, mediaType: mediaType);
+  static Future<String> _gemini(String key, String system, String userText, List<({Uint8List bytes, String type})> images) =>
+      GeminiFallback.generate(apiKey: key, system: system, userText: userText, images: images);
 
   /// Lightweight key check used by the "Test key" button — a tiny request that
   /// only needs to authenticate, not produce a recipe.
