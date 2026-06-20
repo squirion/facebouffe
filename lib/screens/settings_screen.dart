@@ -78,7 +78,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _SettingsRow(label: app.t('set_temp'), width: 150, child: Segmented(value: app.profile.temperature, onChange: app.setTemp, options: const [('celsius', '°C'), ('fahrenheit', '°F')])),
                     _SettingsRow(label: app.t('set_volume'), width: 178, child: Segmented(value: app.profile.volume, onChange: app.setVolume, options: [('metric', app.t('metric')), ('imperial', app.t('imperial'))])),
                     _SettingsRow(label: app.t('set_weight'), width: 178, child: Segmented(value: app.profile.weight, onChange: app.setWeight, options: [('metric', app.t('metric')), ('imperial', app.t('imperial'))])),
-                    _SettingsRow(label: app.t('set_keep_cups'), last: true, child: _Toggle(on: app.profile.keepCups, onTap: () => app.setKeepCups(!app.profile.keepCups))),
+                    _SettingsRow(label: app.t('set_keep_cups'), child: _Toggle(on: app.profile.keepCups, onTap: () => app.setKeepCups(!app.profile.keepCups))),
+                    _SettingsRow(label: app.t('set_pdf_format'), width: 178, last: true, child: Segmented(value: app.profile.pdfPaper, onChange: app.setPdfPaper, options: const [('letter', 'US Letter'), ('a4', 'A4')])),
                   ]),
                   SettingsGroup(label: app.t('set_textsize'), children: [
                     _SettingsRow(label: app.t('set_textsize'), width: 150, last: true, child: Segmented(value: app.profile.fontSize, onChange: app.setFontSize, options: const [('small', 'A'), ('medium', 'A'), ('large', 'A')], labelSizes: const [13, 17, 22])),

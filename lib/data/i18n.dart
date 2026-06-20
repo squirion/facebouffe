@@ -126,7 +126,7 @@ const Map<String, Map<String, String>> kI18n = {
     'aliases_hint': 'Appariements appris : nom d\'ingrédient → aliment préféré.',
     // Nutrition label (§2e)
     'nutrition_section': 'Valeur nutritive', 'nutrition_estimate': 'Estimation',
-    'set_keep_cups': 'Ne pas convertir les tasses', 'embed_recipe': 'Intégrer une recette', 'embed_subrecipe': 'Sous-recette',
+    'set_keep_cups': 'Ne pas convertir les tasses', 'set_pdf_format': 'Format PDF', 'embed_recipe': 'Intégrer une recette', 'embed_subrecipe': 'Sous-recette',
     'embed_needs_nutrition': 'Générez d\'abord la valeur nutritive de « {title} »',
     'finished_weight': 'Poids total cuit (optionnel)', 'expand_subrecipe': 'Détailler',
     'expand_failed': 'Impossible de détailler : générez d\'abord la valeur nutritive de la sous-recette.',
@@ -374,7 +374,7 @@ const Map<String, Map<String, String>> kI18n = {
     'aliases_hint': 'Learned matches: ingredient name → preferred food.',
     // Nutrition label (§2e)
     'nutrition_section': 'Nutrition', 'nutrition_estimate': 'Estimate',
-    'set_keep_cups': 'Never convert cups', 'embed_recipe': 'Embed a recipe', 'embed_subrecipe': 'Sub-recipe',
+    'set_keep_cups': 'Never convert cups', 'set_pdf_format': 'PDF format', 'embed_recipe': 'Embed a recipe', 'embed_subrecipe': 'Sub-recipe',
     'embed_needs_nutrition': 'Generate {title}\'s nutrition first',
     'finished_weight': 'Finished total weight (optional)', 'expand_subrecipe': 'Expand',
     'expand_failed': 'Can\'t expand — generate the sub-recipe\'s nutrition first.',

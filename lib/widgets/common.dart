@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models.dart';
@@ -131,7 +130,7 @@ class FallbackTile extends StatelessWidget {
           Positioned(
             left: 14,
             top: 8,
-            child: Text(initial, style: GoogleFonts.newsreader(fontSize: glyphSize * 0.5, height: 1, fontWeight: FontWeight.w500, color: pal.ink.withValues(alpha: 0.92))),
+            child: Text(initial, style: TextStyle(fontFamily: 'Newsreader', fontSize: glyphSize * 0.5, height: 1, fontWeight: FontWeight.w500, color: pal.ink.withValues(alpha: 0.92))),
           ),
           if (label != null)
             Positioned(

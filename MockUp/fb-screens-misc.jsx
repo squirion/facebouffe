@@ -198,6 +198,19 @@ function SettingsScreen() {
             </div>
           </div>
 
+          <Group label={t("account")}>
+            <button onClick={() => app.account ? app.nav.go("account") : app.nav.go("signin")} style={{ display: "flex", alignItems: "center", gap: 13, width: "100%", border: "none", background: "transparent", cursor: "pointer", padding: "14px 18px", textAlign: "left" }}>
+              {app.account
+                ? <Avatar name={app.account.username} color={th.accent} size={34} />
+                : <span style={{ width: 34, height: 34, borderRadius: 10, background: th.accentSoft, display: "grid", placeItems: "center", flexShrink: 0 }}><Icon name="users" size={18} color={th.accent} /></span>}
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontFamily: th.fontUI, fontSize: th.fs(15.5), fontWeight: 600, color: th.ink }}>{app.account ? "@" + app.account.username : t("signin")}</span>
+                <span style={{ display: "block", fontFamily: th.fontUI, fontSize: th.fs(12.5), color: th.inkFaint, marginTop: 1 }}>{app.account ? t("sync_synced") + " · " + t("sync_ago") : t("social_hub_sub")}</span>
+              </span>
+              <Icon name="chevR" size={th.fs(17)} color={th.inkFaint} />
+            </button>
+          </Group>
+
           <Group label={t("set_language")}>
             <SettingsRow label={t("set_language")}>
               <div style={{ width: 168 }}><Segmented value={lang} onChange={(v) => set("lang", v)} options={[{ value: "fr", label: "Français" }, { value: "en", label: "English" }]} /></div>

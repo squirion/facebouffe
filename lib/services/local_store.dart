@@ -22,6 +22,7 @@ class LocalStore {
   static const volume = 'fb_vol';
   static const weight = 'fb_weight';
   static const keepCups = 'fb_keepcups';
+  static const pdfPaper = 'fb_pdf_paper';
   static const dark = 'fb_dark';
   static const accent = 'fb_accent';
   static const home = 'fb_home';

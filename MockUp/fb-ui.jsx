@@ -79,6 +79,16 @@ const ICON_PATHS = {
   bowl: "M3 11h18a9 9 0 0 1-18 0ZM7 4c-.5 1.2.5 2 0 3.2M11 3c-.5 1.2.5 2 0 3.2M15 4c-.5 1.2.5 2 0 3.2",
   leaf: "M4 20C4 11 11 4 20 4c0 9-7 16-16 16ZM8.5 15.5C11 13 14 11 17.5 9.5",
   dumbbell: "M2 12h2M20 12h2M5.5 8.5h3v7h-3zM15.5 8.5h3v7h-3zM8.5 12h7",
+  // social layer
+  userPlus: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3 20v-1.4A4.6 4.6 0 0 1 7.6 14h2.8M17 14v6M14 17h6",
+  lock: "M6 10V8a6 6 0 0 1 12 0v2M5 10h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1ZM12 14v3",
+  refresh: "M20 11a8 8 0 0 0-14-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14 4.5L20 16M20 20v-4h-4",
+  mail: "M3 6h18v12H3zM3 7l9 6 9-6",
+  logout: "M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3M10 8l-4 4 4 4M6 12h11",
+  shield: "M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3ZM9 12l2 2 4-4",
+  block: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM5.6 5.6l12.8 12.8",
+  share: "M14 9V5l7 7-7 7v-4c-5 0-8 1.5-10 5 .5-6 3.5-9 10-11Z",
+  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM3 12h18M12 3c2.5 2.5 3.5 6 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-6-3.5-9s1-6.5 3.5-9Z",
 };
 
 function Icon({ name, size = 22, color = "currentColor", stroke = 2, fill = false, style = {} }) {
@@ -269,7 +279,7 @@ function RichText({ text, onLink, dark = false }) {
       {parts.map((p, i) => {
         const lm = p.match(/^\{\{link:([^}]+)\}\}$/);
         if (lm) {
-          const r = app.getRecipe(lm[1]);
+          const r = (app.resolveRecipe || app.getRecipe)(lm[1]);
           if (!r) return null;
           return (
             <button key={i} onClick={() => onLink && onLink(r.id)} style={{
@@ -435,9 +445,51 @@ function Coach({ feature, active, text, placement = "top", children, wrapStyle }
   );
 }
 
+// ──────────────────────────────────────────────────────────────
+// Social — avatar initial chip + "visiting someone's cookbook" band
+// ──────────────────────────────────────────────────────────────
+function Avatar({ name, color, size = 40, ring = false }) {
+  const th = useTheme();
+  const initial = (name || "?").trim()[0].toUpperCase();
+  return (
+    <span style={{
+      width: size, height: size, borderRadius: 999, flexShrink: 0, background: color || th.accent,
+      color: "#fff", display: "grid", placeItems: "center", fontFamily: th.fontDisplay,
+      fontSize: size * 0.44, fontWeight: 600, boxShadow: ring ? `0 0 0 3px ${th.card}` : "none",
+    }}>{initial}</span>
+  );
+}
+
+// A tinted top band shown whenever you're inside someone else's cookbook /
+// recipe, so a friend's recipe is never confused with your own.
+function VisitingBand({ friend, onBack }) {
+  const th = useTheme();
+  const app = useApp();
+  const c = (friend && friend.color) || th.accent;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10, padding: `${app.insets.top + 8}px 14px 10px`,
+      background: c + (th.dark ? "33" : "1c"), borderBottom: `1px solid ${c}44`,
+    }}>
+      {onBack && (
+        <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 999, border: "none", background: th.dark ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.6)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}>
+          <Icon name="back" size={20} color={th.ink} />
+        </button>
+      )}
+      <Avatar name={friend.name} color={c} size={28} />
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
+        <span style={{ fontFamily: th.fontUI, fontSize: th.fs(14.5), fontWeight: 700, color: th.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{app.t("visiting_band")} @{friend.username}</span>
+      </div>
+      <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, background: c, color: "#fff", fontFamily: th.fontUI, fontSize: th.fs(11), fontWeight: 700, flexShrink: 0 }}>
+        <Icon name="globe" size={12} color="#fff" /> {app.t("locked_readonly").split(" · ")[0]}
+      </span>
+    </div>
+  );
+}
+
 Object.assign(window, {
   ThemeCtx, useTheme, AppCtx, useApp, buildTheme, FONT_SCALE,
   Icon, ICON_PATHS, Stars, TagChip, FallbackTile, PhotoDrop, HeroMedia, MetaPill,
-  RichText, TempChip, Coach,
+  RichText, TempChip, Coach, Avatar, VisitingBand,
   primaryTag, FeatureCard, MiniCard, ListCard,
 });

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Facebouffe theme — warm cookbook palette, ported from the mockup's buildTheme.
 /// Two surfaces (light/dark), an accent color, and a font scale driven by the
@@ -95,7 +94,8 @@ class FbTheme {
   double fs(double px) => (px * scale * 100).roundToDouble() / 100;
 
   TextStyle display({double size = 16, FontWeight weight = FontWeight.w500, Color? color, double? height, double? letterSpacing, FontStyle? fontStyle}) {
-    return GoogleFonts.newsreader(
+    return TextStyle(
+      fontFamily: 'Newsreader',
       fontSize: fs(size),
       fontWeight: weight,
       color: color ?? ink,
@@ -107,7 +107,8 @@ class FbTheme {
 
   /// Heavy brand wordmark face (Bricolage Grotesque), used for the home title bar.
   TextStyle wordmark({double size = 33, FontWeight weight = FontWeight.w800, Color? color, double? height, double? letterSpacing}) {
-    return GoogleFonts.bricolageGrotesque(
+    return TextStyle(
+      fontFamily: 'Bricolage Grotesque',
       fontSize: fs(size),
       fontWeight: weight,
       color: color ?? ink,
@@ -117,7 +118,8 @@ class FbTheme {
   }
 
   TextStyle ui({double size = 14, FontWeight weight = FontWeight.w500, Color? color, double? height, double? letterSpacing, FontStyle? fontStyle, TextDecoration? decoration}) {
-    return GoogleFonts.hankenGrotesk(
+    return TextStyle(
+      fontFamily: 'Hanken Grotesk',
       fontSize: fs(size),
       fontWeight: weight,
       color: color ?? ink,

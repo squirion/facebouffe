@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 2.4.1+70
+version: 2.5.0+71
 
 environment:
   sdk: ^3.11.1
@@ -61,6 +61,7 @@ dependencies:
   archive: ^4.0.9
   supabase_flutter: ^2.12.4
   crypto: ^3.0.6                       # sha-256 content-addressing for synced images (§2B)
+  flutter_inappwebview: ^6.1.5         # native (Android) headless WebView → system print-to-PDF for glorious recipe export
 
 dev_dependencies:
   flutter_test:
@@ -89,6 +90,24 @@ flutter:
     - assets/facebouffe-seed.json
     - assets/logo_mark.png
     - assets/cnf.json
+    - assets/fonts/    # also embedded as @font-face in the PDF-export HTML
+
+  # Bundled app UI fonts (variable) — registered so the app renders its brand
+  # faces offline, with no runtime google_fonts fetch from fonts.gstatic.com.
+  fonts:
+    - family: Newsreader
+      fonts:
+        - asset: assets/fonts/Newsreader.ttf
+        - asset: assets/fonts/Newsreader-Italic.ttf
+          style: italic
+    - family: Hanken Grotesk
+      fonts:
+        - asset: assets/fonts/HankenGrotesk.ttf
+        - asset: assets/fonts/HankenGrotesk-Italic.ttf
+          style: italic
+    - family: Bricolage Grotesque
+      fonts:
+        - asset: assets/fonts/BricolageGrotesque.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

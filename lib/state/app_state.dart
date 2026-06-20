@@ -252,6 +252,7 @@ class AppState extends ChangeNotifier {
     profile.volume = store.str(LocalStore.volume) ?? profile.volume;
     profile.weight = store.str(LocalStore.weight) ?? profile.weight;
     profile.keepCups = store.flag(LocalStore.keepCups) ?? profile.keepCups;
+    profile.pdfPaper = store.str(LocalStore.pdfPaper) ?? profile.pdfPaper;
     dark = store.flag(LocalStore.dark) ?? false;
     accentHex = store.str(LocalStore.accent) ?? accentHex;
     homeLayout = store.str(LocalStore.home) ?? homeLayout;
@@ -431,6 +432,7 @@ class AppState extends ChangeNotifier {
     p.setStr(LocalStore.volume, profile.volume);
     p.setStr(LocalStore.weight, profile.weight);
     p.setFlag(LocalStore.keepCups, profile.keepCups);
+    p.setStr(LocalStore.pdfPaper, profile.pdfPaper);
     p.setFlag(LocalStore.dark, dark);
     p.setStr(LocalStore.accent, accentHex);
     p.setStr(LocalStore.home, homeLayout);
@@ -472,6 +474,12 @@ class AppState extends ChangeNotifier {
 
   void setKeepCups(bool v) {
     profile.keepCups = v;
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void setPdfPaper(String v) {
+    profile.pdfPaper = v;
     _persistSettings();
     notifyListeners();
   }
@@ -920,6 +928,11 @@ class AppState extends ChangeNotifier {
   static const int maxGalleryPhotos = 5;
 
   List<String> galleryOf(String id) => recipeGallery[id] ?? const [];
+
+  /// Read an image's bytes for a stored path (data: URL or native file path).
+  /// Returns null on web for non-data paths (signed URLs aren't local files).
+  /// Used by the PDF export to embed photos as data URIs.
+  Future<Uint8List?> readImageBytes(String path) => _images.readBytes(path);
 
   void addGalleryPhoto(String id, String path) {
     final list = recipeGallery[id] ??= [];

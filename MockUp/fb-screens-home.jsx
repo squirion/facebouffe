@@ -1,13 +1,28 @@
 /* fb-screens-home.jsx — Home, Search, Filtered list + shared screen chrome. */
 
 // ── Shared screen chrome ──────────────────────────────────────
-function ScreenScroll({ children, padBottom = 96 }) {
+function ScreenScroll({ children, padBottom = 96, wide = false }) {
   const app = useApp();
+  const max = app.layout ? (wide ? app.layout.browseMax : app.layout.readMax) : null;
   return (
     <div className="fb-scroll" style={{
       height: "100%", overflowY: "auto", overflowX: "hidden",
       WebkitOverflowScrolling: "touch", paddingBottom: padBottom + app.insets.bottom,
-    }}>{children}</div>
+    }}>{max ? <div style={{ maxWidth: max, margin: "0 auto" }}>{children}</div> : children}</div>
+  );
+}
+
+// Responsive card grid for browse surfaces (home/search/filter/cookbook).
+// Column count comes from the layout (1 phone · 2 portrait · 3 landscape).
+function RecipeGrid({ items, pad = "0 20px" }) {
+  const app = useApp();
+  const cols = (app.layout && app.layout.gridCols) || 2;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gap: 16, padding: pad }}>
+      {items.map((r) => (
+        <MiniCard key={r.id} recipe={r} tagsById={app.tagsById} lang={app.lang} isFav={app.isFav(r)} onOpen={() => app.nav.openRecipe(r.id)} width="100%" />
+      ))}
+    </div>
   );
 }
 
@@ -89,6 +104,7 @@ function HomeScreen() {
   const th = useTheme();
   const app = useApp();
   const { recipes, tagsById, lang, t, nav, isFav } = app;
+  const tilesCols = app.layout.tablet ? (app.layout.orient === "landscape" ? 4 : 3) : 2;
 
   const favs = recipes.filter(isFav);
   const recent = recipes.filter((r) => r.personal.lastCooked)
@@ -102,7 +118,7 @@ function HomeScreen() {
   const browseTags = app.tags.filter((tg) => tg.special !== "favorite");
 
   return (
-    <ScreenScroll>
+    <ScreenScroll wide>
       <StickyHeader>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px 12px" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -114,8 +130,31 @@ function HomeScreen() {
         </div>
       </StickyHeader>
 
+      {/* Social hub entry — only when signed in */}
+      {app.account && (
+        <div style={{ padding: "16px 20px 0" }}>
+          <button onClick={() => nav.go("friends")} style={{ display: "flex", alignItems: "center", gap: 13, width: "100%", border: `1px solid ${th.line}`, background: th.card, borderRadius: 18, padding: "13px 16px", cursor: "pointer", textAlign: "left", boxShadow: th.shadow }}>
+            <span style={{ position: "relative", width: 40, height: 40, borderRadius: 12, background: th.accentSoft, display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <Icon name="users" size={21} color={th.accent} />
+              {app.social.pendingCount > 0 && (
+                <span style={{ position: "absolute", top: -5, right: -5, minWidth: 19, height: 19, padding: "0 5px", borderRadius: 999, background: th.accent, color: "#fff", fontFamily: th.fontUI, fontSize: 11, fontWeight: 700, display: "grid", placeItems: "center", boxShadow: `0 0 0 2px ${th.card}` }}>{app.social.pendingCount}</span>
+              )}
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: th.fontUI, fontSize: th.fs(16), fontWeight: 700, color: th.ink }}>{t("social_friends")}</span>
+              <span style={{ display: "block", fontFamily: th.fontUI, fontSize: th.fs(12.5), color: th.inkFaint, marginTop: 1 }}>
+                {app.social.pendingCount > 0
+                  ? (app.social.pendingCount + " " + t("requests_in").toLowerCase())
+                  : t("social_hub_sub")}
+              </span>
+            </span>
+            <Icon name="chevR" size={th.fs(18)} color={th.inkFaint} />
+          </button>
+        </div>
+      )}
+
       {/* Category browse hub — colorful tag tiles */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: "16px 20px 4px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${tilesCols}, minmax(0,1fr))`, gap: 10, padding: "16px 20px 4px" }}>
         {browseTags.map((tg) => {
           const r = parseInt(tg.color.slice(1, 3), 16), g = parseInt(tg.color.slice(3, 5), 16), b = parseInt(tg.color.slice(5, 7), 16);
           const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
@@ -175,7 +214,9 @@ function HomeScreen() {
       {/* All recipes */}
       <div style={{ marginTop: 30 }}>
         <SectionLabel action={t("filter_all") + " →"} onAction={() => nav.go("search")}>{t("sec_all")}</SectionLabel>
-        {app.homeLayout === "grid" ? (
+        {app.layout.tablet ? (
+          <RecipeGrid items={all} />
+        ) : app.homeLayout === "grid" ? (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, padding: "0 20px" }}>
             {all.map((r) => <MiniCard key={r.id} recipe={r} tagsById={tagsById} lang={lang} isFav={isFav(r)} onOpen={() => nav.openRecipe(r.id)} width="100%" />)}
           </div>
@@ -250,7 +291,7 @@ function SearchScreen() {
         </div>
       </StickyHeader>
 
-      <ScreenScroll padBottom={96}>
+      <ScreenScroll padBottom={96} wide>
         <div style={{ padding: "14px 16px 0", display: "flex", flexDirection: "column", gap: 12 }}>
           {matches.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 24px", color: th.inkSoft }}>
@@ -265,7 +306,9 @@ function SearchScreen() {
               <div style={{ fontFamily: th.fontUI, fontSize: th.fs(13), color: th.inkSoft, fontWeight: 600, paddingLeft: 4 }}>
                 {matches.length} {matches.length === 1 ? t("result") : t("results")}
               </div>
-              {matches.map((r) => <ListCard key={r.id} recipe={r} tagsById={tagsById} lang={lang} isFav={isFav(r)} variantCount={vcount(r)} onOpen={() => nav.openRecipe(r.id)} />)}
+              {app.layout.tablet
+                ? <RecipeGrid items={matches} pad="0" />
+                : matches.map((r) => <ListCard key={r.id} recipe={r} tagsById={tagsById} lang={lang} isFav={isFav(r)} variantCount={vcount(r)} onOpen={() => nav.openRecipe(r.id)} />)}
             </>
           )}
         </div>
@@ -299,19 +342,23 @@ function ListFilterScreen({ route }) {
           </div>
         </div>
       </StickyHeader>
-      <ScreenScroll>
+      <ScreenScroll wide>
         <div style={{ fontFamily: th.fontUI, fontSize: th.fs(13), color: th.inkSoft, fontWeight: 600, padding: "14px 20px 6px" }}>
           {matches.length} {matches.length === 1 ? t("result") : t("results")}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "0 16px" }}>
-          {matches.map((r) => <ListCard key={r.id} recipe={r} tagsById={tagsById} lang={lang} isFav={isFav(r)} onOpen={() => nav.openRecipe(r.id)} />)}
-        </div>
+        {app.layout.tablet ? (
+          <RecipeGrid items={matches} />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "0 16px" }}>
+            {matches.map((r) => <ListCard key={r.id} recipe={r} tagsById={tagsById} lang={lang} isFav={isFav(r)} onOpen={() => nav.openRecipe(r.id)} />)}
+          </div>
+        )}
       </ScreenScroll>
     </div>
   );
 }
 
 Object.assign(window, {
-  ScreenScroll, StickyHeader, SectionLabel, HScroll,
+  ScreenScroll, StickyHeader, SectionLabel, HScroll, RecipeGrid,
   HomeScreen, SearchScreen, ListFilterScreen,
 });

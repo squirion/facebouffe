@@ -56,9 +56,9 @@ function ImportOverlay({ flow, setFlow }) {
   const fade = app.reduceMotion ? "fbFade 120ms ease both" : "fbFade 200ms ease both";
   const slide = app.reduceMotion ? "fbFade 120ms ease both" : "fbSheetUp 280ms cubic-bezier(0.32,0.72,0,1) both";
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 80, display: "flex", flexDirection: "column", justifyContent: "flex-end", animation: fade }}>
+    <div style={{ position: "absolute", inset: 0, zIndex: 80, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: app.layout.tablet ? "center" : "stretch", animation: fade }}>
       <div onClick={close} style={{ position: "absolute", inset: 0, background: th.scrim }} />
-      <div style={{ position: "relative", background: th.canvas, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingBottom: app.insets.bottom + 14, boxShadow: "0 -16px 40px rgba(0,0,0,0.28)", animation: slide, maxHeight: "92%", overflowY: "auto" }} className="fb-scroll">
+      <div style={{ position: "relative", width: "100%", maxWidth: app.layout.tablet ? 560 : undefined, background: th.canvas, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderBottomLeftRadius: app.layout.tablet ? 26 : 0, borderBottomRightRadius: app.layout.tablet ? 26 : 0, marginBottom: app.layout.tablet ? app.insets.bottom + 14 : 0, paddingBottom: app.insets.bottom + 14, boxShadow: "0 -16px 40px rgba(0,0,0,0.28)", animation: slide, maxHeight: "92%", overflowY: "auto" }} className="fb-scroll">
         <div style={{ display: "flex", justifyContent: "center", paddingTop: 10 }}>
           <div style={{ width: 40, height: 5, borderRadius: 99, background: th.lineStrong }} />
         </div>

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Facebouffe — Recette (PDF)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,500;1,6..72,600&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #FBF6EE;
+      --paper-edge: #F1E7D6;
+      --ink: #2B2620;
+      --ink-soft: #736A5E;
+      --ink-faint: #A89E90;
+      --line: rgba(43,38,32,0.13);
+      --line-soft: rgba(43,38,32,0.08);
+      --rule: rgba(43,38,32,0.30);
+      --accent: #C0563B;
+      --accent-soft: rgba(192,86,59,0.10);
+      --gold: #C58A2E;
+      --serif: "Newsreader", Georgia, "Times New Roman", serif;
+      --sans: "Hanken Grotesk", -apple-system, system-ui, sans-serif;
+      --page-w: 8.5in;
+      --page-h: 11in;
+    }
+    html.a4 { --page-w: 8.27in; --page-h: 11.69in; }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: #cdbfa8;
+      background-image:
+        radial-gradient(120% 80% at 50% -10%, #d8cbb4 0%, #c4b59c 70%);
+      font-family: var(--sans);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+    }
+
+    /* ── Toolbar (screen only) ─────────────────────────────── */
+    .toolbar {
+      position: sticky; top: 0; z-index: 50;
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 20px;
+      background: rgba(33,28,21,0.92);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 2px 18px rgba(0,0,0,0.28);
+    }
+    .toolbar .brand {
+      font-family: var(--serif); font-style: italic; font-weight: 600;
+      font-size: 18px; color: #fff; letter-spacing: 0.2px; margin-right: 4px;
+    }
+    .toolbar .brand small {
+      font-family: var(--sans); font-style: normal; font-weight: 600;
+      font-size: 10.5px; letter-spacing: 1.6px; text-transform: uppercase;
+      color: var(--accent); display: block; margin-top: -2px;
+    }
+    .toolbar label {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.6px;
+      text-transform: uppercase; color: rgba(255,255,255,0.55);
+      margin-right: 6px;
+    }
+    .toolbar select {
+      font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+      color: #fff; background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.18); border-radius: 10px;
+      padding: 8px 12px; cursor: pointer; outline: none;
+    }
+    .toolbar select option { color: #2B2620; }
+    .toolbar .spacer { flex: 1; }
+    .toolbar .print-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--sans); font-size: 13.5px; font-weight: 700;
+      color: #fff; background: var(--accent); border: none;
+      border-radius: 11px; padding: 9px 18px; cursor: pointer;
+      box-shadow: 0 6px 18px rgba(192,86,59,0.4);
+    }
+    .toolbar .print-btn:hover { filter: brightness(1.05); }
+
+    /* ── Document / sheets ─────────────────────────────────── */
+    #doc {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 26px; padding: 34px 16px 70px;
+    }
+    .page {
+      position: relative;
+      width: var(--page-w); height: var(--page-h);
+      background: var(--paper);
+      box-shadow: 0 20px 50px rgba(40,28,16,0.34), 0 2px 6px rgba(40,28,16,0.2);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    /* faint paper grain + warm edge vignette */
+    .page::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      box-shadow: inset 0 0 0 1px rgba(43,38,32,0.05),
+                  inset 0 0 90px rgba(120,90,55,0.06);
+    }
+    .page-frame {
+      position: absolute; inset: 0.30in;
+      border: 1px solid var(--rule);
+      pointer-events: none;
+    }
+    .page-frame::before {
+      content: ""; position: absolute; inset: 4px;
+      border: 1px solid var(--line-soft);
+    }
+    .page-corner {
+      position: absolute; width: 13px; height: 13px; pointer-events: none;
+      border: 1.5px solid var(--accent);
+    }
+    .page-corner.tl { top: calc(0.30in - 4px); left: calc(0.30in - 4px); border-right: none; border-bottom: none; }
+    .page-corner.tr { top: calc(0.30in - 4px); right: calc(0.30in - 4px); border-left: none; border-bottom: none; }
+    .page-corner.bl { bottom: calc(0.30in - 4px); left: calc(0.30in - 4px); border-right: none; border-top: none; }
+    .page-corner.br { bottom: calc(0.30in - 4px); right: calc(0.30in - 4px); border-left: none; border-top: none; }
+
+    .page-inner {
+      position: absolute; inset: 0.30in;
+      padding: 30px 38px 26px;
+      display: block;
+    }
+
+    /* ── Running head / foot ───────────────────────────────── */
+    .runhead {
+      display: flex; align-items: baseline; gap: 12px;
+      padding-bottom: 9px; border-bottom: 1px solid var(--line);
+    }
+    .rh-mark {
+      font-family: var(--serif); font-style: italic; font-weight: 600;
+      font-size: 14px; color: var(--accent); white-space: nowrap;
+    }
+    .rh-title {
+      flex: 1; min-width: 0;
+      font-family: var(--sans); font-size: 10.5px; font-weight: 600;
+      color: var(--ink-faint); letter-spacing: 0.3px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      text-align: center;
+    }
+    .rh-cat {
+      font-family: var(--sans); font-size: 9.5px; font-weight: 700;
+      letter-spacing: 1.4px; color: var(--ink-faint); white-space: nowrap;
+    }
+    .content { margin-top: 20px; }
+    .runfoot {
+      position: absolute; left: 38px; right: 38px; bottom: 16px;
+      display: flex; align-items: center; gap: 12px;
+      padding-top: 8px; border-top: 1px solid var(--line);
+    }
+    .rf-left {
+      flex: 1; font-family: var(--serif); font-style: italic;
+      font-size: 11px; color: var(--ink-faint);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .rf-mark { color: var(--accent); font-size: 11px; }
+    .rf-page {
+      flex: 1; text-align: right; font-family: var(--sans);
+      font-size: 10px; font-weight: 700; letter-spacing: 0.8px;
+      color: var(--ink-faint); text-transform: uppercase;
+    }
+
+    /* ── Block spacing ─────────────────────────────────────── */
+    .block { margin-bottom: 24px; }
+    .sec-head-block { margin-bottom: 12px; }
+    .ing-row-block { margin-bottom: 0; }
+    .step-block { margin-bottom: 17px; }
+
+    /* ── Opener ────────────────────────────────────────────── */
+    .b-opener { margin-bottom: 20px; }
+    .hero {
+      position: relative; width: 100%; height: 2.95in; overflow: hidden;
+      border: 1px solid var(--line); background: var(--paper-edge);
+    }
+    .hero::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      box-shadow: inset 0 0 0 5px var(--paper), inset 0 0 0 6px var(--line);
+    }
+    .hero-fallback { display: flex; align-items: center; justify-content: center; }
+    .hero-fallback::before {
+      content: ""; position: absolute; inset: 0;
+      background-image: radial-gradient(currentColor 1.1px, transparent 1.1px);
+      background-size: 17px 17px; opacity: 0.16;
+    }
+    .hero-monogram {
+      font-family: var(--serif); font-weight: 500; font-size: 150px;
+      line-height: 1; opacity: 0.92; position: relative;
+    }
+    .hero-kicker {
+      position: absolute; bottom: 16px; left: 0; right: 0; text-align: center;
+      font-family: var(--sans); font-size: 11px; font-weight: 700;
+      letter-spacing: 3px; opacity: 0.8;
+    }
+    .hero-photo image-slot { --is-bg: var(--paper-edge); }
+
+    .opener-head { margin-top: 18px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 13px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--sans); font-size: 11px; font-weight: 600;
+      color: var(--ink-soft); padding: 3px 11px 3px 8px;
+      border: 1px solid var(--line); border-radius: 999px; background: #fff;
+    }
+    .chip-dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+    .opener-title {
+      margin: 0; font-family: var(--serif); font-weight: 600;
+      font-size: 44px; line-height: 1.04; letter-spacing: -0.3px;
+      color: var(--ink); text-wrap: balance;
+    }
+    .opener-source {
+      margin-top: 9px; font-family: var(--serif); font-style: italic;
+      font-size: 16px; color: var(--ink-soft);
+    }
+
+    /* ── Meta strip ────────────────────────────────────────── */
+    .meta-strip {
+      display: flex; align-items: stretch;
+      padding: 13px 4px; border-top: 1.5px solid var(--ink);
+      border-bottom: 1px solid var(--line);
+    }
+    .meta-cell { flex: 1; text-align: center; padding: 0 6px; }
+    .meta-val {
+      font-family: var(--serif); font-weight: 600; font-size: 20px;
+      color: var(--ink); line-height: 1.1;
+    }
+    .meta-lbl {
+      font-family: var(--sans); font-size: 9.5px; font-weight: 700;
+      letter-spacing: 1.4px; text-transform: uppercase;
+      color: var(--ink-faint); margin-top: 5px;
+    }
+    .meta-div { width: 1px; background: var(--line); flex-shrink: 0; }
+
+    /* ── Headnote ──────────────────────────────────────────── */
+    .headnote {
+      margin: 0; font-family: var(--serif); font-size: 16.5px;
+      line-height: 1.62; color: var(--ink-soft); text-wrap: pretty;
+    }
+    .dropcap {
+      float: left; font-family: var(--serif); font-weight: 600;
+      color: var(--accent); font-size: 60px; line-height: 0.78;
+      margin: 6px 10px 0 0;
+    }
+    .rich-temp {
+      font-family: var(--sans); font-weight: 700; font-size: 0.86em;
+      color: var(--accent); white-space: nowrap;
+    }
+    .rich-link {
+      font-style: italic; color: var(--accent); font-weight: 500;
+    }
+
+    /* ── Section headings ──────────────────────────────────── */
+    .sec-head { display: flex; align-items: center; gap: 12px; }
+    .sec-rule {
+      width: 22px; height: 2px; background: var(--accent); flex-shrink: 0;
+    }
+    .sec-title {
+      font-family: var(--serif); font-weight: 600; font-size: 23px;
+      color: var(--ink); letter-spacing: -0.2px; white-space: nowrap;
+    }
+    .sec-suite {
+      font-family: var(--sans); font-size: 11px; font-weight: 600;
+      font-style: italic; color: var(--ink-faint); letter-spacing: 0;
+    }
+    .sec-right {
+      margin-left: auto; font-family: var(--sans); font-size: 10.5px;
+      font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+      color: var(--ink-faint); white-space: nowrap;
+    }
+
+    /* ── Ingredients ───────────────────────────────────────── */
+    .ing-row, .ing-row-block .ing-row {
+      display: flex; align-items: baseline; gap: 12px;
+      padding: 8px 0; border-bottom: 1px solid var(--line-soft);
+    }
+    .ing-list .ing-row:first-child { border-top: 1px solid var(--line); }
+    .ing-row-block:first-child .ing-row { border-top: 1px solid var(--line); }
+    .ing-qty {
+      flex-shrink: 0; min-width: 92px;
+      font-family: var(--sans); font-weight: 700; font-size: 13px;
+      color: var(--accent); font-variant-numeric: tabular-nums;
+      letter-spacing: 0.2px;
+    }
+    .ing-name {
+      font-family: var(--sans); font-size: 14px; color: var(--ink);
+      line-height: 1.4;
+    }
+    .ing-note { font-style: italic; color: var(--ink-faint); }
+
+    /* ── Combined band (ingredients + nutrition) ───────────── */
+    .b-nutrition .sec-head { margin-bottom: 15px; }
+    .nut-grid {
+      display: grid; grid-template-columns: 1fr 2.45in; gap: 30px;
+      align-items: start;
+    }
+    .nut-quick { margin-top: 2px; }
+    .nut-basis {
+      font-family: var(--sans); font-size: 11px; font-weight: 600;
+      color: var(--ink-faint); text-align: center; margin-top: 11px;
+    }
+    .nut-disc {
+      font-family: var(--sans); font-size: 10px; line-height: 1.5;
+      color: var(--ink-faint); margin-top: 14px;
+    }
+
+    /* ── Nutrition Facts label ─────────────────────────────── */
+    .nf {
+      font-family: Helvetica, "Helvetica Neue", Arial, sans-serif;
+      color: #000; background: #fff; border: 1.5px solid #000;
+      border-radius: 2px; padding: 6px 9px 8px; font-size: 11.5px;
+      line-height: 1.25; width: 100%;
+    }
+    .nf-t1 { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; line-height: 0.98; }
+    .nf-t2 { font-size: 17px; font-weight: 800; font-style: italic; letter-spacing: -0.3px; line-height: 1; margin-bottom: 2px; }
+    .nf-per { border-bottom: 1px solid #000; padding-bottom: 2px; }
+    .nf-cal {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      border-bottom: 8px solid #000; padding: 2px 0 1px;
+      font-weight: 800; font-size: 16px;
+    }
+    .nf-dvhead { text-align: right; font-weight: 700; padding: 1.5px 0; border-bottom: 1px solid #000; }
+    .nf-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 1.5px 0; border-bottom: 1px solid #000;
+    }
+    .nf-row.nf-last { border-bottom: none; }
+    .nf-indent { padding-left: 12px; }
+    .nf-plus { padding-left: 0; }
+    .nf-name { line-height: 1.2; }
+    .nf-b, .nf-bold .nf-name > span:first-child { font-weight: 700; }
+    .nf-bold .nf-name { font-weight: 700; }
+    .nf-fr { font-weight: 400; font-style: italic; }
+    .nf-amt { font-weight: 700; }
+    .nf-dv { font-weight: 700; white-space: nowrap; padding-left: 8px; }
+    .nf-thick { border-bottom: 8px solid #000; }
+    .nf-foot { border-top: 4px solid #000; margin-top: 2px; padding-top: 3px; font-size: 9.5px; line-height: 1.3; }
+
+    /* ── Steps ─────────────────────────────────────────────── */
+    .step-row { display: flex; gap: 16px; }
+    .step-num {
+      flex-shrink: 0; width: 34px; text-align: center;
+      font-family: var(--serif); font-weight: 600; font-size: 27px;
+      color: var(--accent); line-height: 1; padding-top: 1px;
+    }
+    .step-body { flex: 1; min-width: 0; }
+    .step-text {
+      font-family: var(--sans); font-size: 14px; line-height: 1.58;
+      color: var(--ink); text-wrap: pretty;
+    }
+    .step-meta { margin-top: 8px; }
+    .step-timer {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--sans); font-size: 11.5px; font-weight: 700;
+      color: var(--accent); background: var(--accent-soft);
+      border-radius: 999px; padding: 4px 11px;
+    }
+    .step-photo {
+      margin-top: 11px; width: 2.5in; height: 1.55in; overflow: hidden;
+      border: 1px solid var(--line);
+    }
+    .step-photo::after {
+      content: ""; position: absolute;
+    }
+
+    /* ── Cook's note ───────────────────────────────────────── */
+    .b-note {
+      background: var(--accent-soft); border-left: 3px solid var(--accent);
+      padding: 13px 18px 15px; border-radius: 2px;
+    }
+    .note-label {
+      font-family: var(--sans); font-size: 9.5px; font-weight: 700;
+      letter-spacing: 1.6px; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 5px;
+    }
+    .note-text {
+      margin: 0; font-family: var(--serif); font-style: italic;
+      font-size: 14.5px; line-height: 1.5; color: var(--ink-soft);
+    }
+
+    /* ── Gallery ───────────────────────────────────────────── */
+    .b-gallery .sec-head { margin-bottom: 12px; }
+    .gal-row { display: flex; gap: 12px; }
+    .gal-item { flex: 1; }
+    .gal-frame {
+      position: relative; width: 100%; height: 1.5in; overflow: hidden;
+      border: 1px solid var(--line); background: var(--paper-edge);
+    }
+    .gal-frame::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      box-shadow: inset 0 0 0 4px var(--paper), inset 0 0 0 5px var(--line);
+    }
+
+    /* ── See also ──────────────────────────────────────────── */
+    .b-see .sec-head { margin-bottom: 10px; }
+    .see-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 0; border-bottom: 1px solid var(--line-soft);
+    }
+    .see-mark { color: var(--accent); font-size: 12px; flex-shrink: 0; }
+    .see-title {
+      flex: 1; min-width: 0;
+      font-family: var(--serif); font-size: 15px; color: var(--ink);
+    }
+
+    /* ── image-slot empty-state tuning ─────────────────────── */
+    image-slot {
+      font-family: var(--sans) !important;
+    }
+
+    /* ── Print ─────────────────────────────────────────────── */
+    @page { size: Letter; margin: 0; }
+    html.a4 ~ * { }
+    @media print {
+      :root { }
+      body {
+        background: #fff !important;
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      }
+      .toolbar { display: none !important; }
+      #doc { padding: 0; gap: 0; display: block; }
+      .page {
+        box-shadow: none !important;
+        width: var(--page-w); height: var(--page-h);
+        break-after: page; page-break-after: always;
+        margin: 0;
+      }
+      .page:last-child { break-after: auto; page-break-after: auto; }
+      .page::after { box-shadow: none; }
+    }
+    @media print {
+      html.a4 { }
+    }
+  </style>
+  <style id="print-size">@page { size: Letter; margin: 0; }</style>
+</head>
+<body>
+  <div class="toolbar">
+    <div class="brand">Facebouffe<small>Recette · PDF</small></div>
+    <label for="recipe-select">Recette</label>
+    <select id="recipe-select" aria-label="Choisir une recette"></select>
+    <label for="paper-select" style="margin-left:6px">Format</label>
+    <select id="paper-select" aria-label="Format de page">
+      <option value="letter">US Letter</option>
+      <option value="a4">A4</option>
+    </select>
+    <div class="spacer"></div>
+    <button class="print-btn" id="print-btn">Imprimer / Enregistrer en PDF</button>
+  </div>
+
+  <div id="doc"></div>
+
+  <script src="fb-core.js"></script>
+  <script src="frames/image-slot.js"></script>
+  <script src="recipe-pdf.js"></script>
+  <script>
+    // keep @page size in sync with the paper toggle so the PDF maps exactly
+    (function () {
+      function syncPage() {
+        var a4 = document.documentElement.classList.contains("a4");
+        document.getElementById("print-size").textContent =
+          "@page { size: " + (a4 ? "A4" : "Letter") + "; margin: 0; }";
+      }
+      var sel = document.getElementById("paper-select");
+      if (sel) sel.addEventListener("change", function () { setTimeout(syncPage, 0); });
+      syncPage();
+    })();
+  </script>
+
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect width="100" height="100" fill="#C0563B"/>
+      <rect x="30" y="22" width="40" height="56" rx="2" fill="#FBF6EE"/>
+      <rect x="36" y="30" width="28" height="16" rx="1" fill="#E0A458"/>
+      <rect x="36" y="50" width="28" height="2.5" fill="#C0563B"/>
+      <rect x="36" y="56" width="22" height="2" fill="#A89E90"/>
+      <rect x="36" y="61" width="25" height="2" fill="#A89E90"/>
+      <rect x="36" y="66" width="18" height="2" fill="#A89E90"/>
+    </svg>
+  </template>
+
+  <style id="__om-edit-overrides"></style>
+</body>
+</html>

@@ -463,6 +463,7 @@ class Profile {
   String weight; // metric | imperial
   bool keepCups; // when true, amounts authored in cups never convert to ml
   String fontSize; // small | medium | large
+  String pdfPaper; // letter | a4 — page format for the recipe PDF export
 
   Profile({
     this.username = 'demo_chef',
@@ -472,6 +473,7 @@ class Profile {
     this.weight = 'metric',
     this.keepCups = false,
     this.fontSize = 'medium',
+    this.pdfPaper = 'letter',
   });
 
   factory Profile.fromJson(Map<String, dynamic> j) {
@@ -484,6 +486,7 @@ class Profile {
       weight: units['weight'] as String? ?? 'metric',
       keepCups: units['keepCups'] as bool? ?? false,
       fontSize: j['fontSize'] as String? ?? 'medium',
+      pdfPaper: j['pdfPaper'] as String? ?? 'letter',
     );
   }
 
@@ -492,6 +495,7 @@ class Profile {
         'language': language,
         'units': {'temperature': temperature, 'volume': volume, 'weight': weight, 'keepCups': keepCups},
         'fontSize': fontSize,
+        'pdfPaper': pdfPaper,
       };
 }
 
