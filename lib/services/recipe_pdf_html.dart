@@ -778,7 +778,7 @@ const String _kPaginatorJs = r'''
   "use strict";
   var DATA = JSON.parse(document.getElementById("fb-pages-data").textContent);
   var root = document.getElementById("doc");
-  var FOOTER_ZONE = 46;
+  var FOOTER_GAP = 16; // clearance between the content/columns and the running foot
   var pages = [];
 
   function node(html) {
@@ -823,10 +823,10 @@ const String _kPaginatorJs = r'''
     function fresh() {
       page = makePage(rec.recipe);
       content = page.querySelector(".content");
-      var inner = page.querySelector(".page-inner");
-      var rh = page.querySelector(".runhead");
-      var pad = parseFloat(getComputedStyle(content).marginTop) || 0;
-      budget = inner.clientHeight - rh.offsetHeight - pad - FOOTER_ZONE;
+      var rf = page.querySelector(".runfoot");
+      // Stop content a fixed gap above the (absolutely-positioned) footer, using
+      // its real measured position rather than a guessed reserve.
+      budget = rf.offsetTop - content.offsetTop - FOOTER_GAP;
     }
     function fits() { return content.scrollHeight <= budget + 0.5; }
     function placeAtomic(html) {
