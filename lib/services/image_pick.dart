@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
@@ -56,6 +57,7 @@ class ImagePick {
     final app = context.read<AppState>();
     final messenger = ScaffoldMessenger.of(context);
     final fb = context.fb;
+    final screen = MediaQuery.sizeOf(context);
     XFile? picked;
     try {
       picked = await ImagePicker().pickImage(source: source, maxWidth: 2400, imageQuality: 92);
@@ -79,7 +81,27 @@ class ImagePick {
           hideBottomControls: false,
         ),
         IOSUiSettings(title: title, aspectRatioLockEnabled: false),
-        if (kIsWeb) WebUiSettings(context: context),
+        if (kIsWeb)
+          WebUiSettings(
+            context: context,
+            // The stock dialog is a fixed 500×500 non-scrolling column; on
+            // phone-sized viewports the Cancel/Crop footer gets clipped off
+            // screen, so size the cropper to leave room for the chrome.
+            size: CropperSize(
+              width: math.max(240, math.min(500, screen.width.round() - 88)),
+              height: math.max(240, math.min(500, screen.height.round() - 320)),
+            ),
+            translations: app.lang == 'fr'
+                ? const WebTranslations(
+                    title: 'Cadrer la photo',
+                    rotateLeftTooltip: 'Pivoter de 90° vers la gauche',
+                    rotateRightTooltip: 'Pivoter de 90° vers la droite',
+                    cancelButton: 'Annuler',
+                    cropButton: 'Valider',
+                  )
+                : const WebTranslations.en(),
+            themeData: WebThemeData(rotateIconColor: fb.accent),
+          ),
       ],
     );
     if (cropped == null) return null; // crop cancelled
