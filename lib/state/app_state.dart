@@ -12,6 +12,8 @@ import '../services/import/ondevice_ai.dart';
 import '../services/sync/sync_backend.dart';
 import '../services/sync/supabase_backend.dart';
 import '../services/cnf.dart';
+import '../services/crash_log.dart';
+import '../services/device_meta.dart';
 import '../services/image_cache.dart';
 import '../services/local_store.dart';
 import '../services/timer_notifications.dart';
@@ -316,6 +318,42 @@ class AppState extends ChangeNotifier {
     _initAccount();
     ready = true;
     notifyListeners();
+    CrashLog.instance.add('app', 'ready');
+    unawaited(checkCrashReportStatuses());
+  }
+
+  // ── crash reports ──
+
+  /// Send a crash/problem report (works signed-out) and remember its id so
+  /// [checkCrashReportStatuses] can surface the dev's answer later.
+  Future<String> sendCrashReport({required String kind, required String notes, required String log}) async {
+    final meta = await deviceMeta();
+    final plus = appVersion.indexOf('+');
+    final id = await sync.sendCrashReport(
+      kind: kind,
+      notes: notes,
+      log: log,
+      appVersion: plus < 0 ? appVersion : appVersion.substring(0, plus),
+      build: plus < 0 ? 0 : int.tryParse(appVersion.substring(plus + 1)) ?? 0,
+      platform: meta.platform,
+      osVersion: meta.osVersion,
+      deviceModel: meta.deviceModel,
+      username: account?.username,
+    );
+    CrashLog.instance.recordSentReport(id, kind);
+    notifyListeners(); // settings "sent reports" list
+    return id;
+  }
+
+  /// Fetch statuses for previously-sent reports; on a change the crash-status
+  /// banner and the settings list light up.
+  Future<void> checkCrashReportStatuses() async {
+    if (!online) return;
+    if (CrashLog.instance.sentReports.isEmpty) return;
+    try {
+      final fresh = await sync.crashReportStatuses([for (final r in CrashLog.instance.sentReports) r.id]);
+      if (CrashLog.instance.applyStatuses(fresh)) notifyListeners();
+    } catch (_) {}
   }
 
   // ── account / social ──
@@ -326,6 +364,7 @@ class AppState extends ChangeNotifier {
       _subscribeSharedLists();
     }
     _acctSub = sync.accountChanges.listen((a) async {
+      if ((a == null) != (account == null)) CrashLog.instance.add('acct', a == null ? 'signout' : 'signin');
       account = a;
       if (a != null) {
         if (a.username == null) await _refreshUsername();
@@ -698,6 +737,7 @@ class AppState extends ChangeNotifier {
 
   /// Save (create or replace). Returns the recipe id.
   String saveRecipe(Recipe form, Recipe? existing) {
+    CrashLog.instance.add('recipe', 'save ${existing != null ? existing.id.substring(0, 8) : 'new'}');
     final now = DateTime.now().toIso8601String();
     if (existing != null) {
       final idx = recipes.indexWhere((r) => r.id == existing.id);
@@ -981,6 +1021,7 @@ class AppState extends ChangeNotifier {
       if (up != online) {
         final cameOnline = up && !online;
         online = up;
+        CrashLog.instance.add('net', up ? 'online' : 'offline');
         notifyListeners();
         // Reconnect → pull anything that arrived while offline (e.g. shared lists).
         if (cameOnline && signedIn) unawaited(runCloudSync());

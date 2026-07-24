@@ -38,6 +38,13 @@ class LocalStore {
   static const preferredAi = 'fb_preferred_ai';
   static const importProvider = 'fb_import_provider';
   static const localOwner = 'fb_local_owner';
+  // Crash logging / reporting (see services/crash_log.dart).
+  static const crashLog = 'fb_crash_log'; // this session's breadcrumbs (flushed)
+  static const crashPrevLog = 'fb_crash_prev_log'; // previous session's final log
+  static const crashPending = 'fb_crash_pending'; // un-reported Dart error marker
+  static const runState = 'fb_run_state'; // {state:'fg'|'bg', build} dirty-exit detector
+  static const crashReports = 'fb_crash_reports'; // sent-report bookkeeping (cap 10)
+  static const pickCtx = 'fb_pick_ctx'; // in-flight photo pick target (Android lost-data recovery)
   // Per-account keys (shared-device safety).
   static const _syncedPrefix = 'fb_synced_';
   static String synced(String accountId) => '$_syncedPrefix$accountId';

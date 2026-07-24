@@ -6,8 +6,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../services/crash_log.dart';
 import '../services/update_check.dart';
 import '../services/web_env.dart';
+import 'crash_report_sheet.dart';
 import 'fb_icon.dart';
 
 Future<void> _open(String url) async {
@@ -110,6 +112,94 @@ class _UpdateBannerState extends State<UpdateBanner> {
         setState(() => _hidden = true);
       },
     );
+  }
+}
+
+/// "Looks like the app crashed last time — send a report?" Shown when CrashLog
+/// detected a crash for the previous session (explicit Dart marker or native
+/// dirty-exit). Dismiss = decline; the offer doesn't come back for that crash.
+class CrashReportBanner extends StatefulWidget {
+  const CrashReportBanner({super.key});
+  @override
+  State<CrashReportBanner> createState() => _CrashReportBannerState();
+}
+
+class _CrashReportBannerState extends State<CrashReportBanner> {
+  @override
+  Widget build(BuildContext context) {
+    if (!CrashLog.instance.startupCrashPending) return const SizedBox.shrink();
+    final app = context.read<AppState>();
+    final fb = context.fb;
+    return _Bar(
+      icon: 'flame',
+      content: Text(app.t('crash_banner'), style: fb.ui(size: 13.5, weight: FontWeight.w600, height: 1.3)),
+      actionLabel: app.t('crash_banner_send'),
+      onAction: () async {
+        final log = CrashLog.instance.previousSessionLog ?? CrashLog.instance.dump();
+        await showCrashReportSheet(context, kind: 'crash', log: log);
+        if (mounted) setState(() {}); // sheet clears the pending flag on send
+      },
+      onDismiss: () {
+        CrashLog.instance.clearStartupPending();
+        setState(() {});
+      },
+    );
+  }
+}
+
+/// "Your report was updated" — the dev set a status/note on a report this
+/// device sent. Dismiss marks everything seen.
+class CrashStatusBanner extends StatefulWidget {
+  const CrashStatusBanner({super.key});
+  @override
+  State<CrashStatusBanner> createState() => _CrashStatusBannerState();
+}
+
+class _CrashStatusBannerState extends State<CrashStatusBanner> {
+  @override
+  Widget build(BuildContext context) {
+    context.watch<AppState>(); // statusNotice is set during checkCrashReportStatuses
+    final status = CrashLog.instance.statusNotice;
+    if (status == null) return const SizedBox.shrink();
+    final app = context.read<AppState>();
+    final fb = context.fb;
+    final note = CrashLog.instance.statusNoticeNote;
+    return _Bar(
+      icon: 'check',
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('${app.t('report_status_updated')} · ${crashStatusLabel(app, status)}',
+              style: fb.ui(size: 13.5, weight: FontWeight.w600, height: 1.3)),
+          if (note != null && note.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(note, style: fb.ui(size: 12.5, color: fb.inkSoft, height: 1.3)),
+            ),
+        ],
+      ),
+      onDismiss: () {
+        CrashLog.instance.markStatusesSeen();
+        setState(() {});
+      },
+    );
+  }
+}
+
+/// Localized label for a crash-report status (raw value if unknown).
+String crashStatusLabel(AppState app, String status) {
+  switch (status) {
+    case 'new':
+      return app.t('status_new');
+    case 'investigating':
+      return app.t('status_investigating');
+    case 'fixed':
+      return app.t('status_fixed');
+    case 'closed':
+      return app.t('status_closed');
+    default:
+      return status;
   }
 }
 

@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import 'crash_log.dart';
 import 'web_notif_stub.dart' if (dart.library.js_interop) 'web_notif_web.dart' as webnotif;
 
 /// OS-scheduled cooking-timer alerts. A timer's chime is a `zonedSchedule`d
@@ -177,7 +178,7 @@ class TimerNotifications {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
     } catch (e) {
-      debugPrint('[TimerNotifications] exact schedule failed ($e); retrying inexact');
+      CrashLog.instance.add('timer', 'exact schedule failed ($e); retrying inexact');
       try {
         await _plugin.zonedSchedule(
           id: id, title: title, body: body, scheduledDate: when,
@@ -185,7 +186,7 @@ class TimerNotifications {
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         );
       } catch (e2) {
-        debugPrint('[TimerNotifications] inexact schedule also failed: $e2');
+        CrashLog.instance.add('timer', 'inexact schedule also failed: $e2');
       }
     }
   }

@@ -2,9 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' show Rect;
 
-import 'package:image/image.dart' as img;
-
 import '../../state/app_state.dart';
+import '../image_ops.dart';
 import '../recipe_import.dart';
 import 'byok_client.dart';
 import 'import_debug.dart';
@@ -144,25 +143,25 @@ class ImportEngine {
   }) async {
     final backend = engineOverride ?? resolve(ImportMethod.photo, app);
     if (backend != 'ondevice' && backend != 'online') throw ImportException('needs_ai');
-    final decoded = img.decodeImage(imageBytes);
-    if (decoded == null) throw ImportException('no_recipe', 'could not decode image');
+    // Decode + crop off the UI isolate; OCR stays here (MLKit platform channel).
+    final crops = await cropRegions(
+      imageBytes,
+      [for (final b in ingredientBoxes) (b.left, b.top, b.width, b.height)],
+      [for (final b in stepBoxes) (b.left, b.top, b.width, b.height)],
+    );
+    if (crops == null) throw ImportException('no_recipe', 'could not decode image');
 
-    Future<String> ocrBoxes(List<Rect> boxes) async {
+    Future<String> ocrCrops(List<Uint8List> jpegs) async {
       final parts = <String>[];
-      for (final b in boxes) {
-        final x = (b.left * decoded.width).round().clamp(0, decoded.width - 1);
-        final y = (b.top * decoded.height).round().clamp(0, decoded.height - 1);
-        final w = (b.width * decoded.width).round().clamp(1, decoded.width - x);
-        final h = (b.height * decoded.height).round().clamp(1, decoded.height - y);
-        final crop = img.copyCrop(decoded, x: x, y: y, width: w, height: h);
-        final txt = await Ocr.recognize(Uint8List.fromList(img.encodeJpg(crop)));
+      for (final jpeg in jpegs) {
+        final txt = await Ocr.recognize(jpeg);
         if (txt.trim().isNotEmpty) parts.add(txt.trim());
       }
       return parts.join('\n');
     }
 
-    final ing = ingredientBoxes.isEmpty ? '' : await ocrBoxes(ingredientBoxes);
-    final steps = stepBoxes.isEmpty ? '' : await ocrBoxes(stepBoxes);
+    final ing = await ocrCrops(crops.ing);
+    final steps = await ocrCrops(crops.steps);
     importLog('regions OCR: ingLen=${ing.length} stepsLen=${steps.length}');
     if (ing.trim().isEmpty && steps.trim().isEmpty) throw ImportException('no_recipe', 'no text recognized in the selected regions');
 

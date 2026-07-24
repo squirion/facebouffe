@@ -163,22 +163,27 @@ class _DotPainter extends CustomPainter {
 }
 
 /// An image widget for a stored photo: a data: URL (seed/web-added), a web blob
-/// URL, or a local file path.
-Widget fileImage(String path, {BoxFit fit = BoxFit.cover}) {
+/// URL, or a local file path. [cacheWidth] (physical px) bounds the decoded
+/// bitmap for thumbnail-sized uses — stored photos are ~1600 px wide and
+/// decoding them full-size for every card is needless memory pressure.
+Widget fileImage(String path, {BoxFit fit = BoxFit.cover, int? cacheWidth}) {
   if (path.startsWith('data:')) {
-    return Image.memory(base64Decode(path.substring(path.indexOf(',') + 1)), fit: fit, gaplessPlayback: true);
+    return Image.memory(base64Decode(path.substring(path.indexOf(',') + 1)), fit: fit, gaplessPlayback: true, cacheWidth: cacheWidth);
   }
-  if (kIsWeb) return Image.network(path, fit: fit, gaplessPlayback: true);
-  return Image.file(File(path), fit: fit, gaplessPlayback: true);
+  if (kIsWeb) return Image.network(path, fit: fit, gaplessPlayback: true, cacheWidth: cacheWidth);
+  return Image.file(File(path), fit: fit, gaplessPlayback: true, cacheWidth: cacheWidth);
 }
 
 /// Resolves a stored photo path to an Image widget (data URL vs web blob vs file).
-Widget? recipeImage(BuildContext context, String? id, {BoxFit fit = BoxFit.cover}) {
+Widget? recipeImage(BuildContext context, String? id, {BoxFit fit = BoxFit.cover, int? cacheWidth}) {
   if (id == null) return null;
   final path = context.read<AppState>().recipePhotos[id];
   if (path == null || path.isEmpty) return null;
-  return fileImage(path, fit: fit);
+  return fileImage(path, fit: fit, cacheWidth: cacheWidth);
 }
+
+/// Physical-pixel decode width for an image displayed [logicalWidth] wide.
+int decodePx(BuildContext context, double logicalWidth) => (logicalWidth * MediaQuery.devicePixelRatioOf(context)).round();
 
 // ── Hero media — photo if present, else fallback tile ───────────
 class HeroMedia extends StatelessWidget {
@@ -186,12 +191,13 @@ class HeroMedia extends StatelessWidget {
   final Tag? tag;
   final double height;
   final double radius;
-  const HeroMedia({super.key, required this.recipe, this.tag, required this.height, this.radius = 0});
+  final int? cacheWidth;
+  const HeroMedia({super.key, required this.recipe, this.tag, required this.height, this.radius = 0, this.cacheWidth});
 
   @override
   Widget build(BuildContext context) {
     context.watch<AppState>(); // rebuild when a photo is added/removed
-    final img = recipeImage(context, recipe.id);
+    final img = recipeImage(context, recipe.id, cacheWidth: cacheWidth);
     if (img != null) {
       return ClipRRect(borderRadius: BorderRadius.circular(radius), child: SizedBox(height: height, width: double.infinity, child: img));
     }
@@ -215,7 +221,7 @@ class PhotoDrop extends StatelessWidget {
 
   Future<void> _pick(BuildContext context) async {
     final app = context.read<AppState>();
-    final path = await ImagePick.pick(context);
+    final path = await ImagePick.pick(context, recover: PickTarget('hero', photoId));
     if (path != null) app.setRecipePhoto(photoId, path);
   }
 

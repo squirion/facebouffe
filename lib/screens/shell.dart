@@ -6,6 +6,8 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../responsive.dart';
 import '../widgets/fb_icon.dart';
+import '../services/crash_log.dart';
+import '../services/image_pick.dart';
 import '../services/import/share_import.dart';
 import '../nav.dart';
 import 'home_screen.dart';
@@ -18,7 +20,10 @@ import 'account_screens.dart' show showMigrationSheet;
 /// Holds the active bottom-tab index; screens switch tabs via [go].
 class ShellTab extends ValueNotifier<int> {
   ShellTab() : super(0);
-  void go(int i) => value = i;
+  void go(int i) {
+    if (i != value) CrashLog.instance.add('nav', 'tab $i');
+    value = i;
+  }
 }
 
 /// Root scaffold: the 4 tab screens in an IndexedStack, a blurred bottom tab
@@ -48,6 +53,8 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     // "Partager vers Facebouffe" — handle links/images shared from other apps.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ShareImport.init(context);
+      // Re-attach a photo lost to an Android process-kill during pick.
+      if (mounted) ImagePick.recoverLostPick(context);
     });
   }
 

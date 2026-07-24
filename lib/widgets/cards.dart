@@ -32,7 +32,7 @@ class FeatureCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
-            HeroMedia(recipe: recipe, tag: tag, height: 210, radius: 0),
+            HeroMedia(recipe: recipe, tag: tag, height: 210, radius: 0, cacheWidth: decodePx(context, MediaQuery.sizeOf(context).width)),
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -113,7 +113,7 @@ class MiniCard extends StatelessWidget {
           children: [
             Stack(
               children: [
-                HeroMedia(recipe: recipe, tag: tag, height: 132, radius: 18),
+                HeroMedia(recipe: recipe, tag: tag, height: 132, radius: 18, cacheWidth: decodePx(context, width ?? 156)),
                 if (isFav)
                   Positioned(
                     top: 8,
@@ -159,7 +159,7 @@ class ListCard extends StatelessWidget {
         decoration: BoxDecoration(color: fb.card, borderRadius: BorderRadius.circular(20), boxShadow: fb.shadow),
         child: Row(
           children: [
-            SizedBox(width: 86, height: 86, child: HeroMedia(recipe: recipe, tag: tag, height: 86, radius: 14)),
+            SizedBox(width: 86, height: 86, child: HeroMedia(recipe: recipe, tag: tag, height: 86, radius: 14, cacheWidth: decodePx(context, 86))),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

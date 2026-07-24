@@ -15,7 +15,12 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
+        android:largeHeap="true"
         android:dataExtractionRules="@xml/data_extraction_rules">
+        <!-- largeHeap: native image decode (picker/uCrop bitmaps) is the memory
+             pressure point on 2-3 GB phones; the default heap cap caused hard
+             OOM kills while adding recipe photos. -->
+
         <!-- allowBackup + dataExtractionRules: recipes/settings restore on
              reinstall via the user's Google Drive (Auto Backup). Photos/model are
              excluded from cloud backup to stay under the 25 MB quota — see the

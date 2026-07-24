@@ -747,7 +747,7 @@ class _EditScreenState extends State<EditScreen> {
               width: double.infinity,
               height: 120,
               child: isFile
-                  ? fileImage(image)
+                  ? fileImage(image, cacheWidth: decodePx(context, MediaQuery.sizeOf(context).width))
                   : Container(color: fb.canvas2, alignment: Alignment.center, child: FbIcon('camera', size: 22, color: fb.inkFaint)),
             ),
           ),
@@ -812,7 +812,7 @@ class _EditScreenState extends State<EditScreen> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    ClipRRect(borderRadius: BorderRadius.circular(14), child: fileImage(photos[i])),
+                    ClipRRect(borderRadius: BorderRadius.circular(14), child: fileImage(photos[i], cacheWidth: decodePx(context, 120))),
                     Positioned(
                       top: 6,
                       right: 6,
@@ -833,7 +833,7 @@ class _EditScreenState extends State<EditScreen> {
           if (photos.length < AppState.maxGalleryPhotos)
             GestureDetector(
               onTap: () async {
-                final path = await ImagePick.pick(context);
+                final path = await ImagePick.pick(context, recover: PickTarget('gallery', photoId));
                 if (path != null) app.addGalleryPhoto(photoId, path);
               },
               child: Container(

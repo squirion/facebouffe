@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -5,24 +8,48 @@ import 'state/app_state.dart';
 import 'theme.dart';
 import 'responsive.dart';
 import 'screens/shell.dart';
+import 'services/crash_log.dart';
 import 'services/timer_notifications.dart';
 import 'services/sync/supabase_backend.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await SupabaseSyncBackend.boot(); // connect to Supabase (optional-login social layer)
-  final app = AppState();
-  TimerNotifications.instance.init(); // fire-and-forget; no-op on web; idempotent
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: app),
-        ChangeNotifierProvider(create: (_) => ShellTab()),
-      ],
-      child: const FacebouffeApp(),
-    ),
-  );
-  app.init();
+  // Everything (incl. ensureInitialized + runApp) lives inside the guarded
+  // zone — splitting them triggers Flutter's zone-mismatch warning and makes
+  // error routing unreliable.
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await CrashLog.instance.init();
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details); // keep console/red-screen behavior
+      // Layout overflows go in the log but don't count as a crash.
+      final msg = details.exceptionAsString();
+      CrashLog.instance.error(details.exception, details.stack,
+          source: 'flutter', marker: !details.silent && !msg.contains('overflowed'));
+    };
+    PlatformDispatcher.instance.onError = (e, st) {
+      CrashLog.instance.error(e, st, source: 'platform');
+      return true; // handled — keep the app alive
+    };
+    try {
+      await SupabaseSyncBackend.boot(); // connect to Supabase (optional-login social layer)
+    } catch (e, st) {
+      // A boot failure used to mean an eternal white splash; degrade to a
+      // local-only app instead and let sync calls fail into the handlers.
+      CrashLog.instance.error(e, st, source: 'boot', marker: false);
+    }
+    final app = AppState();
+    TimerNotifications.instance.init(); // fire-and-forget; no-op on web; idempotent
+    runApp(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: app),
+          ChangeNotifierProvider(create: (_) => ShellTab()),
+        ],
+        child: const FacebouffeApp(),
+      ),
+    );
+    app.init();
+  }, (e, st) => CrashLog.instance.error(e, st, source: 'zone'));
 }
 
 class FacebouffeApp extends StatelessWidget {
@@ -36,6 +63,7 @@ class FacebouffeApp extends StatelessWidget {
     return MaterialApp(
       title: 'Facebouffe',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [CrashNavObserver()],
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: theme.canvas,

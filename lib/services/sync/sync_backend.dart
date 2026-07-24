@@ -55,6 +55,15 @@ class FriendEdge {
   bool get incoming => status == 'pending' && !outgoing;
 }
 
+/// One crash-report status from the readback RPC (see crash-reports.sql).
+class CrashReportStatus {
+  final String id;
+  final String status; // 'new' | 'investigating' | 'fixed' | 'closed' | free-form
+  final String? devNote;
+  final DateTime updatedAt;
+  const CrashReportStatus({required this.id, required this.status, this.devNote, required this.updatedAt});
+}
+
 /// One shared grocery list (`shared_lists` row) addressed to a friend.
 class SharedList {
   final String id; // row id (uuid)
@@ -256,4 +265,26 @@ abstract class SyncBackend {
 
   /// Delete a review by id (yours, or any on a recipe you own — moderation).
   Future<void> deleteReview(String commentId);
+
+  // ── Crash reports ──
+
+  /// Insert a crash/problem report. The ONE write that must work signed-out
+  /// (anonymous): the table's RLS is insert-only for anon+authenticated.
+  /// Returns the new report id (client-minted uuid — insert-only RLS forbids
+  /// reading the row back).
+  Future<String> sendCrashReport({
+    required String kind, // 'crash' | 'manual'
+    required String notes,
+    required String log,
+    required String appVersion, // '2.7.0'
+    required int build, // 75
+    required String platform, // 'android' | 'ios' | 'web' | …
+    required String osVersion,
+    required String deviceModel,
+    String? username,
+  });
+
+  /// Statuses for previously-sent reports. Possessing a report's (unguessable,
+  /// client-minted) uuid is the read capability — works signed-out too.
+  Future<List<CrashReportStatus>> crashReportStatuses(List<String> ids);
 }

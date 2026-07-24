@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
@@ -13,10 +13,13 @@ import '../services/pdf_export.dart';
 import '../services/data_export.dart';
 import '../services/timer_notifications.dart';
 import '../services/ringtone_picker.dart';
+import '../services/crash_log.dart';
 import '../services/update_check.dart';
 import '../services/web_env.dart';
 import 'export_select_screen.dart';
+import '../widgets/banners.dart' show crashStatusLabel;
 import '../widgets/chrome.dart';
+import '../widgets/crash_report_sheet.dart';
 import '../widgets/fb_icon.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -108,9 +111,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SettingsGroup(label: app.t('help_section'), children: [
                     _ActionRow(icon: 'download', label: app.t('check_update'), onTap: () => _checkUpdate(app)),
                     _ActionRow(icon: 'note', label: app.t('help_title'), onTap: () => Nav.openHelp(context)),
+                    _ActionRow(icon: 'flame', label: app.t('report_problem'), onTap: () => showCrashReportSheet(context, kind: 'manual', log: CrashLog.instance.dump())),
                     _ActionRow(icon: 'timer', label: app.t('replay_tips'), onTap: () { app.resetTips(); _showFlash(app.t('tips_reset_done')); }, last: true),
                   ]),
-                  Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Center(child: Text(app.appVersion.isEmpty ? app.t('version') : 'Facebouffe · v${app.appVersion}', style: fb.ui(size: 12.5, color: fb.inkFaint)))),
+                  if (CrashLog.instance.sentReports.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(app.t('reports_sent'), style: fb.ui(size: 12.5, weight: FontWeight.w700, color: fb.inkFaint)),
+                          for (final r in CrashLog.instance.sentReports.take(3))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                '#${r.id.substring(0, 8)} · ${crashStatusLabel(app, r.status)}${(r.devNote ?? '').isNotEmpty ? ' — ${r.devNote}' : ''}',
+                                style: fb.ui(size: 12.5, color: fb.inkFaint, height: 1.3),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  // Long-press (debug builds only): forced test crash for the
+                  // crash-banner verification loop.
+                  GestureDetector(
+                    onLongPress: kDebugMode ? () { Future.delayed(Duration.zero, () => throw StateError('forced test crash')); } : null,
+                    child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Center(child: Text(app.appVersion.isEmpty ? app.t('version') : 'Facebouffe · v${app.appVersion}', style: fb.ui(size: 12.5, color: fb.inkFaint)))),
+                  ),
                 ],
               ),
               if (flash != null)

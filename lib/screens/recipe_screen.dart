@@ -256,7 +256,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
             padding: EdgeInsets.only(bottom: 32 + MediaQuery.of(context).padding.bottom),
             children: [
               // hero
-              HeroMedia(recipe: recipe, tag: tag, height: 300, radius: 0),
+              HeroMedia(recipe: recipe, tag: tag, height: 300, radius: 0, cacheWidth: decodePx(context, MediaQuery.sizeOf(context).width)),
               Transform.translate(
                 offset: const Offset(0, -26),
                 child: Padding(
@@ -390,7 +390,7 @@ class _RecipeScreenState extends State<RecipeScreen> {
                               itemBuilder: (_, i) => useReal
                                   ? GestureDetector(
                                       onTap: () => Nav.openGallery(context, g, i),
-                                      child: SizedBox(width: 150, child: ClipRRect(borderRadius: BorderRadius.circular(16), child: fileImage(g[i]))),
+                                      child: SizedBox(width: 150, child: ClipRRect(borderRadius: BorderRadius.circular(16), child: fileImage(g[i], cacheWidth: decodePx(context, 150)))),
                                     )
                                   : _PhotoPlaceholder(label: recipe.gallery[i], size: 150),
                             );
@@ -819,7 +819,7 @@ class _StepRow extends StatelessWidget {
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 240),
                       child: step.image!.contains('/')
-                          ? ClipRRect(borderRadius: BorderRadius.circular(16), child: SizedBox(height: 150, width: double.infinity, child: fileImage(step.image!)))
+                          ? ClipRRect(borderRadius: BorderRadius.circular(16), child: SizedBox(height: 150, width: double.infinity, child: fileImage(step.image!, cacheWidth: decodePx(context, 240))))
                           : _PhotoPlaceholder(label: step.image!, size: 150, height: 150),
                     ),
                   ),

@@ -48,6 +48,7 @@ extension CloudSync on AppState {
     _syncBusy = true;
     _pushFailedDuringSync = false;
     _setSyncStatus(SyncStatus.syncing);
+    CrashLog.instance.add('sync', 'run begin');
     try {
       await _handleAccountSwitch(); // reset local store if it belongs to another account
       _loadSyncState();
@@ -63,8 +64,9 @@ extension CloudSync on AppState {
 
       // Don't report "synced" if a push that ran during this sync failed.
       _setSyncStatus(_pushFailedDuringSync ? SyncStatus.error : SyncStatus.synced);
+      CrashLog.instance.add('sync', 'run end ${_pushFailedDuringSync ? 'pushFailed' : 'ok'}');
     } catch (e) {
-      debugPrint('[sync] runCloudSync failed: $e');
+      CrashLog.instance.add('sync', 'runCloudSync failed: $e');
       _setSyncStatus(online ? SyncStatus.error : SyncStatus.offline);
     } finally {
       _syncBusy = false;
@@ -1022,7 +1024,7 @@ extension CloudSync on AppState {
     try {
       await op();
     } catch (e) {
-      debugPrint('[sync] push failed: $e');
+      CrashLog.instance.add('sync', 'push failed: $e');
       if (_syncBusy) _pushFailedDuringSync = true; // so the sync doesn't end on "synced"
       _setSyncStatus(online ? SyncStatus.error : SyncStatus.offline);
     }

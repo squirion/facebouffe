@@ -433,7 +433,7 @@ class AccountScreen extends StatelessWidget {
     );
     if (!context.mounted) return;
     if (choice == 'change') {
-      final path = await ImagePick.pick(context);
+      final path = await ImagePick.pick(context, recover: const PickTarget('avatar'));
       if (path != null) await app.applyAvatar(path);
     } else if (choice == 'remove') {
       await app.removeAvatar();

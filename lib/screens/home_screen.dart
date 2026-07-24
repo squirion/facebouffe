@@ -83,6 +83,9 @@ class HomeScreen extends StatelessWidget {
               // deployment banners (update available / install app) — self-hide
               const UpdateBanner(),
               const WebPromoBanner(),
+              // crash reporting: offer after a detected crash / dev answered
+              const CrashReportBanner(),
+              const CrashStatusBanner(),
               // social hub (signed-in only)
               if (app.signedIn)
                 Padding(

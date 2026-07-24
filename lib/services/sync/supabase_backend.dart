@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -477,5 +478,70 @@ class SupabaseSyncBackend implements SyncBackend {
       await _c.removeChannel(channel);
     };
     return controller.stream;
+  }
+
+  // ── Crash reports ──
+
+  static final _crashUuidRe = RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$');
+  static final _crashRng = Random();
+
+  // Mirrors _uuidV4 in app_state_sync.dart (private there; a shared util would
+  // be nice-to-have cleanup, not worth coupling state↔services for).
+  static String _uuidV4() {
+    final b = List<int>.generate(16, (_) => _crashRng.nextInt(256));
+    b[6] = (b[6] & 0x0f) | 0x40; // version 4
+    b[8] = (b[8] & 0x3f) | 0x80; // variant 1
+    String h(int i) => b[i].toRadixString(16).padLeft(2, '0');
+    return '${h(0)}${h(1)}${h(2)}${h(3)}-${h(4)}${h(5)}-${h(6)}${h(7)}-${h(8)}${h(9)}-${h(10)}${h(11)}${h(12)}${h(13)}${h(14)}${h(15)}';
+  }
+
+  @override
+  Future<String> sendCrashReport({
+    required String kind,
+    required String notes,
+    required String log,
+    required String appVersion,
+    required int build,
+    required String platform,
+    required String osVersion,
+    required String deviceModel,
+    String? username,
+  }) async {
+    // No signed-in guard, by design: crash reports are the one anonymous write.
+    // Id is client-minted because the table's RLS is insert-only — a .select()
+    // readback would 42501.
+    final id = _uuidV4();
+    await _c.from('crash_reports').insert({
+      'id': id,
+      'user_id': _c.auth.currentUser?.id, // null when anonymous (policy allows)
+      'username': username,
+      'app_version': appVersion,
+      'build': build,
+      'platform': platform,
+      'os_version': osVersion,
+      'device_model': deviceModel,
+      'kind': kind,
+      'notes': notes,
+      'log': log,
+    });
+    return id;
+  }
+
+  @override
+  Future<List<CrashReportStatus>> crashReportStatuses(List<String> ids) async {
+    // One malformed id would 22P02 the whole RPC call — filter defensively.
+    final clean = ids.where(_crashUuidRe.hasMatch).toList();
+    if (clean.isEmpty) return const [];
+    final res = await _c.rpc('crash_report_statuses', params: {'ids': clean});
+    if (res is! List) return const [];
+    return [
+      for (final r in res.whereType<Map>())
+        CrashReportStatus(
+          id: r['id'] as String,
+          status: r['status'] as String? ?? 'new',
+          devNote: r['dev_note'] as String?,
+          updatedAt: DateTime.tryParse(r['updated_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+        ),
+    ];
   }
 }

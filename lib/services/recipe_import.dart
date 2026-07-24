@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
-import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
 import '../data/models.dart';
 import '../config/supabase_config.dart';
+import 'image_ops.dart';
 
 /// Thrown when an import can't be completed (network blocked, no recipe data…).
 /// [detail] carries a verbose, developer-facing reason (surfaced in the UI while
@@ -581,19 +581,11 @@ class RecipeImport {
       if (res.statusCode != 200) return null;
       final bytes = res.bodyBytes;
       if (kIsWeb) {
-        final decoded = img.decodeImage(bytes);
-        List<int> out = bytes;
-        if (decoded != null) {
-          final resized = decoded.width > 1280 ? img.copyResize(decoded, width: 1280) : decoded;
-          out = img.encodeJpg(resized, quality: 80);
-        }
+        final out = await reencodeImage(bytes, maxWidth: 1280, quality: 80) ?? bytes;
         return 'data:image/jpeg;base64,${base64Encode(out)}';
       }
       // Downscale to ≤1600 px before saving (imported heroes can be large).
-      final decoded = img.decodeImage(bytes);
-      final out = decoded != null
-          ? img.encodeJpg(decoded.width > 1600 ? img.copyResize(decoded, width: 1600) : decoded, quality: 88)
-          : bytes;
+      final out = await reencodeImage(bytes, maxWidth: 1600, quality: 88) ?? bytes;
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/import_${DateTime.now().microsecondsSinceEpoch}.jpg');
       await file.writeAsBytes(out);
