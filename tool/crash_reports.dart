@@ -64,8 +64,8 @@ Future<void> main(List<String> args) async {
       }
 
     case 'show':
-      final id = _requireId(args);
-      final rows = await _getJson('$url/rest/v1/crash_reports?select=*&id=like.$id*', headers);
+      final id = await _resolveId(_requireId(args), url, headers);
+      final rows = await _getJson('$url/rest/v1/crash_reports?select=*&id=eq.$id', headers);
       if (rows.isEmpty) {
         stderr.writeln('No report matching id "$id".');
         exit(1);
@@ -86,7 +86,7 @@ Future<void> main(List<String> args) async {
       }
 
     case 'set-status':
-      final id = _requireId(args);
+      final id = await _resolveId(_requireId(args), url, headers);
       if (args.length < 3) {
         stderr.writeln('Usage: set-status <id> <status> [--note "..."]');
         exit(1);
@@ -95,7 +95,7 @@ Future<void> main(List<String> args) async {
       final note = _flag(args, '--note');
       if (note != null) body['dev_note'] = note;
       final res = await http.patch(
-        Uri.parse('$url/rest/v1/crash_reports?id=like.$id*'),
+        Uri.parse('$url/rest/v1/crash_reports?id=eq.$id'),
         headers: {...headers, 'Prefer': 'return=representation'},
         body: jsonEncode(body),
       );
@@ -132,6 +132,24 @@ String _requireId(List<String> args) {
     exit(1);
   }
   return id;
+}
+
+/// Expand an 8-char (or any prefix) id to the full uuid. PostgREST can't
+/// pattern-match uuid columns, so prefixes are resolved client-side against
+/// the most recent rows.
+Future<String> _resolveId(String id, String url, Map<String, String> headers) async {
+  if (id.length == 36) return id;
+  final rows = await _getJson('$url/rest/v1/crash_reports?select=id&order=created_at.desc&limit=500', headers);
+  final matches = [for (final r in rows) (r as Map)['id'] as String].where((u) => u.startsWith(id)).toList();
+  if (matches.isEmpty) {
+    stderr.writeln('No report whose id starts with "$id".');
+    exit(1);
+  }
+  if (matches.length > 1) {
+    stderr.writeln('Ambiguous id prefix "$id" (${matches.length} matches) — use more characters.');
+    exit(1);
+  }
+  return matches.first;
 }
 
 String? _flag(List<String> args, String name) {
