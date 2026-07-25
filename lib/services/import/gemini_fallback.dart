@@ -17,9 +17,10 @@ class GeminiFallback {
   /// Gemini model ids (verify at ai.dev). Keep a known-good model last as the
   /// anchor — an unknown/unavailable id (404) transparently falls through.
   static const List<String> models = [
-    'gemini-3.5-flash',
-    'gemini-3.0-flash',
+    'gemini-3.6-flash',
     'gemini-2.5-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
   ];
 
   static const Duration _maxCooldown = Duration(seconds: 60);

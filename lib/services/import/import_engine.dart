@@ -131,9 +131,12 @@ class ImportEngine {
     }
   }
 
-  /// Region-guided photo import: OCR each user-drawn box per element, then feed
-  /// the model a clearly LABELLED text so a small model just transcribes instead
-  /// of guessing the page layout. Routes to the configured AI backend.
+  /// Region-guided photo import, routed to the configured AI backend:
+  ///  - online: the boxed crops go to the vision model as inline IMAGES with a
+  ///    label telling it which are ingredients vs steps. No OCR — which also
+  ///    makes region import work on web, where ML Kit doesn't exist.
+  ///  - ondevice: OCR each crop (no vision on-device), then feed the model
+  ///    clearly labelled text so it transcribes instead of guessing layout.
   static Future<ImportResult> extractFromRegions({
     required AppState app,
     required Uint8List imageBytes,
@@ -143,14 +146,33 @@ class ImportEngine {
   }) async {
     final backend = engineOverride ?? resolve(ImportMethod.photo, app);
     if (backend != 'ondevice' && backend != 'online') throw ImportException('needs_ai');
-    // Decode + crop off the UI isolate; OCR stays here (MLKit platform channel).
+    // Decode + crop off the UI isolate.
     final crops = await cropRegions(
       imageBytes,
       [for (final b in ingredientBoxes) (b.left, b.top, b.width, b.height)],
       [for (final b in stepBoxes) (b.left, b.top, b.width, b.height)],
     );
     if (crops == null) throw ImportException('no_recipe', 'could not decode image');
+    if (crops.ing.isEmpty && crops.steps.isEmpty) throw ImportException('no_recipe', 'no regions selected');
 
+    if (backend == 'online') {
+      final provider = app.importProvider;
+      final key = app.importKeys[provider] ?? '';
+      if (key.trim().isEmpty) throw ImportException('needs_ai');
+      final sb = StringBuffer();
+      if (crops.ing.isNotEmpty) sb.write('Les ${crops.ing.length} première(s) image(s) montrent les INGRÉDIENTS de la recette.\n');
+      if (crops.steps.isNotEmpty) sb.write('Les ${crops.steps.length} dernière(s) image(s) montrent les ÉTAPES (préparation).\n');
+      importLog('regions → online as images: ing=${crops.ing.length} steps=${crops.steps.length}');
+      final raw = await ByokClient.extract(
+        provider: provider,
+        apiKey: key,
+        text: sb.toString().trim(),
+        images: [for (final b in [...crops.ing, ...crops.steps]) (bytes: b, type: 'image/jpeg')],
+      );
+      return draftFromModelJson(raw, source: 'Importé d\'une photo');
+    }
+
+    // On-device has no vision: OCR each crop to text (ML Kit, native only).
     Future<String> ocrCrops(List<Uint8List> jpegs) async {
       final parts = <String>[];
       for (final jpeg in jpegs) {
@@ -164,18 +186,6 @@ class ImportEngine {
     final steps = await ocrCrops(crops.steps);
     importLog('regions OCR: ingLen=${ing.length} stepsLen=${steps.length}');
     if (ing.trim().isEmpty && steps.trim().isEmpty) throw ImportException('no_recipe', 'no text recognized in the selected regions');
-
-    if (backend == 'online') {
-      // Big cloud models keep sections straight in one labelled call (cheaper).
-      final provider = app.importProvider;
-      final key = app.importKeys[provider] ?? '';
-      if (key.trim().isEmpty) throw ImportException('needs_ai');
-      final sb = StringBuffer();
-      if (ing.trim().isNotEmpty) sb.write('INGRÉDIENTS:\n$ing\n\n');
-      if (steps.trim().isNotEmpty) sb.write('ÉTAPES (préparation):\n$steps\n');
-      final raw = await ByokClient.extract(provider: provider, apiKey: key, text: sb.toString().trim());
-      return draftFromModelJson(raw, source: 'Importé d\'une photo');
-    }
 
     // On-device: two single-purpose calls so the small model can't bleed step
     // text into ingredient notes (or vice-versa); then merge.
