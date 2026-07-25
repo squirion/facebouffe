@@ -18,9 +18,12 @@ class GeminiFallback {
   /// anchor — an unknown/unavailable id (404) transparently falls through.
   static const List<String> models = [
     'gemini-3.6-flash',
+    'gemini-3.5-flash',
     'gemini-2.5-flash',
+    'gemini-flash-latest', // floating alias: survives Google renaming the lineup
     'gemini-3.5-flash-lite',
     'gemini-3.1-flash-lite',
+    'gemini-flash-lite-latest', // floating alias, last-resort anchor
   ];
 
   static const Duration _maxCooldown = Duration(seconds: 60);
